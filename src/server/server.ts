@@ -77,9 +77,9 @@ export function startServer() {
           const password = String(body.password ?? "");
           if (!email || !email.includes("@")) return Response.json({ ok: false, error: "invalid email" }, { status: 400 });
           if (password.length < 8) return Response.json({ ok: false, error: "password must be at least 8 characters" }, { status: 400 });
-          if (findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
-          const userId = createUser(email, await hashPassword(password));
-          const token = createSession(userId);
+          if (await findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
+          const userId = await createUser(email, await hashPassword(password));
+          const token = await createSession(userId);
           return Response.json({ ok: true, email }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
@@ -91,11 +91,11 @@ export function startServer() {
           const body = (await req.json()) as { email?: string; password?: string };
           const email = String(body.email ?? "").trim().toLowerCase();
           const password = String(body.password ?? "");
-          const user = findUserByEmail(email);
+          const user = await findUserByEmail(email);
           if (!user || !(await verifyPassword(password, user.password_hash))) {
             return Response.json({ ok: false, error: "invalid email or password" }, { status: 401 });
           }
-          const token = createSession(user.id);
+          const token = await createSession(user.id);
           return Response.json({ ok: true, email: user.email }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
@@ -104,20 +104,20 @@ export function startServer() {
 
       if (url.pathname === "/api/auth/logout" && req.method === "POST") {
         const token = sessionTokenFromRequest(req);
-        if (token) destroySession(token);
+        if (token) await destroySession(token);
         return Response.json({ ok: true }, { headers: { "Set-Cookie": clearCookieHeader() } });
       }
 
       if (url.pathname === "/api/auth/me") {
-        const userId = userIdFromRequest(req);
+        const userId = await userIdFromRequest(req);
         if (!userId) return Response.json({ ok: false }, { status: 401 });
-        const user = findUserById(userId);
+        const user = await findUserById(userId);
         if (!user) return Response.json({ ok: false }, { status: 401 });
         return Response.json({ ok: true, userId: user.id, email: user.email });
       }
 
       // Everything below is per-user data — require a valid session.
-      const userId = userIdFromRequest(req);
+      const userId = await userIdFromRequest(req);
       if (!userId) return Response.json({ ok: false, error: "not authenticated" }, { status: 401 });
 
       if (url.pathname === "/api/stream") {
@@ -142,21 +142,21 @@ export function startServer() {
 
       if (url.pathname === "/api/state") {
         const portfolio = currentPortfolio(userId);
-        const events = db
+        const events = await db
           .query(
             `SELECT e.*, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact
              FROM events e LEFT JOIN signals s ON s.event_id = e.id
              ORDER BY e.ts DESC LIMIT 100`
           )
           .all();
-        const briefing = db
+        const briefing = await db
           .query(`SELECT * FROM briefings ORDER BY ts DESC LIMIT 1`)
           .get();
         const broker = brokerSnapshot(userId);
         return Response.json({
           portfolio, events, briefing, marketPhase: marketPhase(), marketClock: nextMarketTransition(),
           earnings: earningsFor(portfolio.holdings.map((h) => h.ticker)),
-          aiLive: aiLive(),
+          aiLive: await aiLive(),
           broker: broker
             ? { source: broker.source, asOf: broker.asOf, account: broker.account, openOrders: broker.openOrders }
             : null,
@@ -169,7 +169,7 @@ export function startServer() {
 
       // Ranked screener results (pure quant — no AI cost to view)
       if (url.pathname === "/api/screener") {
-        return Response.json({ rows: getScreenerRows(currentPortfolio(userId)) });
+        return Response.json({ rows: await getScreenerRows(currentPortfolio(userId)) });
       }
 
       // On-demand score + news for ANY ticker (search / ⌘K detail panel).
@@ -185,30 +185,32 @@ export function startServer() {
       if (url.pathname === "/api/search") {
         const q = (url.searchParams.get("q") ?? "").toUpperCase().replace(/[^A-Z0-9.\- ]/g, "").trim();
         if (!q) return Response.json({ results: [] });
-        const rows = db.query(
+        const rows = await db.query(
           // `ticker NOT LIKE '% %'` filters composite option strings ("MRVL
           // 2026-07-24 203C") out of results — the row guard, not a query guard,
           // so multi-word name search still works.
+          // ILIKE (not LIKE): SQLite's LIKE is case-insensitive by default,
+          // Postgres's is not — ILIKE preserves the original name-search behavior.
           `SELECT ticker, name FROM universe
-           WHERE (ticker LIKE $q || '%' OR name LIKE '%' || $q || '%')
+           WHERE (ticker ILIKE ? || '%' OR name ILIKE '%' || ? || '%')
              AND ticker NOT LIKE '% %'
            ORDER BY
              CASE
-               WHEN ticker = $q THEN 0
-               WHEN ticker LIKE $q || '%' THEN 1
-               WHEN name LIKE $q || '%' THEN 2
+               WHEN ticker = ? THEN 0
+               WHEN ticker ILIKE ? || '%' THEN 1
+               WHEN name ILIKE ? || '%' THEN 2
                ELSE 3
              END,
              market_cap DESC, length(ticker)
            LIMIT 8`
-        ).all({ $q: q }) as { ticker: string; name: string }[];
+        ).all(q, q, q, q, q) as { ticker: string; name: string }[];
         return Response.json({ results: rows });
       }
 
       // Price / score alerts (per-user; the background evaluator fires them all
       // to the shared notification channel).
       if (url.pathname === "/api/alerts" && req.method === "GET") {
-        return Response.json({ alerts: listAlerts(userId) });
+        return Response.json({ alerts: await listAlerts(userId) });
       }
       if (url.pathname === "/api/alerts" && req.method === "POST") {
         try {
@@ -221,7 +223,7 @@ export function startServer() {
         }
       }
       if (url.pathname === "/api/alerts" && req.method === "DELETE") {
-        deleteAlert(userId, Number(url.searchParams.get("id")));
+        await deleteAlert(userId, Number(url.searchParams.get("id")));
         return Response.json({ ok: true });
       }
 
@@ -263,7 +265,7 @@ export function startServer() {
       if (url.pathname === "/api/concentration") {
         try {
           const holdings = currentPortfolio(userId).holdings.filter((h) => (h.asset_class as string) !== "crypto");
-          const maxPositionPct = loadRiskConfigFor(userId).max_position_pct ?? 20;
+          const maxPositionPct = (await loadRiskConfigFor(userId)).max_position_pct ?? 20;
           // Beta + sector key off the underlying (options) or the ticker (equities).
           const betaFor = (key: string): number | null => {
             const row = db.query(`SELECT indicators FROM screener WHERE ticker = ?`).get(key) as any;
@@ -275,7 +277,7 @@ export function startServer() {
             let value = 0;
             if (h.market_value != null) value = Math.abs(h.market_value);          // options / broker-priced
             else { try { const q = await cachedQuote(h.ticker); if (q?.c) value = Math.abs(h.shares * q.c); } catch {} }
-            return { key, value, sector: universeMeta(key)?.sector ?? "Unknown", beta: h.asset_class === "option" ? null : betaFor(key) };
+            return { key, value, sector: (await universeMeta(key))?.sector ?? "Unknown", beta: h.asset_class === "option" ? null : betaFor(key) };
           }));
           return Response.json({ ok: true, ...computeConcentration(items, maxPositionPct) });
         } catch (err) {
@@ -286,14 +288,14 @@ export function startServer() {
       // Market regime + sector rotation + per-sector setup boards
       if (url.pathname === "/api/market") {
         return Response.json({
-          snapshot: getMarketSnapshot(),
-          boards: sectorBoards(currentPortfolio(userId)),
+          snapshot: await getMarketSnapshot(),
+          boards: await sectorBoards(currentPortfolio(userId)),
         });
       }
 
       // Recent validated ideas (structured reports)
       if (url.pathname === "/api/ideas") {
-        return Response.json({ ideas: recentIdeas(userId, 20) });
+        return Response.json({ ideas: await recentIdeas(userId, 20) });
       }
 
       // Validate one idea — long, short, or auto (user-initiated, always allowed)
@@ -331,7 +333,7 @@ export function startServer() {
                 tickers: Array.isArray(body.filters.tickers) ? body.filters.tickers.map((t) => String(t).toUpperCase()).slice(0, 300) : undefined,
               }
             : undefined;
-          const candidates = pickCandidates(portfolio, count, filters);
+          const candidates = await pickCandidates(portfolio, count, filters);
           if (!candidates.length) {
             return Response.json({ ok: true, reports: [], note: "No setup-grade candidates match the current filters in the latest scan. That is a valid answer — don't force trades." });
           }
@@ -413,7 +415,7 @@ export function startServer() {
         const s = brokerSnapshot(userId);
         return Response.json({
           snapshot: s ? { source: s.source, asOf: s.asOf, positions: s.holdings.length, watchlist: s.watchlist.length, openOrders: s.openOrders, account: s.account } : null,
-          robinhoodLinked: getBrokerLink(userId)?.provider === "robinhood",
+          robinhoodLinked: (await getBrokerLink(userId))?.provider === "robinhood",
         });
       }
       if (url.pathname === "/api/broker/refresh" && req.method === "POST") {
@@ -423,7 +425,7 @@ export function startServer() {
       if (url.pathname === "/api/broker/import" && req.method === "POST") {
         try {
           const payload = (await req.json()) as ImportPayload;
-          saveImport(userId, payload);
+          await saveImport(userId, payload);
           const snap = await refreshBroker(userId);
           return Response.json({ ok: true, source: snap.source, positions: snap.holdings.length });
         } catch (err) {
@@ -431,7 +433,7 @@ export function startServer() {
         }
       }
       if (url.pathname === "/api/broker/import/clear" && req.method === "POST") {
-        clearImport(userId);
+        await clearImport(userId);
         const snap = await refreshBroker(userId);
         return Response.json({ ok: true, source: snap.source });
       }
@@ -446,7 +448,7 @@ export function startServer() {
           if (!ticker) return Response.json({ ok: false, error: "no ticker" }, { status: 400 });
           if (!outcome) return Response.json({ ok: false, error: "outcome must be win, loss, or breakeven" }, { status: 400 });
           const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-          const id = logOutcome(userId, {
+          const id = await logOutcome(userId, {
             ticker, direction, outcome,
             idea_id: num(body.idea_id), entry_price: num(body.entry_price), exit_price: num(body.exit_price),
             pnl_pct: num(body.pnl_pct), notes: String(body.notes ?? "").slice(0, 2000),
@@ -459,12 +461,12 @@ export function startServer() {
         }
       }
       if (url.pathname === "/api/journal") {
-        return Response.json({ outcomes: listOutcomes(userId, 50), tracked: listTracked(userId) });
+        return Response.json({ outcomes: await listOutcomes(userId, 50), tracked: await listTracked(userId) });
       }
       if (url.pathname.startsWith("/api/journal/") && req.method === "DELETE") {
         const id = Number(url.pathname.split("/").pop());
         if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
-        return Response.json({ ok: deleteOutcome(userId, id) });
+        return Response.json({ ok: await deleteOutcome(userId, id) });
       }
 
       // F2b: track an idea toward a future journal entry (the manual path,
@@ -482,25 +484,25 @@ export function startServer() {
             const owns = db.query(`SELECT 1 FROM ideas WHERE id = ? AND user_id = ?`).get(idea_id, userId);
             if (!owns) idea_id = null;
           }
-          const id = trackTrade(userId, { ticker, direction, idea_id, entry_price: num(body.entry_price) });
+          const id = await trackTrade(userId, { ticker, direction, idea_id, entry_price: num(body.entry_price) });
           return Response.json({ ok: true, id });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
         }
       }
       if (url.pathname === "/api/tracked") {
-        return Response.json({ tracked: listTracked(userId), keys: trackedKeys(userId) });
+        return Response.json({ tracked: await listTracked(userId), keys: await trackedKeys(userId) });
       }
 
       // F1b: AI token usage per day (global — background pipeline spend isn't per-user).
       if (url.pathname === "/api/spend") {
-        return Response.json({ days: spendByDay(7) });
+        return Response.json({ days: await spendByDay(7) });
       }
 
       // F5: saved screener filter presets (per user, cross-device). Client owns the
       // list and POSTs the whole thing; server validates shape and caps at 8.
       if (url.pathname === "/api/filter-presets" && req.method === "GET") {
-        try { return Response.json({ presets: JSON.parse(getSettingFor(userId, "filter_presets", "[]")) }); }
+        try { return Response.json({ presets: JSON.parse(await getSettingFor(userId, "filter_presets", "[]")) }); }
         catch { return Response.json({ presets: [] }); }
       }
       if (url.pathname === "/api/filter-presets" && req.method === "POST") {
@@ -514,7 +516,7 @@ export function startServer() {
               customFilters: Array.isArray(p.customFilters) ? p.customFilters.slice(0, 20) : [],
               numFilters: { minScore: p.numFilters?.minScore ?? null, minCapB: p.numFilters?.minCapB ?? null },
             }));
-          setSettingFor(userId, "filter_presets", JSON.stringify(clean));
+          await setSettingFor(userId, "filter_presets", JSON.stringify(clean));
           return Response.json({ ok: true, presets: clean });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
@@ -523,7 +525,7 @@ export function startServer() {
       if (url.pathname.startsWith("/api/tracked/") && req.method === "DELETE") {
         const id = Number(url.pathname.split("/").pop());
         if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
-        return Response.json({ ok: untrack(userId, id) });
+        return Response.json({ ok: await untrack(userId, id) });
       }
 
       // Per-user risk preferences (equity fallback, risk %, position cap, target R:R).
@@ -531,7 +533,7 @@ export function startServer() {
         if (req.method === "PUT" || req.method === "POST") {
           try {
             const body = (await req.json()) as Record<string, unknown>;
-            const cur = loadRiskConfigFor(userId);
+            const cur = await loadRiskConfigFor(userId);
             const num = (v: unknown, fallback: number) => (v == null || v === "" || !Number.isFinite(Number(v)) ? fallback : Number(v));
             const prefs = {
               // undefined = field not sent (keep current); null or "" = explicit
@@ -543,13 +545,13 @@ export function startServer() {
               max_position_pct: Math.min(Math.max(num(body.max_position_pct, cur.max_position_pct), 1), 100),
               target_rr_ratio: Math.min(Math.max(num(body.target_rr_ratio, cur.target_rr_ratio), 1), 10),
             };
-            setRiskPrefs(userId, prefs);
+            await setRiskPrefs(userId, prefs);
             return Response.json({ ok: true, prefs });
           } catch (err) {
             return Response.json({ ok: false, error: String(err) }, { status: 400 });
           }
         }
-        return Response.json({ prefs: loadRiskConfigFor(userId), customized: !!getRiskPrefs(userId) });
+        return Response.json({ prefs: await loadRiskConfigFor(userId), customized: !!(await getRiskPrefs(userId)) });
       }
 
       // Profile: name/phone are editable; email is the login identity and stays read-only.
@@ -562,22 +564,22 @@ export function startServer() {
               return s || null;
             };
             const fields = { full_name: str(body.full_name, 120), phone: str(body.phone, 32) };
-            updateProfile(userId, fields);
-            return Response.json({ ok: true, profile: getProfile(userId) });
+            await updateProfile(userId, fields);
+            return Response.json({ ok: true, profile: await getProfile(userId) });
           } catch (err) {
             return Response.json({ ok: false, error: String(err) }, { status: 400 });
           }
         }
-        return Response.json({ ok: true, profile: getProfile(userId) });
+        return Response.json({ ok: true, profile: await getProfile(userId) });
       }
 
       // Master switch for automatic AI spend (triage/analysis/scheduled briefings).
       // Global, not per-user — background monitoring is one shared pipeline (see index.ts).
       if (url.pathname === "/api/ai-live" && req.method === "POST") {
         const body = (await req.json().catch(() => ({}))) as { on?: boolean };
-        setAiLive(!!body.on);
+        await setAiLive(!!body.on);
         console.log(`[ai] live updates ${body.on ? "ENABLED" : "PAUSED"} by user`);
-        return Response.json({ ok: true, aiLive: aiLive() });
+        return Response.json({ ok: true, aiLive: await aiLive() });
       }
 
       // One-tap AI news digest for a ticker (fast model, user-initiated).
@@ -646,8 +648,8 @@ export function startServer() {
       if (url.pathname.startsWith("/api/stock/")) {
         const ticker = decodeURIComponent(url.pathname.split("/").pop() ?? "").toUpperCase().trim();
         if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
-        const meta = universeMeta(ticker);
-        const row = db.query(`SELECT * FROM screener WHERE ticker = ?`).get(ticker) as any;
+        const meta = await universeMeta(ticker);
+        const row = await db.query(`SELECT * FROM screener WHERE ticker = ?`).get(ticker) as any;
         const fresh = url.searchParams.get("fresh") === "1"; // stock-page Refresh bypasses the 60s quote cache
         let quote: any = null;
         try { quote = await cachedQuote(ticker, fresh); } catch {}
@@ -680,7 +682,7 @@ export function startServer() {
         if (!meta && !row && !quote?.c && !spark) {
           return Response.json({ ok: false, error: `No data found for "${ticker}" — check the symbol.` }, { status: 404 });
         }
-        const ideaRows = db
+        const ideaRows = await db
           .query(`SELECT ts, source, report FROM ideas WHERE user_id = ? AND ticker = ? AND source != 'intraday' ORDER BY ts DESC LIMIT 5`)
           .all(userId, ticker) as any[];
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;

@@ -121,6 +121,9 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // Supabase Postgres connection string. Required — the app has no local fallback.
+  databaseUrl: process.env.DATABASE_URL ?? "",
+  // Legacy SQLite path, retained only for the one-time migration script.
   dbPath: join(ROOT, "data/sharpedge.db"),
   // Deep-reasoning model (analysis, validation, chat) and fast triage model.
   // Sonnet 5 is ~40% cheaper than Opus 4.8 ($3/$15 vs $5/$25 per 1M tokens) and

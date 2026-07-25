@@ -187,34 +187,43 @@ export async function refreshUniverse(portfolio: Portfolio): Promise<string[]> {
   }
   for (const r of rows) r.inScan = scan.has(r.ticker);
 
-  const upsert = db.query(
-    `INSERT INTO universe (ticker, name, sector, industry, market_cap, last_price, day_volume, sp500, in_scan, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
-     ON CONFLICT(ticker) DO UPDATE SET name=excluded.name, sector=excluded.sector, industry=excluded.industry,
-       market_cap=excluded.market_cap, last_price=excluded.last_price, day_volume=excluded.day_volume,
-       sp500=excluded.sp500, in_scan=excluded.in_scan, updated_at=excluded.updated_at`
-  );
-  const tx = db.transaction((items: UniverseRow[]) => {
-    for (const r of items)
-      upsert.run(r.ticker, r.name, r.sector, r.industry, r.marketCap, r.lastPrice, r.dayVolume, r.sp500 ? 1 : 0, r.inScan ? 1 : 0);
-  });
-  tx(rows);
+  // Chunked multi-row upsert. Over network Postgres a row-at-a-time loop would be
+  // ~12k round-trips (minutes) and blocks boot; batching keeps it to a handful of
+  // statements. 9 bound params/row (updated_at is a server-side literal) → stay
+  // well under Postgres's 65535-param cap.
+  const now = Math.floor(Date.now() / 1000);
+  const ROWS_PER_CHUNK = 5000;
+  for (let i = 0; i < rows.length; i += ROWS_PER_CHUNK) {
+    const chunk = rows.slice(i, i + ROWS_PER_CHUNK);
+    const values = chunk.map(() => `(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).join(", ");
+    const params: (string | number)[] = [];
+    for (const r of chunk) {
+      params.push(r.ticker, r.name, r.sector, r.industry, r.marketCap, r.lastPrice, r.dayVolume, r.sp500 ? 1 : 0, r.inScan ? 1 : 0, now);
+    }
+    await db.query(
+      `INSERT INTO universe (ticker, name, sector, industry, market_cap, last_price, day_volume, sp500, in_scan, updated_at)
+       VALUES ${values}
+       ON CONFLICT(ticker) DO UPDATE SET name=excluded.name, sector=excluded.sector, industry=excluded.industry,
+         market_cap=excluded.market_cap, last_price=excluded.last_price, day_volume=excluded.day_volume,
+         sp500=excluded.sp500, in_scan=excluded.in_scan, updated_at=excluded.updated_at`
+    ).run(...params);
+  }
 
   console.log(`[universe] scan universe: ${scan.size} tickers (filters: cap≥$${(filters.min_market_cap / 1e6).toFixed(0)}M, px≥$${filters.min_price}, vol≥${filters.min_volume / 1000}k, max ${filters.max_stocks})`);
   return [...scan];
 }
 
-export function scanUniverse(): string[] {
-  return (db.query(`SELECT ticker FROM universe WHERE in_scan = 1`).all() as { ticker: string }[]).map((r) => r.ticker);
+export async function scanUniverse(): Promise<string[]> {
+  return (await db.query(`SELECT ticker FROM universe WHERE in_scan = 1`).all<{ ticker: string }>()).map((r) => r.ticker);
 }
 
-export function universeMeta(ticker: string): { name: string; sector: string; industry: string; marketCap: number } | null {
-  const r = db.query(`SELECT name, sector, industry, market_cap FROM universe WHERE ticker = ?`).get(ticker) as any;
+export async function universeMeta(ticker: string): Promise<{ name: string; sector: string; industry: string; marketCap: number } | null> {
+  const r = await db.query(`SELECT name, sector, industry, market_cap FROM universe WHERE ticker = ?`).get(ticker) as any;
   return r ? { name: r.name, sector: r.sector ?? "Unknown", industry: r.industry ?? "Unknown", marketCap: r.market_cap ?? 0 } : null;
 }
 
 // ticker → sector for a set of tickers (screener rows join).
-export function sectorMap(): Map<string, string> {
-  const rows = db.query(`SELECT ticker, sector FROM universe`).all() as { ticker: string; sector: string | null }[];
+export async function sectorMap(): Promise<Map<string, string>> {
+  const rows = await db.query(`SELECT ticker, sector FROM universe`).all<{ ticker: string; sector: string | null }>();
   return new Map(rows.map((r) => [r.ticker, r.sector ?? "Unknown"]));
 }

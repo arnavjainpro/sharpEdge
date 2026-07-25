@@ -13,8 +13,8 @@ const client = new Anthropic();
 // Last N significant events (and this advisor's own past signals) for a ticker,
 // so Opus analyzes the *delta* of new news rather than each headline in amnesia —
 // e.g. a "$50B buyback" reads very differently if a $60B one was announced last quarter.
-export function recentHistory(ticker: string, excludeEventId: number, limit = 3): string {
-  const rows = db
+export async function recentHistory(ticker: string, excludeEventId: number, limit = 3): Promise<string> {
+  const rows = await db
     .query(
       `SELECT e.ts, e.kind, e.title, e.severity, s.action, s.conviction, s.thesis
        FROM events e LEFT JOIN signals s ON s.event_id = e.id
@@ -93,9 +93,11 @@ export async function analyzeEvent(event: RawEvent, portfolio: Portfolio): Promi
     console.warn(`[analyst] circuit breaker tripped — skipping analysis for event ${event.id}`);
     return null;
   }
-  const bars = recentBars(event.ticker, 120);
-  const stats = db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(event.ticker) as { prev_close: number } | null;
+  const bars = await recentBars(event.ticker, 120);
+  const stats = await db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(event.ticker) as { prev_close: number } | null;
   const tech = snapshot(bars, stats?.prev_close ?? null);
+  const marketCtx = await marketContextText();
+  const history = await recentHistory(event.ticker, event.id);
 
   try {
     const response = await claudeQueue(() => client.messages.create({
@@ -123,17 +125,17 @@ export async function analyzeEvent(event: RawEvent, portfolio: Portfolio): Promi
             `TECHNICAL SNAPSHOT for ${event.ticker}:`,
             `price=$${tech.price ?? "n/a"}  sessionChange=${tech.sessionChangePct?.toFixed(2) ?? "n/a"}%  RSI14=${tech.rsi14?.toFixed(0) ?? "n/a"}  MACD-hist=${tech.macdHistogram?.toFixed(3) ?? "n/a"}  VWAP=$${tech.vwap?.toFixed(2) ?? "n/a"}  SMA20=$${tech.sma20?.toFixed(2) ?? "n/a"}`,
             ``,
-            marketContextText(),
+            marketCtx,
             ``,
             `RECENT HISTORY for ${event.ticker} (prior significant events + your own past signals — analyze the new event as a delta against these, not in isolation):`,
-            recentHistory(event.ticker, event.id),
+            history,
           ].join("\n"),
         },
       ],
     }));
 
     const signal = parseJsonResponse<Signal>(response, "analyst");
-    insertSignal({ event_id: event.id, ticker: event.ticker, ...signal });
+    await insertSignal({ event_id: event.id, ticker: event.ticker, ...signal });
     return signal;
   } catch (err) {
     console.error(`[analyst] failed for event ${event.id}:`, err);

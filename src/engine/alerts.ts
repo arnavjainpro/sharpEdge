@@ -50,21 +50,21 @@ export function shouldFire(kind: AlertKind, prev: number | null, cur: number, th
 }
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
-function scoreFromScreener(ticker: string): number | null {
-  const row = db.query(`SELECT score, long_score, short_score FROM screener WHERE ticker = ?`).get(ticker) as any;
+async function scoreFromScreener(ticker: string): Promise<number | null> {
+  const row = await db.query(`SELECT score, long_score, short_score FROM screener WHERE ticker = ?`).get(ticker) as any;
   if (!row) return null;
   return Math.max(row.long_score ?? row.score ?? 0, row.short_score ?? 0);
 }
 
-export function listAlerts(userId: number): AlertRow[] {
-  return db.query(`SELECT * FROM alerts WHERE user_id = ? ORDER BY active DESC, created_ts DESC`).all(userId) as AlertRow[];
+export async function listAlerts(userId: number): Promise<AlertRow[]> {
+  return await db.query(`SELECT * FROM alerts WHERE user_id = ? ORDER BY active DESC, created_ts DESC`).all<AlertRow>(userId);
 }
-export function deleteAlert(userId: number, id: number): void {
-  db.query(`DELETE FROM alerts WHERE user_id = ? AND id = ?`).run(userId, id);
+export async function deleteAlert(userId: number, id: number): Promise<void> {
+  await db.query(`DELETE FROM alerts WHERE user_id = ? AND id = ?`).run(userId, id);
 }
 // Distinct alert tickers for one user (the per-user cap on how many they can watch).
-export function activeAlertTickerCount(userId: number): number {
-  return (db.query(`SELECT COUNT(DISTINCT ticker) n FROM alerts WHERE active = 1 AND user_id = ?`).get(userId) as any).n;
+export async function activeAlertTickerCount(userId: number): Promise<number> {
+  return (await db.query(`SELECT COUNT(DISTINCT ticker)::int n FROM alerts WHERE active = 1 AND user_id = ?`).get(userId) as any).n;
 }
 
 export async function createAlert(userId: number, rawTicker: string, kind: AlertKind, threshold: number, recurring = false): Promise<AlertRow> {
@@ -78,24 +78,24 @@ export async function createAlert(userId: number, rawTicker: string, kind: Alert
     throw new Error("Score threshold must be between 0 and 100");
   }
 
-  const isNewTicker = !(db.query(`SELECT 1 FROM alerts WHERE user_id = ? AND ticker = ? AND active = 1`).get(userId, ticker));
-  if (isNewTicker && activeAlertTickerCount(userId) >= MAX_ALERT_TICKERS) {
+  const isNewTicker = !(await db.query(`SELECT 1 FROM alerts WHERE user_id = ? AND ticker = ? AND active = 1`).get(userId, ticker));
+  if (isNewTicker && (await activeAlertTickerCount(userId)) >= MAX_ALERT_TICKERS) {
     throw new Error(`Alert limit reached (${MAX_ALERT_TICKERS} tickers). Delete one first.`);
   }
 
   // Seed last_value with the current observation so an already-true condition
   // doesn't fire instantly.
   let seed: number | null = null;
-  if (kind === "score_gte") seed = scoreFromScreener(ticker);
+  if (kind === "score_gte") seed = await scoreFromScreener(ticker);
   else { try { const q = await cachedQuote(ticker); seed = q?.c ?? null; } catch { /* seed stays null */ } }
 
-  db.query(
+  await db.query(
     `INSERT INTO alerts (user_id, ticker, kind, threshold, last_value, active, created_ts, recurring)
-     VALUES (?, ?, ?, ?, ?, 1, unixepoch(), ?)
+     VALUES (?, ?, ?, ?, ?, 1, extract(epoch from now())::int, ?)
      ON CONFLICT(user_id, ticker, kind, threshold)
        DO UPDATE SET active = 1, last_value = excluded.last_value, last_fired_ts = NULL, recurring = excluded.recurring`
   ).run(userId, ticker, kind, threshold, seed, recurring ? 1 : 0);
-  return db.query(`SELECT * FROM alerts WHERE user_id = ? AND ticker = ? AND kind = ? AND threshold = ?`).get(userId, ticker, kind, threshold) as AlertRow;
+  return await db.query(`SELECT * FROM alerts WHERE user_id = ? AND ticker = ? AND kind = ? AND threshold = ?`).get<AlertRow>(userId, ticker, kind, threshold) as AlertRow;
 }
 
 // ── evaluation (called from the detector loop) ───────────────────────────────
@@ -124,22 +124,22 @@ async function deliver(text: string): Promise<void> {
   }
 }
 
-function processObservation(a: AlertRow, cur: number): void {
+async function processObservation(a: AlertRow, cur: number): Promise<void> {
   if (shouldFire(a.kind, a.last_value, cur, a.threshold)) {
     // Recurring alerts stay armed: last_value keeps updating, so the crossing
     // logic naturally requires the value to leave the zone before it can fire
     // again — no spam while the condition stays true.
-    db.query(`UPDATE alerts SET active = ?, last_value = ?, last_fired_ts = unixepoch() WHERE id = ?`)
+    await db.query(`UPDATE alerts SET active = ?, last_value = ?, last_fired_ts = extract(epoch from now())::int WHERE id = ?`)
       .run(a.recurring ? 1 : 0, cur, a.id);
     console.log(`[alerts] FIRED #${a.id} ${a.ticker} ${a.kind} ${a.threshold} → ${cur}${a.recurring ? " (recurring, re-armed)" : ""}`);
     void deliver(alertMessage(a, cur) + (a.recurring ? " ↻ re-armed" : ""));
   } else {
-    db.query(`UPDATE alerts SET last_value = ? WHERE id = ?`).run(cur, a.id);
+    await db.query(`UPDATE alerts SET last_value = ? WHERE id = ?`).run(cur, a.id);
   }
 }
 
 export async function evaluateActiveAlerts(): Promise<void> {
-  const alerts = db.query(`SELECT * FROM alerts WHERE active = 1`).all() as AlertRow[];
+  const alerts = await db.query(`SELECT * FROM alerts WHERE active = 1`).all<AlertRow>();
   if (!alerts.length) return;
 
   // Price alerts: fetch a quote for each distinct alert ticker (cap + 1.1s pace,
@@ -154,13 +154,13 @@ export async function evaluateActiveAlerts(): Promise<void> {
   }
   for (const a of priceAlerts) {
     const cur = prices.get(a.ticker);
-    if (cur != null) processObservation(a, cur);
+    if (cur != null) await processObservation(a, cur);
   }
 
   // Score alerts: universe rows are free (screener table); off-universe tickers
   // recompute at most hourly through the cached scoreTicker path.
   for (const a of alerts.filter((a) => a.kind === "score_gte")) {
-    let score = scoreFromScreener(a.ticker);
+    let score = await scoreFromScreener(a.ticker);
     if (score == null) {
       const last = lastOffUniverseEval.get(a.ticker) ?? 0;
       if (Date.now() - last < OFF_UNIVERSE_RECOMPUTE_MS) continue;
@@ -172,7 +172,7 @@ export async function evaluateActiveAlerts(): Promise<void> {
       lastOffUniverseEval.set(a.ticker, Date.now());
       if (out.data.long_score != null) score = Math.max(out.data.long_score, out.data.short_score ?? 0);
     }
-    if (score != null) processObservation(a, score);
+    if (score != null) await processObservation(a, score);
   }
 }
 

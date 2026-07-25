@@ -212,7 +212,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
       text: [
         "NO TICKER PROVIDED — screenshot-only analysis. Read the symbol/timeframe off the chart if visible.",
         "",
-        marketContextText(),
+        await marketContextText(),
         accountContextText(userId),
       ].join("\n"),
     };
@@ -257,7 +257,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
   }
 
   if (daily && daily.closes.length >= 210) {
-    const meta = universeMeta(ticker);
+    const meta = await universeMeta(ticker);
     const ind = computeIndicators(daily, benchmarkCandles("SPY")?.closes ?? null, benchmarkCandles(sectorEtf(meta?.sector))?.closes ?? null);
     if (ind) {
       lines.push(
@@ -281,7 +281,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
     const s = sessionStats(spyIntra);
     lines.push(``, `MARKET TAPE TODAY: SPY $${fmt(s.last)} (session ${intraPct(s.last, spyIntra.prevClose)}), ${s.vwap != null ? (s.last >= s.vwap ? "above" : "below") : "n/a"} its VWAP, session range $${fmt(s.low)}–$${fmt(s.high)}`);
   }
-  lines.push(``, marketContextText());
+  lines.push(``, await marketContextText());
 
   // News + earnings proximity. Swing setups weigh the last week of sentiment;
   // intraday only cares about same-day catalysts.
@@ -301,7 +301,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
     const dAtr = atr(daily.highs, daily.lows, daily.closes, 14);
     if (dAtr) {
       const stopDist = dAtr * 0.35; // typical intraday stop ≈ a fraction of the daily range
-      const sz = positionSizing(userId, px, px - stopDist);
+      const sz = await positionSizing(userId, px, px - stopDist);
       lines.push(
         ``,
         `SIZING MATH (example with a ${fmt(stopDist)}$ ≈ 0.35×dailyATR stop): ` +
@@ -315,7 +315,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
 
   // The trader's own reward:risk bar (Analyze tab) drives what counts as a strong
   // short-term setup here — this is the one place target_rr is consumed now.
-  const targetRR = loadRiskConfigFor(userId).target_rr_ratio;
+  const targetRR = (await loadRiskConfigFor(userId)).target_rr_ratio;
   lines.push(`TARGET REWARD:RISK — the trader wants at least ${targetRR.toFixed(1)}:1 to the first target for a "strong" setup; below that, rate the R:R leg weak and say so.`);
 
   if (req.options || swing) {
@@ -399,7 +399,7 @@ export async function analyzeIntraday(userId: number, req: IntradayRequest, port
         console.error(`[intraday] stress attach failed for ${ticker}:`, e);
       }
     }
-    db.query(`INSERT INTO ideas (ts, ticker, direction, rating, confidence, source, report, user_id) VALUES (unixepoch(), ?, ?, ?, ?, 'intraday', ?, ?)`)
+    await db.query(`INSERT INTO ideas (ts, ticker, direction, rating, confidence, source, report, user_id) VALUES (extract(epoch from now())::int, ?, ?, ?, ?, 'intraday', ?, ?)`)
       .run(ticker, plan.direction, plan.setup_quality === "no_trade" ? "reject" : plan.setup_quality, plan.confidence, JSON.stringify(plan), userId);
     return plan;
   } catch (err) {

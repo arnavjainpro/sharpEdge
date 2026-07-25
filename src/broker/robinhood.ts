@@ -50,8 +50,8 @@ export interface RhAuth {
   expires_at: number; // unix seconds
 }
 
-export function loadAuth(userId: number): RhAuth | null {
-  const row = getBrokerLink(userId);
+export async function loadAuth(userId: number): Promise<RhAuth | null> {
+  const row = await getBrokerLink(userId);
   if (!row || row.provider !== "robinhood") return null;
   try {
     return JSON.parse(row.auth_json) as RhAuth;
@@ -59,11 +59,11 @@ export function loadAuth(userId: number): RhAuth | null {
     return null;
   }
 }
-export function saveAuth(userId: number, a: RhAuth) {
-  setBrokerLink(userId, "robinhood", JSON.stringify(a));
+export async function saveAuth(userId: number, a: RhAuth) {
+  await setBrokerLink(userId, "robinhood", JSON.stringify(a));
 }
-export function clearAuth(userId: number) {
-  clearBrokerLink(userId);
+export async function clearAuth(userId: number) {
+  await clearBrokerLink(userId);
 }
 
 export function newDeviceToken(): string {
@@ -172,7 +172,7 @@ async function refreshAccess(userId: number, a: RhAuth): Promise<RhAuth> {
   });
   if (status !== 200 || !json.access_token) throw new Error(`robinhood token refresh failed (${status})`);
   const next = { ...toAuth(json, a.device_token), refresh_token: json.refresh_token ?? a.refresh_token };
-  saveAuth(userId, next);
+  await saveAuth(userId, next);
   return next;
 }
 
@@ -308,9 +308,9 @@ async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
 
 export const robinhoodProvider: BrokerProvider = {
   name: "robinhood",
-  available: (userId: number) => !!loadAuth(userId),
+  available: async (userId: number) => !!(await loadAuth(userId)),
   async fetchSnapshot(userId: number): Promise<BrokerSnapshot> {
-    let a = loadAuth(userId);
+    let a = await loadAuth(userId);
     if (!a) throw new Error("robinhood not linked");
     if (Date.now() / 1000 >= a.expires_at) a = await refreshAccess(userId, a);
     let authHeader = `Bearer ${a.access_token}`;
@@ -319,7 +319,7 @@ export const robinhoodProvider: BrokerProvider = {
     } catch (e: any) {
       // One re-auth attempt on 401, then let the provider loop fall through.
       if (e?.code === 401) {
-        a = await refreshAccess(userId, loadAuth(userId)!);
+        a = await refreshAccess(userId, (await loadAuth(userId))!);
         authHeader = `Bearer ${a.access_token}`;
         return await pullSnapshot(authHeader);
       }

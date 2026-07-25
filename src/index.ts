@@ -68,11 +68,11 @@ async function processEvent(event: RawEvent) {
   let triage;
   let signal = null;
 
-  if (!aiLive()) {
+  if (!(await aiLive())) {
     // Live updates paused: no tokens spent — rule-based severity, no analysis.
     triage = heuristicSeverity(event);
     const { setTriage } = await import("./db");
-    setTriage(event.id, triage.severity, triage.rationale);
+    await setTriage(event.id, triage.severity, triage.rationale);
   } else {
     triage = await triageEvent(event, portfolio);
     if (triage.severity === "critical" || triage.severity === "high") {
@@ -195,7 +195,7 @@ function scheduleSweep() {
   const sweep = async () => {
     if (marketPhase() === "closed") return;
     try {
-      const universe = scanUniverse();
+      const universe = await scanUniverse();
       if (!universe.length) return;
       const watched = new Set(allTickers(currentPortfolio(PRIMARY_USER_ID)));
       const events = await sweepIndex(universe, watched);
@@ -318,7 +318,7 @@ setTestEventHandler(async (body) => {
     detail: body.detail ?? { source: "test", summary: "Synthetic event for pipeline verification." },
   };
   const { insertEvent } = await import("./db");
-  const id = insertEvent({ ...event, dedupeKey: `test:${Date.now()}` });
+  const id = await insertEvent({ ...event, dedupeKey: `test:${Date.now()}` });
   if (id) await processEvent({ ...event, id });
 });
 

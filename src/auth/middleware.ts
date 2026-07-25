@@ -15,10 +15,10 @@ function parseCookies(header: string | null): Record<string, string> {
   return out;
 }
 
-export function userIdFromRequest(req: Request): number | null {
+export async function userIdFromRequest(req: Request): Promise<number | null> {
   const token = parseCookies(req.headers.get("cookie"))[COOKIE_NAME];
   if (!token) return null;
-  return validateSession(token);
+  return await validateSession(token);
 }
 
 export function sessionCookieHeader(token: string): string {

@@ -20,10 +20,10 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
   }
 
   const since = Math.floor(Date.now() / 1000) - 24 * 3600;
-  const events = db
+  const events = await db
     .query(`SELECT ticker, kind, title, severity FROM events WHERE ts > ? AND severity IN ('critical','high') ORDER BY ts DESC LIMIT 25`)
     .all(since) as { ticker: string; kind: string; title: string; severity: string }[];
-  const signals = db
+  const signals = await db
     .query(`SELECT ticker, action, conviction, thesis FROM signals WHERE ts > ? ORDER BY ts DESC LIMIT 10`)
     .all(since) as { ticker: string; action: string; conviction: string; thesis: string }[];
 
@@ -31,13 +31,14 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
     .map((h) => `- ${h.ticker}: ${h.shares} shares @ $${h.cost_basis}`)
     .join("\n");
 
-  const sectorLine = (() => {
-    const snap = getMarketSnapshot();
+  const sectorLine = await (async () => {
+    const snap = await getMarketSnapshot();
     if (!snap) return "";
     const leading = snap.sectors.filter((s) => s.state === "leading").map((s) => s.sector);
     const lagging = snap.sectors.filter((s) => s.state === "lagging").map((s) => s.sector);
     return `Sector rotation: leading — ${leading.join(", ") || "none"}; lagging — ${lagging.join(", ") || "none"}.`;
   })();
+  const marketCtx = await marketContextText();
 
   const response = await claudeQueue(() => client.messages.create({
     model: config.modelDeep,
@@ -57,7 +58,7 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
           `Portfolio:\n${positions || "(none)"}`,
           `Watchlist: ${portfolio.watchlist.join(", ") || "none"}`,
           ``,
-          marketContextText(),
+          marketCtx,
           sectorLine,
           ``,
           `Live quotes:\n${quotes.join("\n") || "unavailable"}`,
@@ -71,6 +72,6 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
   }));
 
   const text = response.content.find((b) => b.type === "text")?.text ?? "";
-  db.query(`INSERT INTO briefings (ts, kind, content) VALUES (unixepoch(), ?, ?)`).run(kind, text);
+  await db.query(`INSERT INTO briefings (ts, kind, content) VALUES (extract(epoch from now())::int, ?, ?)`).run(kind, text);
   return text;
 }

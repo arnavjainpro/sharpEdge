@@ -40,15 +40,15 @@ export async function refreshBroker(userId: number): Promise<BrokerSnapshot> {
 // figure. Overlaying it used to pin the dashboard's displayed equity to the
 // typed value, so live broker equity never moved on refresh. The override now
 // lives only in positionSizing()/accountContextText().
-function applyOverlays(userId: number, snap: BrokerSnapshot): BrokerSnapshot {
-  const wp = watchlistPrefs(userId);
+async function applyOverlays(userId: number, snap: BrokerSnapshot): Promise<BrokerSnapshot> {
+  const wp = await watchlistPrefs(userId);
   snap.watchlist = [...new Set([...snap.watchlist, ...wp.add])].filter((t) => !wp.remove.includes(t));
   return snap;
 }
 
 async function doRefresh(userId: number): Promise<BrokerSnapshot> {
   for (const p of providers) {
-    if (!p.available(userId)) continue;
+    if (!(await p.available(userId))) continue;
     try {
       const snap = await p.fetchSnapshot(userId);
       // Merge YAML context: theses onto positions, watchlist union, equity fallback.
@@ -65,7 +65,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
         // the portfolio's displayed equity is exactly the leak we're removing.
         // A live provider with a null equity shows "unknown", never the bankroll.
       }
-      applyOverlays(userId, snap);
+      await applyOverlays(userId, snap);
       cached.set(userId, snap);
       console.log(
         `[broker] snapshot via ${snap.source} (user ${userId}): ${snap.holdings.length} positions, ${snap.watchlist.length} watched, ` +
@@ -85,7 +85,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
       // last good snapshot instead; stale beats wrong-source.
       const prev = cached.get(userId);
       if (prev) {
-        applyOverlays(userId, prev); // reapply in case Settings/watchlist changed since prev was cached
+        await applyOverlays(userId, prev); // reapply in case Settings/watchlist changed since prev was cached
         console.warn(`[broker] keeping previous ${prev.source} snapshot (as of ${new Date(prev.asOf * 1000).toISOString().slice(0, 16)})`);
         return prev;
       }
@@ -93,7 +93,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
   }
   // yamlProvider never throws, but keep a hard fallback anyway.
   const snap = await yamlProvider.fetchSnapshot(userId);
-  applyOverlays(userId, snap);
+  await applyOverlays(userId, snap);
   cached.set(userId, snap);
   return snap;
 }
@@ -122,7 +122,7 @@ function toPosSnaps(holdings: BrokerSnapshot["holdings"]): PosSnap[] {
 // the new baseline. First-ever snapshot (no baseline) records silently, so
 // linking an account never floods the feed with phantom closes.
 async function detectAndRecordCloses(userId: number, snap: BrokerSnapshot): Promise<void> {
-  const row = db.query(`SELECT positions, close_seq FROM broker_positions WHERE user_id = ?`).get(userId) as { positions: string; close_seq: number } | null;
+  const row = await db.query(`SELECT positions, close_seq FROM broker_positions WHERE user_id = ?`).get(userId) as { positions: string; close_seq: number } | null;
   const next = toPosSnaps(snap.holdings);
   let seq = row?.close_seq ?? 0;
 
@@ -140,13 +140,13 @@ async function detectAndRecordCloses(userId: number, snap: BrokerSnapshot): Prom
       const title = e.kind === "closed"
         ? `📓 Closed ${e.ticker} (${e.direction})${pnl} — journal it?`
         : `📓 Trimmed ${e.ticker} ${e.direction} to ${e.nowQty} of ${e.prevQty}${pnl} — journal it?`;
-      const id = insertEvent({ ts: Math.floor(Date.now() / 1000), ticker: e.ticker, kind: "position_close", title, detail: { ...e, estPnlPct }, dedupeKey: `brokerclose:${userId}:${seq}` });
+      const id = await insertEvent({ ts: Math.floor(Date.now() / 1000), ticker: e.ticker, kind: "position_close", title, detail: { ...e, estPnlPct }, dedupeKey: `brokerclose:${userId}:${seq}` });
       if (id && telegramEnabled()) { try { await notifyTelegram(title + (e.note ? ` (${e.note})` : "")); } catch { /* delivery best-effort */ } }
     }
   }
 
-  db.query(
-    `INSERT INTO broker_positions (user_id, positions, close_seq, updated_at) VALUES (?, ?, ?, unixepoch())
+  await db.query(
+    `INSERT INTO broker_positions (user_id, positions, close_seq, updated_at) VALUES (?, ?, ?, extract(epoch from now())::int)
      ON CONFLICT(user_id) DO UPDATE SET positions = excluded.positions, close_seq = excluded.close_seq, updated_at = excluded.updated_at`
   ).run(userId, JSON.stringify(next), seq);
 }
@@ -154,9 +154,9 @@ async function detectAndRecordCloses(userId: number, snap: BrokerSnapshot): Prom
 // ── UI watchlist edits (persisted per user, merged onto every snapshot) ─────
 // add[] = tickers starred in the UI; remove[] = tickers explicitly unstarred,
 // which also suppresses broker/YAML-sourced entries.
-function watchlistPrefs(userId: number): { add: string[]; remove: string[] } {
+async function watchlistPrefs(userId: number): Promise<{ add: string[]; remove: string[] }> {
   try {
-    const raw = JSON.parse(getSettingFor(userId, "watchlist_prefs", "{}"));
+    const raw = JSON.parse(await getSettingFor(userId, "watchlist_prefs", "{}"));
     return { add: Array.isArray(raw.add) ? raw.add : [], remove: Array.isArray(raw.remove) ? raw.remove : [] };
   } catch {
     return { add: [], remove: [] };
@@ -166,7 +166,7 @@ function watchlistPrefs(userId: number): { add: string[]; remove: string[] } {
 export async function updateWatchlist(userId: number, rawTicker: string, action: "add" | "remove"): Promise<string[]> {
   const ticker = rawTicker.trim().toUpperCase();
   if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) throw new Error("bad ticker");
-  const wp = watchlistPrefs(userId);
+  const wp = await watchlistPrefs(userId);
   if (action === "add") {
     wp.add = [...new Set([...wp.add, ticker])].slice(0, 50);
     wp.remove = wp.remove.filter((t) => t !== ticker);
@@ -174,7 +174,7 @@ export async function updateWatchlist(userId: number, rawTicker: string, action:
     wp.add = wp.add.filter((t) => t !== ticker);
     wp.remove = [...new Set([...wp.remove, ticker])].slice(0, 100);
   }
-  setSettingFor(userId, "watchlist_prefs", JSON.stringify(wp));
+  await setSettingFor(userId, "watchlist_prefs", JSON.stringify(wp));
   const snap = await refreshBroker(userId); // re-merge so the change is visible immediately
   return snap.watchlist;
 }
@@ -188,8 +188,8 @@ export function currentPortfolio(userId: number): Portfolio {
 
 // Per-user risk settings (target R:R etc. layer on in a later phase), falling
 // back to the shared portfolio.yaml risk: block until a user sets their own.
-export function loadRiskConfigFor(userId: number): RiskConfig {
-  const row = getRiskPrefs(userId);
+export async function loadRiskConfigFor(userId: number): Promise<RiskConfig> {
+  const row = await getRiskPrefs(userId);
   if (row) return row;
   return loadRiskConfig();
 }
@@ -211,11 +211,11 @@ export interface SizingPlan {
 // - Analyze tab (short-term): buying power + the trader's per-user risk prefs.
 // - Ideas tab (medium/long): equity + fixed account defaults, so nothing the
 //   trader tunes in the Analyze form leaks into idea validation.
-export function positionSizing(
+export async function positionSizing(
   userId: number, entry: number, stop: number,
   opts: { risk?: RiskConfig; basis?: "buyingPower" | "equity" } = {}
-): SizingPlan {
-  const risk = opts.risk ?? loadRiskConfigFor(userId);
+): Promise<SizingPlan> {
+  const risk = opts.risk ?? await loadRiskConfigFor(userId);
   const acct = cached.get(userId)?.account;
   const equity = opts.basis === "equity"
     ? (acct?.equity ?? acct?.buying_power ?? acct?.cash)

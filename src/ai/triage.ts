@@ -57,7 +57,7 @@ export async function triageEvent(event: RawEvent, portfolio: Portfolio): Promis
       severity: held ? "high" : "info",
       rationale: "Circuit breaker tripped — AI triage halted; defaulted by holding status.",
     };
-    setTriage(event.id, fallback.severity, fallback.rationale);
+    await setTriage(event.id, fallback.severity, fallback.rationale);
     return fallback;
   }
   try {
@@ -83,7 +83,7 @@ export async function triageEvent(event: RawEvent, portfolio: Portfolio): Promis
     }));
 
     const result = parseJsonResponse<TriageResult>(response, "triage");
-    setTriage(event.id, result.severity, result.rationale);
+    await setTriage(event.id, result.severity, result.rationale);
     return result;
   } catch (err) {
     console.error(`[triage] failed for event ${event.id}:`, err);
@@ -93,7 +93,7 @@ export async function triageEvent(event: RawEvent, portfolio: Portfolio): Promis
       severity: held ? "high" : "info",
       rationale: "Triage unavailable — defaulted by holding status.",
     };
-    setTriage(event.id, fallback.severity, fallback.rationale);
+    await setTriage(event.id, fallback.severity, fallback.rationale);
     return fallback;
   }
 }

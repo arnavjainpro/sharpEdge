@@ -68,11 +68,11 @@ function classifySector(rel1m: number, relTrend: number): SectorRotation["state"
 }
 
 // % of scanned stocks above their 200-day SMA, from the latest screener pass.
-export function computeBreadth(): number | null {
-  const row = db
+export async function computeBreadth(): Promise<number | null> {
+  const row = await db
     .query(
-      `SELECT COUNT(*) total,
-              SUM(CASE WHEN json_extract(indicators, '$.pctVs200') > 0 THEN 1 ELSE 0 END) above
+      `SELECT COUNT(*)::int total,
+              SUM(CASE WHEN (indicators::jsonb->>'pctVs200')::double precision > 0 THEN 1 ELSE 0 END)::int above
        FROM screener`
     )
     .get() as { total: number; above: number | null };
@@ -104,7 +104,7 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   const vix = vixC?.closes.at(-1) ?? null;
   const vixChange5d = vixC && vixC.closes.length > 5 ? vix! - vixC.closes.at(-6)! : null;
   const volatility: MarketRegime["volatility"] = vix == null ? "normal" : vix >= 25 ? "high" : vix <= 15 ? "low" : "normal";
-  const breadthPct = computeBreadth();
+  const breadthPct = await computeBreadth();
   const riskOff =
     (vix != null && vix >= 25) ||
     (trend === "down" && (vixChange5d ?? 0) > 3) ||
@@ -156,7 +156,7 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   }
 
   const snapshot: MarketSnapshot = { ts: Math.floor(Date.now() / 1000), regime, sectors, benchmarks };
-  db.query(
+  await db.query(
     `INSERT INTO market_snapshot (id, ts, regime, sectors, benchmarks) VALUES (1, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET ts=excluded.ts, regime=excluded.regime, sectors=excluded.sectors, benchmarks=excluded.benchmarks`
   ).run(snapshot.ts, JSON.stringify(regime), JSON.stringify(sectors), JSON.stringify(benchmarks));
@@ -164,11 +164,11 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   // F6a: append rotation history, but only when a sector's state changes or its
   // last row is ≥1h old — cadence-proof, so a burst of refreshes can't flood it.
   const lastFor = db.query(`SELECT state, ts FROM sector_history WHERE sector = ? ORDER BY ts DESC LIMIT 1`);
-  const appendHist = db.query(`INSERT OR IGNORE INTO sector_history (sector, ts, state, rel1m) VALUES (?, ?, ?, ?)`);
+  const appendHist = db.query(`INSERT INTO sector_history (sector, ts, state, rel1m) VALUES (?, ?, ?, ?) ON CONFLICT (sector, ts) DO NOTHING`);
   for (const s of sectors) {
-    const last = lastFor.get(s.sector) as { state: string; ts: number } | null;
+    const last = await lastFor.get(s.sector) as { state: string; ts: number } | null;
     if (!last || last.state !== s.state || snapshot.ts - last.ts >= 3600) {
-      appendHist.run(s.sector, snapshot.ts, s.state, s.rel1m);
+      await appendHist.run(s.sector, snapshot.ts, s.state, s.rel1m);
     }
   }
 
@@ -176,8 +176,8 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   return snapshot;
 }
 
-export function getMarketSnapshot(): MarketSnapshot | null {
-  const row = db.query(`SELECT ts, regime, sectors, benchmarks FROM market_snapshot WHERE id = 1`).get() as any;
+export async function getMarketSnapshot(): Promise<MarketSnapshot | null> {
+  const row = await db.query(`SELECT ts, regime, sectors, benchmarks FROM market_snapshot WHERE id = 1`).get() as any;
   if (!row) return null;
   return {
     ts: row.ts,
@@ -188,8 +188,8 @@ export function getMarketSnapshot(): MarketSnapshot | null {
 }
 
 // Compact text block for AI prompts (validator, intraday, briefing, advisor).
-export function marketContextText(): string {
-  const snap = getMarketSnapshot();
+export async function marketContextText(): Promise<string> {
+  const snap = await getMarketSnapshot();
   if (!snap) return "MARKET CONTEXT: unavailable (no snapshot yet).";
   const r = snap.regime;
   const lines = [

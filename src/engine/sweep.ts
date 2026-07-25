@@ -80,7 +80,7 @@ export async function sweepIndex(universe: string[], alreadyWatched: Set<string>
   for (const m of candidates) {
     dynamicWatch.set(m.ticker, Date.now() + PROMOTE_TTL_MS);
     promotedToday.add(m.ticker);
-    const id = insertEvent({
+    const id = await insertEvent({
       ts: now,
       ticker: m.ticker,
       kind: "market_mover",

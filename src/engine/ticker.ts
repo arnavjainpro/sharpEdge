@@ -53,7 +53,7 @@ export async function scoreTicker(rawSym: string): Promise<ScoreTickerOutcome> {
   if (isScanRunning()) return { ok: false, error: "Scan in progress, retry shortly", status: 503 };
 
   const candles = await fetchDailyCandles(sym, "1y", 60);
-  const meta = db.query(`SELECT name, sector FROM universe WHERE ticker = ?`).get(sym) as
+  const meta = await db.query(`SELECT name, sector FROM universe WHERE ticker = ?`).get(sym) as
     | { name?: string; sector?: string }
     | null;
   const sector = meta?.sector ?? null;

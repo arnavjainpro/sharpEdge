@@ -50,7 +50,7 @@ export async function checkOptionExpiries(portfolio: Portfolio): Promise<void> {
     if (threshold == null || dte < 0) continue;
     const o = h.option;
     const title = `⏳ ${o.underlying} $${o.strike} ${o.type} expires ${dte <= 1 ? "TODAY/tomorrow" : `in ${dte} days`} (${o.expiry}) — you hold ${Math.abs(h.shares)} contract${Math.abs(h.shares) === 1 ? "" : "s"}`;
-    const id = insertEvent({
+    const id = await insertEvent({
       ts: Math.floor(Date.now() / 1000), ticker: h.ticker, kind: "option_expiry",
       title, detail: { dte, ...o }, dedupeKey: `optexp:${h.ticker}:${threshold}`,
     });
@@ -135,7 +135,7 @@ export async function replayUserIdeas(userId: number): Promise<{ ideas: IdeaRepl
   const cached = replayCache.get(userId);
   if (cached && Date.now() - cached.at < 3_600_000) return cached;
   const since = Math.floor(Date.now() / 1000) - 120 * 86400;
-  const ideas = db.query(
+  const ideas = await db.query(
     `SELECT id, ts, ticker, direction, rating, report FROM ideas
      WHERE user_id = ? AND source != 'intraday' AND rating != 'reject' AND ts > ?
      ORDER BY ts DESC LIMIT 40`

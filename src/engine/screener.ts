@@ -288,9 +288,9 @@ export interface ScreenRow {
   market_cap: number | null; // from the universe table (dashboard filters)
 }
 
-export function getScreenerRows(portfolio: Portfolio): ScreenRow[] {
+export async function getScreenerRows(portfolio: Portfolio): Promise<ScreenRow[]> {
   const heldSet = new Set(portfolio.holdings.map((h) => h.ticker));
-  const rows = db
+  const rows = await db
     .query(`SELECT s.*, u.market_cap FROM screener s LEFT JOIN universe u ON u.ticker = s.ticker ORDER BY s.score DESC`)
     .all() as any[];
   return rows.map((r) => ({
@@ -321,9 +321,9 @@ export interface SectorBoard {
   shorts: { ticker: string; short_score: number; price: number; held: boolean }[];
 }
 
-export function sectorBoards(portfolio: Portfolio): SectorBoard[] {
-  const rows = getScreenerRows(portfolio);
-  const rotation = new Map((getMarketSnapshot()?.sectors ?? []).map((s) => [s.sector, s]));
+export async function sectorBoards(portfolio: Portfolio): Promise<SectorBoard[]> {
+  const rows = await getScreenerRows(portfolio);
+  const rotation = new Map(((await getMarketSnapshot())?.sectors ?? []).map((s) => [s.sector, s]));
   const bySector = new Map<string, ScreenRow[]>();
   for (const r of rows) {
     if (!bySector.has(r.sector)) bySector.set(r.sector, []);
@@ -371,10 +371,10 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   if (!benchmarkCandles("SPY")) await refreshMarketContext();
   const spyCloses = benchmarkCandles("SPY")?.closes ?? null;
 
-  const tickers = scanUniverse();
-  const sectors = sectorMap();
+  const tickers = await scanUniverse();
+  const sectors = await sectorMap();
   const heldSet = new Set(portfolio.holdings.map((h) => h.ticker));
-  const regime = getMarketSnapshot()?.regime;
+  const regime = (await getMarketSnapshot())?.regime;
   const concurrency = loadUniverseFilters().concurrency;
   console.log(`[screener] scanning ${tickers.length} tickers, concurrency ${concurrency} (~${Math.max(1, Math.round((tickers.length * 0.4) / 60 / concurrency))} min)`);
   const events: RawEvent[] = [];
@@ -386,16 +386,16 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
 
   const upsert = db.query(
     `INSERT INTO screener (ticker, score, long_score, short_score, direction, sector, cross_status, indicators, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, unixepoch())
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, extract(epoch from now())::int)
      ON CONFLICT(ticker) DO UPDATE SET score=excluded.score, long_score=excluded.long_score,
        short_score=excluded.short_score, direction=excluded.direction, sector=excluded.sector,
        cross_status=excluded.cross_status, indicators=excluded.indicators, updated_at=excluded.updated_at`
   );
 
   const week = new Date().toISOString().slice(0, 10).slice(0, 8) + String(Math.ceil(new Date().getDate() / 7));
-  const emit = (t: string, ind: Indicators, extra: object, kind: string, title: string, key: string) => {
+  const emit = async (t: string, ind: Indicators, extra: object, kind: string, title: string, key: string) => {
     const now = Math.floor(Date.now() / 1000);
-    const id = insertEvent({ ts: now, ticker: t, kind, title, detail: { ...ind, ...extra }, dedupeKey: key });
+    const id = await insertEvent({ ts: now, ticker: t, kind, title, detail: { ...ind, ...extra }, dedupeKey: key });
     if (id) events.push({ id, ts: now, ticker: t, kind, title, detail: { ...ind, ...extra } });
   };
   // Pick/short events are emitted top-N AFTER the full pass, so a broad rally
@@ -423,16 +423,16 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
     scanned++;
     if (scanned % 200 === 0) console.log(`[screener] progress: ${scanned}/${tickers.length}`);
 
-    upsert.run(t, longScore, longScore, shortScore, direction, sector, ind.crossStatus, JSON.stringify(ind));
+    await upsert.run(t, longScore, longScore, shortScore, direction, sector, ind.crossStatus, JSON.stringify(ind));
 
     // Cross events are self-rate-limited by the 10-session formation window.
     const extra = { longScore, shortScore, sector };
     if (ind.crossStatus === "golden_formed" && longScore >= 65) {
-      emit(t, ind, extra, "golden_cross", `${t} golden cross formed — ${ind.crossDetail} (long score ${longScore})`, `gx:${t}:${week}`);
+      await emit(t, ind, extra, "golden_cross", `${t} golden cross formed — ${ind.crossDetail} (long score ${longScore})`, `gx:${t}:${week}`);
     } else if (ind.crossStatus === "golden_soon" && longScore >= 68) {
-      emit(t, ind, extra, "golden_cross", `${t} golden cross approaching — ${ind.crossDetail} (long score ${longScore})`, `gxsoon:${t}:${week}`);
+      await emit(t, ind, extra, "golden_cross", `${t} golden cross approaching — ${ind.crossDetail} (long score ${longScore})`, `gxsoon:${t}:${week}`);
     } else if (ind.crossStatus === "death_formed" && heldSet.has(t)) {
-      emit(t, ind, extra, "death_cross", `${t} DEATH CROSS on a held position — ${ind.crossDetail}`, `dx:${t}:${week}`);
+      await emit(t, ind, extra, "death_cross", `${t} DEATH CROSS on a held position — ${ind.crossDetail}`, `dx:${t}:${week}`);
     }
     if (longScore >= 84 && !regime?.riskOff) pickCands.push({ t, ind, score: longScore, sector });
     if (shortScore >= 84) shortCands.push({ t, ind, score: shortScore, sector });
@@ -461,17 +461,17 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
 
   // Only the strongest confluences in the whole universe become events.
   for (const c of pickCands.sort((a, b) => b.score - a.score).slice(0, 12)) {
-    emit(c.t, c.ind, { longScore: c.score, sector: c.sector }, "screener_pick",
+    await emit(c.t, c.ind, { longScore: c.score, sector: c.sector }, "screener_pick",
       `${c.t} strong multi-factor LONG setup (${c.sector}, long score ${c.score}/100)`, `pick:${c.t}:${week}`);
   }
   for (const c of shortCands.sort((a, b) => b.score - a.score).slice(0, 8)) {
-    emit(c.t, c.ind, { shortScore: c.score, sector: c.sector }, "screener_short",
+    await emit(c.t, c.ind, { shortScore: c.score, sector: c.sector }, "screener_short",
       `${c.t} strong multi-factor SHORT setup (${c.sector}, short score ${c.score}/100 — structural breakdown confirmed)`, `short:${c.t}:${week}`);
   }
   // Prune rows for tickers that left the universe (delistings, filter changes) —
   // but only after a substantially complete pass, never after an aborted one.
   if (scanned > tickers.length * 0.5) {
-    const pruned = db.query(`DELETE FROM screener WHERE updated_at < unixepoch() - 172800 RETURNING ticker`).all().length;
+    const pruned = (await db.query(`DELETE FROM screener WHERE updated_at < extract(epoch from now())::int - 172800 RETURNING ticker`).all()).length;
     if (pruned) console.log(`[screener] pruned ${pruned} stale rows (out of universe >48h)`);
   }
   const skipped = tickers.length - scanned;

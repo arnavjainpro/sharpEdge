@@ -264,13 +264,13 @@ export async function gatherIdeaContext(
   if (!benchmarkCandles("SPY")) await refreshMarketContext();
 
   // Prefer the screener's stored indicators; compute fresh for off-universe tickers.
-  const row = db.query(`SELECT * FROM screener WHERE ticker = ?`).get(ticker) as any;
+  const row = await db.query(`SELECT * FROM screener WHERE ticker = ?`).get(ticker) as any;
   let ind: Indicators | null = row ? (JSON.parse(row.indicators) as Indicators) : null;
   const stale = row ? Date.now() / 1000 - row.updated_at > 24 * 3600 : true;
   if (!ind || stale) {
     const candles = await fetchDailyCandles(ticker);
     if (candles) {
-      const meta = universeMeta(ticker);
+      const meta = await universeMeta(ticker);
       const spy = benchmarkCandles("SPY")?.closes ?? null;
       const sec = benchmarkCandles(sectorEtf(meta?.sector))?.closes ?? null;
       ind = computeIndicators(candles, spy, sec) ?? ind;
@@ -292,7 +292,7 @@ export async function gatherIdeaContext(
   const dir: "long" | "short" =
     requestedDirection !== "auto" ? requestedDirection : quantDirection === "short" ? "short" : "long";
 
-  const meta = universeMeta(ticker);
+  const meta = await universeMeta(ticker);
   let headlines = "(news unavailable)";
   try {
     const to = new Date().toISOString().slice(0, 10);
@@ -308,7 +308,7 @@ export async function gatherIdeaContext(
   // Ideas are medium/long-term equity positions: size against account equity
   // with fixed account defaults, NOT the trader's short-term Analyze-tab risk
   // prefs — the Ideas tab is fully independent of the analyzer.
-  const sizing = positionSizing(userId, frame.entry, frame.stop, { risk: loadRiskConfig(), basis: "equity" });
+  const sizing = await positionSizing(userId, frame.entry, frame.stop, { risk: loadRiskConfig(), basis: "equity" });
   let optionsText: string | null = null;
   let optionsSummary: OptionsSummary | null = null;
   if (withOptions) {
@@ -336,10 +336,10 @@ export async function gatherIdeaContext(
   };
 }
 
-function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Portfolio, userNotes?: string): string {
+async function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Portfolio, userNotes?: string): Promise<string> {
   const i = ctx.ind;
   const held = portfolio.holdings.find((h) => h.ticker === ctx.ticker);
-  const snap = getMarketSnapshot();
+  const snap = await getMarketSnapshot();
   const secRot = snap?.sectors.find((s) => s.sector === ctx.sector);
   const fmt = (v: number | null | undefined, dec = 2) => (v != null ? v.toFixed(dec) : "n/a");
   // Ideas are medium-to-long-term equity buys/shorts, so the R:R bar is a fixed
@@ -365,7 +365,7 @@ function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Portfolio,
     `levels: nearest support $${fmt(i.support)}, nearest resistance $${fmt(i.resistance)}`,
     `relative strength: vs SPY 1m ${fmt(i.rsSpy1m, 1)}pp, 3m ${fmt(i.rsSpy3m, 1)}pp; vs sector ETF 1m ${fmt(i.rsSector1m, 1)}pp  beta(60d)=${fmt(i.beta, 2)}`,
     ``,
-    marketContextText(),
+    await marketContextText(),
     secRot
       ? `THIS SECTOR: ${secRot.sector} is ${secRot.state} (1m ${secRot.ret1m >= 0 ? "+" : ""}${secRot.ret1m.toFixed(1)}%, vs SPY ${secRot.rel1m >= 0 ? "+" : ""}${secRot.rel1m.toFixed(1)}pp, trend ${secRot.relTrend >= 0 ? "improving" : "fading"}).`
       : ``,
@@ -385,7 +385,7 @@ function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Portfolio,
       ? `SIZING MATH: ${ctx.sizing.accountEquity ? `equity $${ctx.sizing.accountEquity.toLocaleString()}, max risk ${ctx.sizing.riskPct}% = $${ctx.sizing.riskDollars}, suggested ~${ctx.sizing.shares} shares (~$${ctx.sizing.notional}). ${ctx.sizing.note}` : ctx.sizing.note}`
       : "",
     accountContextText(userId),
-    journalContextText(userId, ctx.ticker),
+    await journalContextText(userId, ctx.ticker),
     held ? `POSITION: trader already holds ${held.shares} shares @ $${held.cost_basis}${held.thesis ? ` — thesis: ${held.thesis}` : ""}.` : `POSITION: trader does not hold ${ctx.ticker}.`,
     ctx.optionsText
       ? `\n${ctx.optionsText}\nInclude an options_view in your output. Consider the FULL strategy menu — long call/put, vertical debit/credit spreads, straddle, strangle, iron condor, covered call, cash-secured put, calendar — and pick the ONE structure that best fits both the thesis and the IV regime: sell premium (credit spreads, iron condor, covered call, CSP) when IV is elevated; buy premium (long options, debit spreads) when IV is low and a real move is expected; straddle/strangle only for a genuine big-move-either-way thesis; iron condor for a range-bound thesis; covered call / cash-secured put only when it fits an existing or intended share position. Do NOT default to plain calls/puts if a defined-risk structure fits better. Propose concrete legs (action/right/strike/expiry/quantity) using ONLY strikes and expiries from the chain data above — max loss, max gain, and breakevens will be computed deterministically from your legs, so make them real. If options genuinely add nothing here, use strategy "neutral" or "avoid" with an empty legs array and say why. Spell out premium risk (IV crush, theta decay) in plain terms in iv_context.`
@@ -432,6 +432,7 @@ export async function validateIdea(
 
   const ctx = await gatherIdeaContext(userId, ticker, requestedDirection, !!opts.options);
   if ("error" in ctx) return ctx;
+  const prompt = await contextToPrompt(userId, ctx, portfolio, opts.notes);
 
   try {
     const response = await claudeQueue(() =>
@@ -441,12 +442,12 @@ export async function validateIdea(
         thinking: { type: "adaptive" },
         system: [{ type: "text", text: VALIDATOR_SYSTEM, cache_control: { type: "ephemeral" } }],
         output_config: { format: { type: "json_schema", schema: IDEA_SCHEMA } },
-        messages: [{ role: "user", content: contextToPrompt(userId, ctx, portfolio, opts.notes) }],
+        messages: [{ role: "user", content: prompt }],
       })
     );
     const report = { ticker: ctx.ticker, ...parseJsonResponse<Omit<IdeaReport, "ticker">>(response, "validator") };
     priceOptionsView(report, ctx);
-    db.query(`INSERT INTO ideas (ts, ticker, direction, rating, confidence, source, report, user_id) VALUES (unixepoch(), ?, ?, ?, ?, ?, ?, ?)`)
+    await db.query(`INSERT INTO ideas (ts, ticker, direction, rating, confidence, source, report, user_id) VALUES (extract(epoch from now())::int, ?, ?, ?, ?, ?, ?, ?)`)
       .run(ctx.ticker, report.direction, report.rating, report.confidence, opts.source ?? "validate", JSON.stringify(report), userId);
     return report;
   } catch (err) {
@@ -465,9 +466,9 @@ export interface IdeaFilters {
 
 // Batch idea generation: strongest screener confluences, both directions,
 // sector-diversified (max 2 per sector per direction), capped for cost.
-export function pickCandidates(portfolio: Portfolio, count: number, filters?: IdeaFilters): { ticker: string; direction: "long" | "short" }[] {
-  const rows = getScreenerRows(portfolio);
-  const regime = getMarketSnapshot()?.regime;
+export async function pickCandidates(portfolio: Portfolio, count: number, filters?: IdeaFilters): Promise<{ ticker: string; direction: "long" | "short" }[]> {
+  const rows = await getScreenerRows(portfolio);
+  const regime = (await getMarketSnapshot())?.regime;
   const minScore = filters?.minScore ?? 68;
   const sectorSet = filters?.sectors?.length ? new Set(filters.sectors) : null;
   const tickerSet = filters?.tickers?.length ? new Set(filters.tickers) : null;
@@ -493,8 +494,8 @@ export function pickCandidates(portfolio: Portfolio, count: number, filters?: Id
   return out;
 }
 
-export function recentIdeas(userId: number, limit = 20): (IdeaReport & { ts: number; source: string })[] {
+export async function recentIdeas(userId: number, limit = 20): Promise<(IdeaReport & { ts: number; source: string })[]> {
   // Intraday plans live in the same table but have a different shape — excluded here.
-  const rows = db.query(`SELECT ts, source, report FROM ideas WHERE user_id = ? AND source != 'intraday' ORDER BY ts DESC LIMIT ?`).all(userId, limit) as any[];
+  const rows = await db.query(`SELECT ts, source, report FROM ideas WHERE user_id = ? AND source != 'intraday' ORDER BY ts DESC LIMIT ?`).all(userId, limit) as any[];
   return rows.map((r) => ({ ...(JSON.parse(r.report) as IdeaReport), ts: r.ts, source: r.source }));
 }

@@ -30,6 +30,6 @@ export interface BrokerSnapshot {
 
 export interface BrokerProvider {
   name: BrokerSnapshot["source"];
-  available(userId: number): boolean;
+  available(userId: number): boolean | Promise<boolean>;
   fetchSnapshot(userId: number): Promise<BrokerSnapshot>;
 }

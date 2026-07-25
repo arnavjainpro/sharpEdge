@@ -110,21 +110,21 @@ export async function fetchNextEarnings(ticker: string): Promise<{ date: string;
 // Refresh per-ticker daily stats (prev close, 20d avg volume, 52wk range) from quote + stored bars.
 export async function refreshDailyStats(ticker: string) {
   const q = await fetchQuote(ticker);
-  const vol = db
+  const vol = await db
     .query(
       `SELECT AVG(day_vol) as av FROM (
          SELECT SUM(volume) as day_vol FROM bars WHERE ticker = ?
-         GROUP BY date(ts, 'unixepoch') ORDER BY date(ts, 'unixepoch') DESC LIMIT 20)`
+         GROUP BY to_char(to_timestamp(ts), 'YYYY-MM-DD') ORDER BY to_char(to_timestamp(ts), 'YYYY-MM-DD') DESC LIMIT 20) sub`
     )
     .get(ticker) as { av: number | null };
-  const existing = db
+  const existing = await db
     .query(`SELECT week52_high, week52_low FROM daily_stats WHERE ticker = ?`)
     .get(ticker) as { week52_high: number; week52_low: number } | null;
   const hi = Math.max(existing?.week52_high ?? q.h, q.h);
   const lo = Math.min(existing?.week52_low ?? q.l, q.l);
-  db.query(
+  await db.query(
     `INSERT INTO daily_stats (ticker, avg_volume_20d, prev_close, week52_high, week52_low, updated_at)
-     VALUES (?, ?, ?, ?, ?, unixepoch())
+     VALUES (?, ?, ?, ?, ?, extract(epoch from now())::int)
      ON CONFLICT(ticker) DO UPDATE SET avg_volume_20d=excluded.avg_volume_20d,
        prev_close=excluded.prev_close, week52_high=excluded.week52_high,
        week52_low=excluded.week52_low, updated_at=excluded.updated_at`
@@ -157,7 +157,7 @@ export function startTradeStream(tickers: string[], onTrade?: (t: { s: string; p
       console.log(`[finnhub] websocket connected, subscribing to ${tickers.length} tickers`);
       for (const t of tickers) ws!.send(JSON.stringify({ type: "subscribe", symbol: toFinnhub(t) }));
     };
-    ws.onmessage = (msg) => {
+    ws.onmessage = async (msg) => {
       wsStatus.lastMessageAt = Date.now();
       backoffAttempt = 0; // stable traffic → reset backoff
       try {
@@ -166,7 +166,7 @@ export function startTradeStream(tickers: string[], onTrade?: (t: { s: string; p
         for (const tr of data.data as { s: string; p: number; v: number; t: number }[]) {
           const sym = fromFinnhub(tr.s); // bars/cache keyed dash-form like the rest of storage
           const tsMin = Math.floor(tr.t / 1000 / 60) * 60;
-          upsertBar(sym, tsMin, tr.p, tr.p, tr.p, tr.p, tr.v);
+          await upsertBar(sym, tsMin, tr.p, tr.p, tr.p, tr.p, tr.v);
           patchQuoteFromTrade(sym, tr.p, tr.t);
           onTrade?.({ ...tr, s: sym });
         }

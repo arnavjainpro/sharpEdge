@@ -41,7 +41,7 @@ export interface ImportPayload {
   account?: { equity?: number; cash?: number; buying_power?: number };
 }
 
-export function saveImport(userId: number, payload: ImportPayload): BrokerSnapshot {
+export async function saveImport(userId: number, payload: ImportPayload): Promise<BrokerSnapshot> {
   const cryptoTickers = (payload.positions ?? [])
     .filter((p) => p.asset_class === "crypto")
     .map((p) => String(p.ticker ?? p.symbol ?? "?").toUpperCase());
@@ -81,18 +81,18 @@ export function saveImport(userId: number, payload: ImportPayload): BrokerSnapsh
       buying_power: payload.account?.buying_power != null ? Number(payload.account.buying_power) : null,
     },
   };
-  setSettingFor(userId, "broker_import", JSON.stringify(snapshot));
+  await setSettingFor(userId, "broker_import", JSON.stringify(snapshot));
   return snapshot;
 }
 
-export function clearImport(userId: number) {
-  setSettingFor(userId, "broker_import", "");
+export async function clearImport(userId: number) {
+  await setSettingFor(userId, "broker_import", "");
 }
 
 export const importProvider: BrokerProvider = {
   name: "import",
-  available: (userId: number) => !!getSettingFor(userId, "broker_import", ""),
+  available: async (userId: number) => !!(await getSettingFor(userId, "broker_import", "")),
   async fetchSnapshot(userId: number): Promise<BrokerSnapshot> {
-    return JSON.parse(getSettingFor(userId, "broker_import", "{}")) as BrokerSnapshot;
+    return JSON.parse(await getSettingFor(userId, "broker_import", "{}")) as BrokerSnapshot;
   },
 };

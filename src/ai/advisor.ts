@@ -55,15 +55,15 @@ function tickersInQuestion(question: string, portfolio: Portfolio): string[] {
 async function buildMarketContext(userId: number, portfolio: Portfolio, question: string): Promise<string> {
   const lines: string[] = [];
 
-  lines.push(marketContextText(), "", accountContextText(userId), "");
+  lines.push(await marketContextText(), "", accountContextText(userId), "");
   // Past-trade journal, scoped to a ticker if the question names exactly one.
   const askedTickers = tickersInQuestion(question, portfolio);
-  const journal = journalContextText(userId, askedTickers.length === 1 ? askedTickers[0] : undefined);
+  const journal = await journalContextText(userId, askedTickers.length === 1 ? askedTickers[0] : undefined);
   if (journal) lines.push(journal, "");
   lines.push("CURRENT PRICES & TECHNICALS:");
   for (const t of allTickers(portfolio)) {
-    const stats = db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(t) as { prev_close: number } | null;
-    const tech = snapshot(recentBars(t, 120), stats?.prev_close ?? null);
+    const stats = await db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(t) as { prev_close: number } | null;
+    const tech = snapshot(await recentBars(t, 120), stats?.prev_close ?? null);
     // Bars are empty when the market is quiet (overnight/weekends) — fall back to a REST quote.
     let price = tech.price;
     let chg = tech.sessionChangePct;
@@ -97,7 +97,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
   }
 
   const since = Math.floor(Date.now() / 1000) - 72 * 3600;
-  const events = db
+  const events = await db
     .query(
       `SELECT e.ts, e.ticker, e.kind, e.title, e.severity, s.action, s.conviction, s.thesis
        FROM events e LEFT JOIN signals s ON s.event_id = e.id
@@ -112,7 +112,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
     lines.push(line);
   }
 
-  const briefing = db.query(`SELECT ts, kind, content FROM briefings ORDER BY ts DESC LIMIT 1`).get() as
+  const briefing = await db.query(`SELECT ts, kind, content FROM briefings ORDER BY ts DESC LIMIT 1`).get() as
     | { ts: number; kind: string; content: string }
     | null;
   if (briefing) {
@@ -187,14 +187,14 @@ export async function summarizeTickerNews(ticker: string): Promise<string> {
 // pros, and cons. Markdown out; the frontend renders it as-is.
 export async function scorePortfolio(userId: number, portfolio: Portfolio): Promise<string> {
   if (!opusBreaker.allow()) throw new Error("AI circuit breaker is tripped — reset it from the status bar.");
-  const rows = new Map(getScreenerRows(portfolio).map((r) => [r.ticker, r]));
+  const rows = new Map((await getScreenerRows(portfolio)).map((r) => [r.ticker, r]));
   const lines: string[] = ["POSITIONS:"];
   let hasEtf = false;
   for (const h of portfolio.holdings) {
     const cls = h.asset_class ?? "equity";
     // An ETF held as an equity position is internally diversified — mark it so
     // the model doesn't read a single fund as a concentrated single-stock bet.
-    const meta = universeMeta(h.ticker);
+    const meta = await universeMeta(h.ticker);
     const isEtf = meta?.sector === "ETF";
     if (isEtf) hasEtf = true;
     const tag = isEtf ? `ETF — ${meta!.name}` : cls;
@@ -211,7 +211,7 @@ export async function scorePortfolio(userId: number, portfolio: Portfolio): Prom
   }
   if (hasEtf) lines.push("", "NOTE: positions marked ETF are diversified funds, not single stocks — a single ETF holding is NOT concentration; do not tell the trader to diversify out of one ETF.");
   if (!portfolio.holdings.length) lines.push("(no positions)");
-  lines.push("", marketContextText(), "", accountContextText(userId));
+  lines.push("", await marketContextText(), "", accountContextText(userId));
 
   const response = await claudeQueue(() =>
     client.messages.create({
