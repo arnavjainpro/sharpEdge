@@ -4258,8 +4258,7 @@
         }
       }
       wrap.innerHTML = `
-      <button class="rowbtn" aria-expanded="false">
-        ${chevSvg}
+      <button class="rowbtn">
         <div class="tick-name"><div class="sym">${esc(sym)}</div><div class="sub">${esc(sub)}</div></div>
         <svg class="mini-spark" preserveAspectRatio="none"></svg>
         ${timeChip}
@@ -4268,11 +4267,7 @@
           <div class="px">${priceCell}</div>
           <div class="dp ${q && q.dp >= 0 ? "up" : "down"}">${q ? signed(q.dp) + "%" : ""} ${q ? "today" : ""}</div>
         </div>
-      </button>
-      <div class="detail">
-        <p>You hold ${Math.abs(h.shares)} ${unit}${Math.abs(h.shares) === 1 ? "" : "s"} at a cost of ${money(h.cost_basis)} each — ${gain >= 0 ? "up" : "down"} <b class="${gain >= 0 ? "up" : "down"}">${money(Math.abs(gain))}</b> overall.</p>
-        ${factorDetail(sym)}
-      </div>`;
+      </button>`;
       // Full stock page (options resolve to their underlying via `sym`).
       wrap.querySelector(".rowbtn").addEventListener("click", () => showPane("stock", sym));
       sparkSvg(wrap.querySelector(".mini-spark"), screener[sym]?.indicators?.spark);
@@ -4577,19 +4572,13 @@
             }
           }
           const wrap = document.createElement("div");
-          const openKey = "ideas:" + item.ticker;
-          const isOpen = openRows.has(openKey);
-          wrap.dataset.openkey = openKey;
-          if (isOpen) wrap.classList.add("open");
           wrap.innerHTML = `
-        <button class="rowbtn" aria-expanded="${isOpen}">
-          ${chevSvg}
+        <button class="rowbtn">
           <div class="tick-name"><div class="sym">${esc(item.ticker)}${item.held ? ` <span class="chip warn sm">held</span>` : ""}</div><div class="sub">${money(item.price)}</div></div>
           <svg class="mini-spark" preserveAspectRatio="none"></svg>
           <span class="chip ${isLong ? "buy" : "sell"}">${isLong ? "Long" : "Short"} ${isLong ? item.long_score : item.short_score}</span>
           <div class="row-price"><div class="sub" style="font-size:12px;color:var(--dim);max-width:150px;white-space:normal;text-align:right">${reasons.slice(0, 2).join(" · ") || "Multi-factor"}</div></div>
-        </button>
-        <div class="detail">${r ? factorDetail(item.ticker) : `<p class="empty">no detail</p>`}</div>`;
+        </button>`;
           wrap.querySelector(".rowbtn").addEventListener("click", () => showPane("stock", item.ticker));
           if (i) sparkSvg(wrap.querySelector(".mini-spark"), i.spark);
           groupBox.appendChild(wrap);
@@ -4818,7 +4807,7 @@
         box.innerHTML = `
           <div style="font-size:13.5px;margin-bottom:12px">${betaLine}</div>
           ${bars}
-          <p style="font-size:11px;color:var(--faint);margin:10px 0 0">Exposure by sector across ${money0(d.totalValue)} of stocks and options — options grouped under their underlying, so a stock and its calls count as one position. Deterministic, no AI.</p>`;
+          <p style="font-size:11px;color:var(--faint);margin:10px 0 0">Exposure by sector across ${money0(d.totalValue)} of stock positions (options excluded). Deterministic, no AI.</p>`;
       } catch { sec.style.display = "none"; }
     }
 
