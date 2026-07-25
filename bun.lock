@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "marketpulse",
+      "name": "sharpedge",
       "dependencies": {
         "@anthropic-ai/sdk": "^0.78.0",
         "yaml": "^2.6.0",
