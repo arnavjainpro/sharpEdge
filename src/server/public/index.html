@@ -5039,7 +5039,10 @@
         const { scores } = await (await fetch("/api/portfolio/score-history")).json();
         if (!scores?.length) { el.innerHTML = ""; return; }
         const last = scores.at(-1);
-        const prev = scores.length > 1 ? scores[0] : null;
+        // The PREVIOUS score, not the oldest: "was 64 yesterday" answers
+        // "did it move?", which is the question. scores[0] would report the
+        // oldest run in the window and never change as new scores land.
+        const prev = scores.length > 1 ? scores[scores.length - 2] : null;
         const spark = document.createElement("svg");
         let sparkHtml = "";
         if (scores.length > 1) {
