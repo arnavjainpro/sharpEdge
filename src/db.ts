@@ -115,6 +115,100 @@ export async function clearBrokerLink(userId: number) {
   await db.query(`DELETE FROM broker_links WHERE user_id = ?`).run(userId);
 }
 
+// ── artifacts: non-idea AI output that survives a refresh ────────────────────
+export const ARTIFACT_KINDS = ["portfolio_score", "backtest"] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
+
+export interface ArtifactRow {
+  id: number; ts: number; kind: string;
+  ticker: string | null; score: number | null; summary: string | null; payload: string;
+}
+
+export async function insertArtifact(a: {
+  userId: number; kind: ArtifactKind; ticker?: string | null;
+  score?: number | null; summary?: string | null; payload: string;
+}): Promise<void> {
+  await db.query(
+    `INSERT INTO artifacts (user_id, ts, kind, ticker, score, summary, payload)
+     VALUES (?, extract(epoch from now())::int, ?, ?, ?, ?, ?)`
+  ).run(a.userId, a.kind, a.ticker ?? null, a.score ?? null, a.summary ?? null, a.payload);
+}
+
+export async function deleteArtifact(userId: number, id: number): Promise<boolean> {
+  // Scoped by user_id so an id from another account can't be deleted.
+  const rows = await db.query(`DELETE FROM artifacts WHERE user_id = ? AND id = ? RETURNING id`).all(userId, id);
+  return rows.length > 0;
+}
+
+export async function scoreHistory(userId: number, limit = 30): Promise<{ ts: number; score: number }[]> {
+  const rows = await db.query(
+    `SELECT ts, score FROM artifacts
+     WHERE user_id = ? AND kind = 'portfolio_score' AND score IS NOT NULL
+     ORDER BY ts DESC, id DESC LIMIT ?`
+  ).all(userId, limit) as { ts: number; score: number }[];
+  return rows.reverse(); // oldest -> newest, ready to plot
+}
+
+// Merged history feed over two tables with independent id sequences.
+//
+// The cursor is row-wise on (ts, src, id), NOT plain `ts < before`: ts is
+// second-granularity and /api/ideas/generate writes several rows inside one
+// second, so a ts-only cursor drops the rest of the boundary second (with `<`)
+// or loops forever (with `<=`). `src` is a literal 'a'/'i' per branch, which
+// makes the composite a total order across both tables.
+//
+// UNION ALL, not UNION: plain UNION would dedupe across the big text payload —
+// wrong (rows are never equal) and expensive. Each branch orders and limits
+// before the union so idx_ideas_user_ts / idx_artifacts_user_ts get used.
+export interface HistoryCursor { ts: number; src: string; id: number }
+
+export async function historyFeed(
+  userId: number, limit: number, cursor: HistoryCursor | null, kinds: string[] | null
+): Promise<any[]> {
+  const wantIdeas = !kinds || kinds.some((k) => k === "idea" || k === "intraday");
+  const wantArtifacts = !kinds || kinds.some((k) => (ARTIFACT_KINDS as readonly string[]).includes(k));
+  const cur = cursor ? [cursor.ts, cursor.src, cursor.id] : null;
+  const branches: string[] = [];
+  const params: any[] = [];
+
+  if (wantIdeas) {
+    const onlyIntraday = kinds?.includes("intraday") && !kinds.includes("idea");
+    const onlyIdeas = kinds?.includes("idea") && !kinds.includes("intraday");
+    branches.push(
+      `(SELECT ts, 'i' AS src, id, source AS kind, ticker, direction, rating, NULL::int AS score, NULL::text AS summary, report AS payload
+        FROM ideas WHERE user_id = ?
+        ${onlyIntraday ? "AND source = 'intraday'" : ""}${onlyIdeas ? "AND source != 'intraday'" : ""}
+        ${cur ? "AND (ts, 'i', id) < (?, ?, ?)" : ""}
+        ORDER BY ts DESC, id DESC LIMIT ?)`
+    );
+    params.push(userId, ...(cur ?? []), limit);
+  }
+  if (wantArtifacts) {
+    const ks = kinds?.filter((k) => (ARTIFACT_KINDS as readonly string[]).includes(k)) ?? null;
+    // Placeholder COUNT is interpolated, never the values — and ks is already
+    // filtered to the ARTIFACT_KINDS allowlist, so nothing user-supplied can
+    // reach the SQL text. Expanded IN (?,?) rather than = ANY(?) to avoid
+    // depending on array-parameter binding.
+    branches.push(
+      `(SELECT ts, 'a' AS src, id, kind, ticker, NULL::text AS direction, NULL::text AS rating, score, summary, payload
+        FROM artifacts WHERE user_id = ?
+        ${ks?.length ? `AND kind IN (${ks.map(() => "?").join(",")})` : ""}
+        ${cur ? "AND (ts, 'a', id) < (?, ?, ?)" : ""}
+        ORDER BY ts DESC, id DESC LIMIT ?)`
+    );
+    params.push(userId, ...(ks ?? []), ...(cur ?? []), limit);
+  }
+  if (!branches.length) return [];
+
+  // Wrapped in a subselect: with a single branch (any one-kind filter) a bare
+  // `(SELECT ... ORDER BY ... LIMIT) ORDER BY ... LIMIT` is a Postgres syntax
+  // error ("multiple ORDER BY clauses not allowed"). The wrapper makes the
+  // one-branch and two-branch shapes identical.
+  return await db.query(
+    `SELECT * FROM (${branches.join(" UNION ALL ")}) feed ORDER BY ts DESC, src DESC, id DESC LIMIT ?`
+  ).all(...params, limit) as any[];
+}
+
 // Master switch for automatic AI calls (triage, analysis, scheduled briefings).
 // User-initiated actions (chat, manual briefing, screener deep-dive) always work.
 export const aiLive = async () => (await getSetting("ai_live", "1")) === "1";
