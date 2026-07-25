@@ -266,22 +266,22 @@ export function startServer() {
 
       // F3: portfolio concentration — deterministic ($0). Resolve each holding's
       // value/sector/beta, then let the pure engine do the grouping + warnings.
+      // Options are excluded: this reads as stock exposure, not a mixed
+      // premium/notional blend that misrepresents how concentrated the book is.
       if (url.pathname === "/api/concentration") {
         try {
-          const holdings = currentPortfolio(userId).holdings.filter((h) => (h.asset_class as string) !== "crypto");
+          const holdings = currentPortfolio(userId).holdings.filter((h) => (h.asset_class ?? "equity") === "equity");
           const maxPositionPct = (await loadRiskConfigFor(userId)).max_position_pct ?? 20;
-          // Beta + sector key off the underlying (options) or the ticker (equities).
           const betaFor = (key: string): number | null => {
             const row = db.query(`SELECT indicators FROM screener WHERE ticker = ?`).get(key) as any;
             if (!row) return null;
             try { return JSON.parse(row.indicators).beta ?? null; } catch { return null; }
           };
           const items: ConcHolding[] = await Promise.all(holdings.map(async (h) => {
-            const key = (h.option?.underlying ?? h.ticker).toUpperCase();
+            const key = h.ticker.toUpperCase();
             let value = 0;
-            if (h.market_value != null) value = Math.abs(h.market_value);          // options / broker-priced
-            else { try { const q = await cachedQuote(h.ticker); if (q?.c) value = Math.abs(h.shares * q.c); } catch {} }
-            return { key, value, sector: (await universeMeta(key))?.sector ?? "Unknown", beta: h.asset_class === "option" ? null : betaFor(key) };
+            try { const q = await cachedQuote(h.ticker); if (q?.c) value = Math.abs(h.shares * q.c); } catch {}
+            return { key, value, sector: (await universeMeta(key))?.sector ?? "Unknown", beta: betaFor(key) };
           }));
           return Response.json({ ok: true, ...computeConcentration(items, maxPositionPct) });
         } catch (err) {
