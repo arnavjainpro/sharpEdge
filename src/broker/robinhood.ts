@@ -268,10 +268,19 @@ async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
     const portfolios = await rhList(`${API}/portfolios/`, authHeader);
     const acc = (await rhList(`${API}/accounts/`, authHeader))[0] ?? {};
     const pf = portfolios[0] ?? {};
+    // `|| null` would turn a legitimate $0 (fully invested) into "unknown" and
+    // silently drop the row from the UI and the AI prompt — coerce explicitly.
+    const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+    // The top-level `buying_power` is the START-OF-DAY figure — it's literally
+    // equal to margin_balances.start_of_day_overnight_buying_power and goes
+    // stale the moment you trade, so it reads high all day. The live number is
+    // margin_balances.overnight_buying_power. Cash accounts return no
+    // margin_balances at all, hence the fallback.
+    const mb = acc.margin_balances ?? {};
     account = {
-      equity: Number(pf.extended_hours_equity ?? pf.equity) || null,
-      cash: Number(acc.portfolio_cash ?? acc.cash) || null,
-      buying_power: Number(acc.buying_power) || null,
+      equity: num(pf.extended_hours_equity ?? pf.equity),
+      cash: num(acc.portfolio_cash ?? acc.cash),
+      buying_power: num(mb.overnight_buying_power ?? acc.buying_power),
     };
   } catch {}
 

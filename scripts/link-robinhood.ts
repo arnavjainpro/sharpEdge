@@ -18,7 +18,7 @@ function ask(q: string): string {
 
 // Which sharpEdge account (sign up in the dashboard first) this link belongs to.
 const mpEmail = ask("sharpEdge account email (sign up in the dashboard first if you haven't): ");
-const mpUser = findUserByEmail(mpEmail);
+const mpUser = await findUserByEmail(mpEmail);
 if (!mpUser) {
   console.error(`\n✗ No sharpEdge account for "${mpEmail}". Sign up at the dashboard first, then re-run this.`);
   process.exit(1);
@@ -26,7 +26,7 @@ if (!mpUser) {
 const userId = mpUser.id;
 
 if (process.argv.includes("--clear")) {
-  clearAuth(userId);
+  await clearAuth(userId);
   console.log(`Robinhood tokens cleared for ${mpEmail}.`);
   process.exit(0);
 }
@@ -34,7 +34,7 @@ if (process.argv.includes("--clear")) {
 console.log("Robinhood link (read-only). Your password is sent only to Robinhood; tokens are stored locally.\n");
 const username = ask("Robinhood email/username: ");
 const password = ask("Password: ");
-const deviceToken = loadAuth(userId)?.device_token ?? newDeviceToken();
+const deviceToken = (await loadAuth(userId))?.device_token ?? newDeviceToken();
 
 const base = {
   client_id: CLIENT_ID,
@@ -74,7 +74,7 @@ if (json?.verification_workflow?.id) {
 }
 
 if (json?.access_token) {
-  saveAuth(userId, toAuth(json, deviceToken));
+  await saveAuth(userId, toAuth(json, deviceToken));
   console.log("\n✓ Linked. Restart the server (or hit Refresh in the dashboard) to pull positions.");
 } else {
   console.error(`\n✗ Login failed (status ${status}): ${JSON.stringify(json).slice(0, 300)}`);
