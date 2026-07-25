@@ -27,12 +27,13 @@ A personal trading research and decision-support engine. It scans a **~1,500-sto
 
 ## Setup
 
-1. Free Finnhub key: https://finnhub.io
-2. Anthropic API key: https://platform.claude.com (needs credits)
-3. `cp .env.example .env` and fill both keys in
-4. Put your real holdings in `config/portfolio.yaml` (or link Robinhood / use the Import panel) — add a one-line `thesis:` per holding and a `risk:` section for sizing
-5. `bun install && bun start` → http://localhost:3000
-6. **Create an account** on first load. The first signup becomes the primary user and inherits the `portfolio.yaml` holdings and any existing data; the background monitor watches that account. Additional users get their own portfolios and the interactive tools (validate / generate / intraday / chat / journal / alerts).
+1. Supabase project: create one at https://supabase.com and copy the Postgres connection string (Project → Settings → Database → Connection string → URI)
+2. Free Finnhub key: https://finnhub.io
+3. Anthropic API key: https://platform.claude.com (needs credits)
+4. `cp .env.example .env` and fill in `DATABASE_URL`, `FINNHUB_API_KEY`, and the Anthropic key — the schema is created automatically on first boot (migrating from an old local SQLite build? run `bun run scripts/migrate-to-supabase.ts` once)
+5. Put your real holdings in `config/portfolio.yaml` (or link Robinhood / use the Import panel) — add a one-line `thesis:` per holding and a `risk:` section for sizing
+6. `bun install && bun start` → http://localhost:3000
+7. **Create an account** on first load. The first signup becomes the primary user and inherits the `portfolio.yaml` holdings and any existing data; the background monitor watches that account. Additional users get their own portfolios and the interactive tools (validate / generate / intraday / chat / journal / alerts).
 
 **Telegram (required for alerts to reach you):** set `TELEGRAM_BOT_TOKEN` (bot via @BotFather) and `TELEGRAM_CHAT_ID` (from @userinfobot) in `.env`. Without it, price/score alerts still evaluate and fire correctly but have nowhere to land — the only other channel is a native macOS notification, which off macOS just fails and writes a `[notify:mac] failed:` line to the log on every delivery. Signals (buy/sell advice) use the same channel.
 
