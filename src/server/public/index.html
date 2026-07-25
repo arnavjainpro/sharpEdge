@@ -1067,12 +1067,6 @@
       margin-top: 4px;
     }
 
-    #portfolio-total {
-      font-size: 13px;
-      color: var(--dim);
-      margin-top: 2px;
-    }
-
     .up {
       color: var(--green);
     }
@@ -2664,6 +2658,88 @@
       display: none;
     }
 
+    /* one row grammar for every history kind */
+    #history-ideas .hist-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex: none;
+      background: var(--dim);
+    }
+
+    #history-ideas .hist-dot.idea,
+    #history-ideas .hist-dot.validate,
+    #history-ideas .hist-dot.generate {
+      background: var(--brand);
+    }
+
+    #history-ideas .hist-dot.intraday {
+      background: var(--green);
+    }
+
+    #history-ideas .hist-dot.portfolio_score {
+      background: #f59e0b;
+    }
+
+    #history-ideas .hist-dot.backtest {
+      background: #8b5cf6;
+    }
+
+    #history-ideas .hist-label {
+      font-weight: 700;
+      min-width: 62px;
+    }
+
+    #history-ideas .hist-time {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .hist-del {
+      background: none;
+      border: none;
+      color: var(--faint);
+      cursor: pointer;
+      padding: 2px;
+      line-height: 0;
+      border-radius: 4px;
+    }
+
+    .hist-del:hover {
+      color: var(--red);
+    }
+
+    #pf-score-trend {
+      font-size: 13px;
+      color: var(--dim);
+      margin-top: 2px;
+    }
+
+    #pf-score-trend svg {
+      width: 54px;
+      height: 14px;
+      vertical-align: -2px;
+    }
+
+    .hist-open {
+      background: none;
+      border: 1px solid var(--line);
+      color: var(--faint);
+      border-radius: 6px;
+      padding: 1px 7px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .hist-open:hover {
+      color: var(--brand);
+      border-color: var(--brand);
+    }
+
     #brief-gen {
       margin-left: auto;
       background: none;
@@ -3058,7 +3134,7 @@
           </div>
           <div id="portfolio-value">$—</div>
           <div id="portfolio-day"></div>
-          <div id="portfolio-total"></div>
+          <div id="pf-score-trend"></div>
           <svg id="portfolio-spark" preserveAspectRatio="none"></svg>
           <div id="broker-line"></div>
           <div id="pf-updated"></div>
@@ -3197,14 +3273,11 @@
               <input type="text" id="preset-name" placeholder="Name this filter set" maxlength="40" style="flex:1">
               <button class="refresh-btn" id="preset-save" title="Save the current filters as a reusable preset">+ Save preset</button>
             </div>
-            <div class="flabel">Quick thresholds</div>
-            <label>Minimum score (0–100) <input type="number" id="flt-score" min="50" max="100" step="1"
-                placeholder="any"></label>
-            <label>Minimum market cap ($ billions) <input type="number" id="flt-mcap" min="0" step="1"
-                placeholder="any"></label>
-            <div class="flabel">Custom rule</div>
+            <div class="flabel">Add a rule</div>
             <div class="cf-row">
               <select id="cf-metric" aria-label="Metric">
+                <option value="score">Score</option>
+                <option value="mcapB">Market cap $B</option>
                 <option value="rsi14">RSI (14d)</option>
                 <option value="pctVs200">% vs 200-day</option>
                 <option value="mom1m">1-mo return %</option>
@@ -3217,8 +3290,10 @@
                 <option value="pct52w">52-wk range %</option>
               </select>
               <select id="cf-op" aria-label="Comparison">
+                <option value=">=">at least</option>
                 <option value=">">above</option>
                 <option value="<">below</option>
+                <option value="<=">at most</option>
               </select>
               <input type="number" id="cf-val" step="any" placeholder="value" style="width:74px">
               <button class="refresh-btn" id="cf-add" title="Add this rule as a removable filter">+ Add rule</button>
@@ -3418,6 +3493,24 @@
           </div>
         </section>
 
+        <!-- The feed comes FIRST: it's what you open History for. The journal form,
+             calibration, and the scoreboard are input/reference and sit below, so
+             they stop pushing the actual history under the fold. -->
+        <section data-pane="history">
+          <h2>History</h2>
+          <div id="history-kinds" class="filter-bar" style="margin:0 0 10px"></div>
+          <div id="history-ideas">
+            <div class="skel-rows">
+              <div class="skel" style="height:44px"></div>
+              <div class="skel" style="height:44px"></div>
+              <div class="skel" style="height:44px"></div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:center;margin-top:10px">
+            <button class="refresh-btn" id="history-more" hidden>Load more</button>
+          </div>
+        </section>
+
         <section data-pane="history">
           <h2>Trade journal</h2>
           <div class="card" id="tracked-list" style="margin-bottom:12px;padding:10px 16px;display:none"></div>
@@ -3450,33 +3543,32 @@
         </section>
 
         <section data-pane="history">
-          <h2>Validator calibration</h2>
-          <div class="card" id="calibration" style="padding:14px 16px">
-            <div class="skel-rows">
-              <div class="skel" style="height:36px"></div>
-              <div class="skel" style="height:36px"></div>
-              <div class="skel" style="height:36px"></div>
+          <details class="block">
+            <summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg><span style="font-weight:700">Validator
+                calibration</span></summary>
+            <div class="inner">
+              <div id="calibration">
+                <div class="skel-rows">
+                  <div class="skel" style="height:36px"></div>
+                  <div class="skel" style="height:36px"></div>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
-
-        <section data-pane="history">
-          <h2>Idea scoreboard</h2>
-          <div class="card" id="scoreboard" style="padding:12px 16px">
-            <div class="skel-rows">
-              <div class="skel" style="height:36px"></div>
-              <div class="skel" style="height:36px"></div>
-              <div class="skel" style="height:36px"></div>
+          </details>
+          <details class="block">
+            <summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg><span style="font-weight:700">Idea
+                scoreboard</span></summary>
+            <div class="inner">
+              <div id="scoreboard">
+                <div class="skel-rows">
+                  <div class="skel" style="height:36px"></div>
+                  <div class="skel" style="height:36px"></div>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
-
-        <section data-pane="history">
-          <h2>Past analyses</h2>
-          <div id="history-ideas">
-            <div class="empty">No validated ideas yet — validate a ticker or generate ideas and they'll show up here.
-            </div>
-          </div>
+          </details>
         </section>
 
         <p class="disclaimer">Decision-support tool, not licensed financial advice. Every trade is your decision.</p>
@@ -3722,7 +3814,19 @@
     let tickerSeq = 0;                     // guards against out-of-order keystroke responses
     let lastTickerData = null;             // wave 5 (alerts) reads the currently-shown ticker
 
-    function openTickerModal() { tickerModal.hidden = false; tickerSearch.focus(); tickerSearch.select(); }
+    // Opens clean every time: the old query, its rendered result, and the cached
+    // symbol are all cleared. Previously .select() only highlighted the last
+    // search, so reopening showed stale text and a stale result card.
+    const TM_HINT = `<div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news — jump to the full page or TradingView.</div>`;
+    function openTickerModal() {
+      tickerSearch.value = "";
+      tickerResult.innerHTML = TM_HINT;
+      currentSym = "";
+      lastTickerData = null;
+      hideSuggest();
+      tickerModal.hidden = false;
+      tickerSearch.focus();
+    }
     function closeTickerModal() { tickerModal.hidden = true; hideSuggest(); }
     $("#search-open").addEventListener("click", openTickerModal);
     document.addEventListener("keydown", (e) => {
@@ -4076,21 +4180,19 @@
     /* ── portfolio hero + broker ── */
     function renderPortfolio() {
       if (!portfolio.holdings.length) return;
-      let value = 0, day = 0, cost = 0, prev = 0;
+      let value = 0, day = 0, prev = 0;
       for (const h of portfolio.holdings) {
         if (h.asset_class === "crypto") continue; // unsupported; new imports reject it, but pre-existing stored imports may still have one
         const q = quotes[h.ticker];
         // Options (and any broker-priced position) carry their own market value.
         if (h.market_value != null) {
           value += h.market_value;
-          cost += h.shares * h.cost_basis * (h.asset_class === "option" ? 100 : 1);
           continue;
         }
         if (!q) continue;
         value += h.shares * q.c;
         day += h.shares * (q.d ?? 0);
         prev += h.shares * (q.pc ?? q.c);
-        cost += h.shares * h.cost_basis;
       }
       if (!value) return;
       $("#portfolio-value").textContent = money(value);
@@ -4098,9 +4200,9 @@
       const d = $("#portfolio-day");
       d.innerHTML = `${icon(day >= 0 ? "trend-up" : "trend-down", 14)} ${money(Math.abs(day))} (${signed(dayPct)}%) today`;
       d.className = day >= 0 ? "up" : "down";
-      const tot = value - cost;
-      const t = $("#portfolio-total");
-      t.innerHTML = `Total return <span class="${tot >= 0 ? "up" : "down"}" style="font-weight:600">${signed(tot / Math.max(cost, 1) * 100, 1)}% (${money(tot)})</span> since you invested`;
+      // No all-time return line: `cost` is the basis of CURRENTLY HELD shares
+      // only, so it ignores dividends, splits, partial sells, and every closed
+      // position. "Since you invested" was wrong by construction, not by rounding.
 
       const sparks = portfolio.holdings
         .map((h) => ({ h, s: screener[h.ticker]?.indicators?.spark }))
@@ -4118,9 +4220,11 @@
       const el = $("#broker-line");
       const src = brokerInfo?.source ?? "manual";
       const srcLabel = src === "robinhood" ? "Linked: Robinhood" : src === "import" ? "Imported positions" : "From portfolio.yaml";
-      // Portfolio value above is active positions; here we show spendable cash
-      // (buying power), not account equity — equity double-counts the positions.
-      const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
+      // Portfolio value above is active positions; the "Cash" chip is deliberately
+      // buying power (what's actually spendable), not settled cash and not equity
+      // — equity would double-count the positions.
+      const acct = brokerInfo?.account;
+      const cash = acct?.buying_power ?? acct?.cash;
       const orders = brokerInfo?.openOrders?.length ?? 0;
       el.innerHTML = `
     <span class="chip ${src === "robinhood" ? "buy" : src === "import" ? "info" : "calm"} sm">${srcLabel}</span>
@@ -4183,6 +4287,7 @@
           box.innerHTML = `<div class="report"><button class="close-report" title="dismiss">${icon("close", 12)}</button><div class="pf-score-md"></div></div>`;
           renderMd(box.querySelector(".pf-score-md"), res.analysis);
           box.querySelector(".close-report").addEventListener("click", () => { box.innerHTML = ""; });
+          loadScoreTrend(); // it's saved now, so refresh the hero trend line
         } else box.innerHTML = `<div class="empty">Scoring failed: ${esc(res.error)}</div>`;
       } catch (e) { box.innerHTML = `<div class="empty">Scoring failed: ${esc(String(e))}</div>`; }
       finally { btn.disabled = false; btn.textContent = orig; }
@@ -4377,61 +4482,70 @@
     const readStoredSet = (key) => { try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); } };
     const collapsedSectors = readStoredSet("collapsedSectors");
     const saveCollapsed = () => localStorage.setItem("collapsedSectors", JSON.stringify([...collapsedSectors]));
+    // One filter mechanism, not two. "Minimum score" and "Minimum market cap"
+    // used to be a separate `numFilters` store with its own localStorage key,
+    // chip type, and removal handler — duplicating CUSTOM_METRICS.score and
+    // .mcapB, which already existed but were hidden from the dropdown. They're
+    // now exposed as ordinary rules and numFilters is gone.
+    const FILTER_OPS = {
+      ">=": (v, t) => v >= t,
+      ">": (v, t) => v > t,
+      "<": (v, t) => v < t,
+      "<=": (v, t) => v <= t,
+    };
+    const OP_LABEL = { ">=": "≥", ">": ">", "<": "<", "<=": "≤" };
+    const validRule = (f) => f && CUSTOM_METRICS[f.metric] && FILTER_OPS[f.op] && Number.isFinite(f.value);
+
     let customFilters = [];
     try {
       const raw = JSON.parse(localStorage.getItem("customIdeaFilters") || "[]");
-      if (Array.isArray(raw)) customFilters = raw.filter((f) => f && CUSTOM_METRICS[f.metric] && (f.op === ">" || f.op === "<") && Number.isFinite(f.value));
+      if (Array.isArray(raw)) customFilters = raw.filter(validRule);
+    } catch { }
+    // One-time migration of the retired numeric thresholds. `>=` preserves the
+    // old "Minimum" semantics exactly — migrating to `>` would silently start
+    // excluding rows that sat exactly on the threshold.
+    function migrateNumFilters(nf) {
+      const out = [];
+      if (Number.isFinite(nf?.minScore)) out.push({ metric: "score", op: ">=", value: nf.minScore });
+      if (Number.isFinite(nf?.minCapB)) out.push({ metric: "mcapB", op: ">=", value: nf.minCapB });
+      return out;
+    }
+    try {
+      const legacy = localStorage.getItem("ideaNumFilters");
+      if (legacy) {
+        const migrated = migrateNumFilters(JSON.parse(legacy));
+        // Don't duplicate a rule the user already has for the same metric.
+        for (const m of migrated) if (!customFilters.some((f) => f.metric === m.metric)) customFilters.push(m);
+        localStorage.removeItem("ideaNumFilters");
+        localStorage.setItem("customIdeaFilters", JSON.stringify(customFilters));
+      }
     } catch { }
     const saveCustomFilters = () => localStorage.setItem("customIdeaFilters", JSON.stringify(customFilters));
-    // Numeric thresholds (min score / min market cap) layer on top of the rules.
-    let numFilters = { minScore: null, minCapB: null };
-    try {
-      const raw = JSON.parse(localStorage.getItem("ideaNumFilters") || "{}");
-      if (Number.isFinite(raw.minScore)) numFilters.minScore = raw.minScore;
-      if (Number.isFinite(raw.minCapB)) numFilters.minCapB = raw.minCapB;
-    } catch { }
-    const saveNumFilters = () => localStorage.setItem("ideaNumFilters", JSON.stringify(numFilters));
-    const anyFilterActive = () => customFilters.length > 0 || numFilters.minScore != null || numFilters.minCapB != null;
+    const anyFilterActive = () => customFilters.length > 0;
     function passesFilters(item, i, isLong) {
       for (const cf of customFilters) {
         const v = CUSTOM_METRICS[cf.metric]?.get(i, item, isLong);
-        if (v == null || !(cf.op === ">" ? v > cf.value : v < cf.value)) return false;
-      }
-      const score = isLong ? item.long_score : item.short_score;
-      if (numFilters.minScore != null && score < numFilters.minScore) return false;
-      if (numFilters.minCapB != null) {
-        const cap = screener[item.ticker]?.market_cap;
-        if (cap != null && cap < numFilters.minCapB * 1e9) return false;
+        // Unknown value fails every rule. The old market-cap threshold did the
+        // opposite and let null through, so "Cap ≥ $10B" quietly included every
+        // ticker whose market cap the screener didn't have.
+        if (v == null || !FILTER_OPS[cf.op](v, cf.value)) return false;
       }
       return true;
     }
     // Active-rule chips render in the bar AND inside the dialog; removing works
     // from either place. The ⚙ button shows how many rules are live.
     function filterChipsHtml() {
-      const chips = [];
-      if (numFilters.minScore != null) chips.push(`<button class="filter-chip on" data-nfilter="minScore" title="Remove">Score ≥ ${numFilters.minScore} ${icon("close", 12)}</button>`);
-      if (numFilters.minCapB != null) chips.push(`<button class="filter-chip on" data-nfilter="minCapB" title="Remove">Cap ≥ $${numFilters.minCapB}B ${icon("close", 12)}</button>`);
-      chips.push(...customFilters.map((cf, idx) =>
-        `<button class="filter-chip on" data-cfilter="${idx}" title="Remove this filter">${esc(CUSTOM_METRICS[cf.metric].label)} ${cf.op} ${cf.value} ${icon("close", 12)}</button>`));
-      return chips.join("");
+      return customFilters.map((cf, idx) =>
+        `<button class="filter-chip on" data-cfilter="${idx}" title="Remove this filter">${esc(CUSTOM_METRICS[cf.metric].label)} ${OP_LABEL[cf.op] ?? cf.op} ${cf.value} ${icon("close", 12)}</button>`).join("");
     }
     function renderFilterBar() {
       const html = filterChipsHtml();
       $("#active-filter-chips").innerHTML = html;
       $("#modal-filter-chips").innerHTML = html || `<span style="color:var(--faint)">No filters active — everything setup-grade shows.</span>`;
-      const n = customFilters.length + (numFilters.minScore != null) + (numFilters.minCapB != null);
-      $("#filters-btn-label").textContent = n ? `Filters (${n})` : "Filters";
+      $("#filters-btn-label").textContent = customFilters.length ? `Filters (${customFilters.length})` : "Filters";
     }
     // Chip removal, delegated at document level so bar + dialog share it.
     document.addEventListener("click", (e) => {
-      const nbtn = e.target.closest("[data-nfilter]");
-      if (nbtn) {
-        numFilters[nbtn.dataset.nfilter] = null;
-        saveNumFilters();
-        $(nbtn.dataset.nfilter === "minScore" ? "#flt-score" : "#flt-mcap").value = "";
-        renderFilterBar(); renderIdeas();
-        return;
-      }
       const cbtn = e.target.closest("[data-cfilter]");
       if (cbtn) {
         customFilters.splice(+cbtn.dataset.cfilter, 1);
@@ -4444,26 +4558,24 @@
     $("#filters-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     $("#filters-clear").addEventListener("click", () => {
       customFilters = [];
-      numFilters = { minScore: null, minCapB: null };
-      saveCustomFilters(); saveNumFilters();
-      $("#flt-score").value = ""; $("#flt-mcap").value = "";
+      saveCustomFilters();
       renderFilterBar(); renderIdeas();
     });
     $("#cf-add").addEventListener("click", () => {
       const metric = $("#cf-metric").value;
       const op = $("#cf-op").value;
       const value = parseFloat($("#cf-val").value);
-      if (!CUSTOM_METRICS[metric] || !Number.isFinite(value)) return;
-      customFilters.push({ metric, op, value });
+      if (!CUSTOM_METRICS[metric] || !FILTER_OPS[op] || !Number.isFinite(value)) return;
+      // Re-adding the same metric+op replaces it rather than stacking a second
+      // contradictory rule ("Score ≥ 70" then "Score ≥ 80" is one intent).
+      const dup = customFilters.findIndex((f) => f.metric === metric && f.op === op);
+      if (dup >= 0) customFilters[dup] = { metric, op, value };
+      else customFilters.push({ metric, op, value });
       saveCustomFilters();
       $("#cf-val").value = "";
       renderFilterBar();
       renderIdeas();
     });
-    $("#flt-score").addEventListener("input", (e) => { numFilters.minScore = e.target.value === "" ? null : +e.target.value; saveNumFilters(); renderFilterBar(); renderIdeas(); });
-    $("#flt-mcap").addEventListener("input", (e) => { numFilters.minCapB = e.target.value === "" ? null : +e.target.value; saveNumFilters(); renderFilterBar(); renderIdeas(); });
-    $("#flt-score").value = numFilters.minScore ?? "";
-    $("#flt-mcap").value = numFilters.minCapB ?? "";
     renderFilterBar();
 
     /* ── F5: named filter presets, saved per-user (settings table) so they
@@ -4489,18 +4601,24 @@
         `<span style="display:inline-flex;align-items:center"><button class="filter-chip" data-preset="${i}" title="Apply this preset">${esc(p.name)}</button><button class="filter-chip" data-preset-del="${i}" title="Delete preset" style="padding:4px 6px">${icon("close", 12)}</button></span>`).join(" ");
     }
     function applyPreset(p) {
-      customFilters = (p.customFilters || []).filter((f) => f && CUSTOM_METRICS[f.metric] && (f.op === ">" || f.op === "<") && Number.isFinite(f.value)).map((f) => ({ ...f }));
-      numFilters = { minScore: p.numFilters?.minScore ?? null, minCapB: p.numFilters?.minCapB ?? null };
-      saveCustomFilters(); saveNumFilters();
-      $("#flt-score").value = numFilters.minScore ?? "";
-      $("#flt-mcap").value = numFilters.minCapB ?? "";
+      customFilters = (p.customFilters || []).filter(validRule).map((f) => ({ ...f }));
+      // Presets are stored SERVER-side (settings table), so old ones still carry
+      // a numFilters object. Migrate on apply or every saved preset silently
+      // loses its score/market-cap thresholds.
+      for (const m of migrateNumFilters(p.numFilters)) {
+        if (!customFilters.some((f) => f.metric === m.metric)) customFilters.push(m);
+      }
+      saveCustomFilters();
       renderFilterBar(); renderIdeas();
     }
     $("#preset-save").addEventListener("click", () => {
       const name = $("#preset-name").value.trim();
       if (!name) { toast("Name the preset first", "err"); return; }
       if (!anyFilterActive()) { toast("Set some filters before saving", "err"); return; }
-      const preset = { name, customFilters: customFilters.map((f) => ({ ...f })), numFilters: { ...numFilters } };
+      // No numFilters: score/market-cap are ordinary rules now. The server still
+      // accepts and round-trips the old field so presets saved before this
+      // change keep their thresholds until they're next re-saved.
+      const preset = { name, customFilters: customFilters.map((f) => ({ ...f })) };
       const existing = filterPresets.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
       if (existing >= 0) filterPresets[existing] = preset;
       else {
@@ -4741,8 +4859,15 @@
       const orig = btn.textContent;
       btn.textContent = "Validating top setups… (1-3 min)";
       try {
+        // minScore is now just a rule like any other — pull the tightest lower
+        // bound the user set on `score` so the server-side candidate pick still
+        // respects it. (`tickers` below already encodes the full rule set; this
+        // is the fallback when no rules are active.)
+        const scoreFloor = customFilters
+          .filter((f) => f.metric === "score" && (f.op === ">=" || f.op === ">"))
+          .reduce((max, f) => Math.max(max, f.value), -Infinity);
         const filters = {
-          minScore: numFilters.minScore ?? undefined,
+          minScore: Number.isFinite(scoreFloor) ? scoreFloor : undefined,
           direction: ideasTab, // generate what the current view shows
         };
         if (anyFilterActive()) {
@@ -4893,33 +5018,189 @@
       }
     }
 
-    async function loadPastIdeas() {
-      const box = $("#history-ideas");
+    // "Open →" on a history row jumps to that ticker's full stock page. Delegated
+    // because rows are re-rendered on every History load. preventDefault stops the
+    // click from also toggling the <details> it sits inside.
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest(".hist-open");
+      if (!b) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showPane("stock", b.dataset.tkr);
+    });
+
+    // Score trend lives in the portfolio hero, where the question is actually
+    // asked — not as a chart per history row, which would re-render the same
+    // series N times and wreck the row rhythm.
+    async function loadScoreTrend() {
+      const el = $("#pf-score-trend");
+      if (!el) return;
       try {
-        const { ideas } = await (await fetch("/api/ideas")).json();
-        if (!ideas?.length) {
-          box.innerHTML = `<div class="empty">No validated ideas yet — validate a ticker or generate ideas and they'll show up here.</div>`;
+        const { scores } = await (await fetch("/api/portfolio/score-history")).json();
+        if (!scores?.length) { el.innerHTML = ""; return; }
+        const last = scores.at(-1);
+        const prev = scores.length > 1 ? scores[0] : null;
+        const spark = document.createElement("svg");
+        let sparkHtml = "";
+        if (scores.length > 1) {
+          const vals = scores.map((s) => s.score);
+          const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+          const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * 100},${100 - ((v - min) / span) * 92 - 4}`).join(" ");
+          sparkHtml = `<svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--brand)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>`;
+        }
+        el.innerHTML = `Score <b>${last.score}</b>${sparkHtml}${prev ? ` <span style="color:var(--faint)">was ${prev.score} on ${new Date(prev.ts * 1000).toLocaleDateString()}</span>` : ""}`;
+      } catch { el.innerHTML = ""; }
+    }
+
+    /* ── History feed: ideas, intraday analyses, portfolio scores, backtests in
+       one time-sorted list. Every row uses the SAME grammar — kind dot, primary
+       label, one metric chip, right-aligned time — because four different row
+       shapes with three blank slots each read as ragged. ── */
+    const HIST_KINDS = {
+      all: { label: "All", param: "" },
+      idea: { label: "Ideas", param: "idea" },
+      intraday: { label: "Analyses", param: "intraday" },
+      portfolio_score: { label: "Scores", param: "portfolio_score" },
+      backtest: { label: "Backtests", param: "backtest" },
+    };
+    const HIST_EMPTY = {
+      all: "Nothing yet. Validate a ticker, analyze a chart, or score your portfolio and it'll show up here.",
+      idea: "No validated ideas yet — validate a ticker or generate ideas.",
+      intraday: "No chart analyses yet — run one from the Analyze tab.",
+      portfolio_score: "No portfolio scores yet — score your portfolio from the Portfolio tab.",
+      backtest: "No backtests yet — run one from the Backtest tab.",
+    };
+    let histKind = "all";
+    let histCursor = null;
+
+    function relTime(ts) {
+      const s = Math.floor(Date.now() / 1000) - ts;
+      if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`;
+      if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+      if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+      return new Date(ts * 1000).toLocaleDateString();
+    }
+
+    function histRowHtml(it) {
+      const dot = `<span class="hist-dot ${esc(it.kind)}"></span>`;
+      const time = `<span class="hist-time">${relTime(it.ts)}</span>`;
+      const open = it.ticker
+        ? `<button class="hist-open" data-tkr="${esc(it.ticker)}" title="Open ${esc(it.ticker)} in full view">Open →</button>` : "";
+      const del = it.deletable
+        ? `<button class="hist-del" data-hid="${it.id}" title="Delete this entry">${icon("close", 12)}</button>` : "";
+      let label, metric;
+      if (it.kind === "portfolio_score") {
+        label = "Portfolio";
+        metric = it.score != null ? `<span class="chip info sm">${it.score}/100</span>` : `<span class="chip calm sm">scored</span>`;
+      } else if (it.kind === "backtest") {
+        label = esc(it.ticker ?? "—");
+        metric = `<span class="chip calm sm">${esc(it.summary ?? "backtest")}</span>`;
+      } else {
+        const dirTone = it.direction === "long" ? "buy" : it.direction === "short" ? "sell" : "calm";
+        label = esc(it.ticker ?? "—");
+        metric = `<span class="chip ${dirTone} sm">${esc(it.direction ?? "—").replace("_", " ")}</span>
+                  <span class="rbadge ${esc(it.rating ?? "")}">${esc(it.rating ?? "—")}</span>`;
+      }
+      return `<summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
+        ${dot}<span class="hist-label">${label}</span>${metric}${open}${del}${time}</summary>`;
+    }
+
+    function histBodyHtml(it) {
+      if (!it.payload) return `<div class="empty">This entry couldn't be read back.</div>`;
+      if (it.kind === "portfolio_score") {
+        const d = document.createElement("div");
+        renderMd(d, it.payload.analysis ?? "");
+        return d.innerHTML;
+      }
+      if (it.kind === "backtest") {
+        const m = it.payload.metrics ?? {};
+        const spec = it.payload.spec ?? {};
+        return `<div style="font-size:13px">
+          <div class="klabel">Result${it.payload.walkForward ? " (walk-forward was on)" : ""}</div>
+          <div class="stats">
+            ${m.totalReturnPct != null ? `<div><b>${Number(m.totalReturnPct).toFixed(1)}%</b><span>total return</span></div>` : ""}
+            ${m.annualizedPct != null ? `<div><b>${Number(m.annualizedPct).toFixed(1)}%</b><span>annualized</span></div>` : ""}
+            ${m.sharpe != null ? `<div><b>${Number(m.sharpe).toFixed(2)}</b><span>Sharpe</span></div>` : ""}
+            ${m.trades != null ? `<div><b>${m.trades}</b><span>trades</span></div>` : ""}
+            ${it.payload.years != null ? `<div><b>${it.payload.years}y</b><span>history</span></div>` : ""}
+          </div>
+          <div class="klabel" style="margin-top:10px">Strategy</div>
+          <pre style="white-space:pre-wrap;font-size:11.5px;color:var(--dim);margin:0">${esc(JSON.stringify(spec, null, 2))}</pre>
+          <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Saved metrics from the original run. Re-running now would use candles through today and give different numbers.</p>
+        </div>`;
+      }
+      // ideas + intraday plans: same table, different shape, different renderer.
+      const body = it.kind === "intraday" ? planCardHtml(it.payload) : reportCardHtml(it.payload);
+      return body;
+    }
+
+    function renderHistKinds() {
+      $("#history-kinds").innerHTML = Object.entries(HIST_KINDS)
+        .map(([k, v]) => `<button class="filter-chip${k === histKind ? " on" : ""}" data-hkind="${k}">${v.label}</button>`)
+        .join("");
+    }
+
+    async function loadHistory(append = false) {
+      const box = $("#history-ideas");
+      const more = $("#history-more");
+      if (!append) {
+        histCursor = null;
+        box.innerHTML = `<div class="skel-rows"><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div></div>`;
+        more.hidden = true;
+      } else {
+        more.disabled = true; more.textContent = "Loading…";
+      }
+      const kindParam = HIST_KINDS[histKind]?.param ?? "";
+      const qs = new URLSearchParams({ limit: "30" });
+      if (kindParam) qs.set("kind", kindParam);
+      if (append && histCursor) qs.set("before", histCursor);
+      try {
+        const res = await (await fetch(`/api/history?${qs}`)).json();
+        if (!res.ok) throw new Error(res.error || "failed");
+        if (!append) box.innerHTML = "";
+        if (!res.items.length && !append) {
+          box.innerHTML = `<div class="empty">${HIST_EMPTY[histKind] ?? HIST_EMPTY.all}</div>`;
+          more.hidden = true;
           return;
         }
-        box.innerHTML = "";
-        for (const rep of ideas) {
+        for (const it of res.items) {
           const det = document.createElement("details");
           det.className = "block";
-          const dirTone = rep.direction === "long" ? "buy" : rep.direction === "short" ? "sell" : "calm";
-          det.innerHTML = `
-        <summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
-          <span style="font-weight:700">${esc(rep.ticker)}</span>
-          <span class="chip ${dirTone} sm">${esc(rep.direction ?? "—").replace("_", " ")}</span>
-          <span class="rbadge ${esc(rep.rating)}">${esc(rep.rating)}</span>
-          <span style="margin-left:auto;font-size:12px;color:var(--faint)">${esc(rep.source ?? "")} · ${new Date(rep.ts * 1000).toLocaleString()}</span>
-        </summary>
-        <div class="inner">${reportCardHtml(rep)}</div>`;
+          det.innerHTML = histRowHtml(it) + `<div class="inner">${histBodyHtml(it)}</div>`;
           det.querySelector(".close-report")?.remove();
           box.appendChild(det);
         }
+        histCursor = res.items.at(-1)?.cursor ?? null;
+        more.hidden = !res.more;         // exhausted -> no dead button
       } catch {
-        box.innerHTML = `<div class="empty">Could not load past analyses.</div>`;
+        const msg = `<div class="empty">Couldn't load history. <button class="refresh-btn" id="hist-retry">Retry</button></div>`;
+        if (append) more.insertAdjacentHTML("afterend", msg); else box.innerHTML = msg;
+        more.hidden = true;
+      } finally {
+        more.disabled = false; more.textContent = "Load more";
       }
+    }
+
+    document.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-hkind]");
+      if (chip) { histKind = chip.dataset.hkind; renderHistKinds(); loadHistory(); return; }
+      if (e.target.closest("#history-more")) { loadHistory(true); return; }
+      if (e.target.closest("#hist-retry")) { loadHistory(); return; }
+      const del = e.target.closest(".hist-del");
+      if (del) {
+        e.preventDefault(); e.stopPropagation();
+        const id = del.dataset.hid;
+        del.disabled = true;
+        fetch(`/api/history/${id}`, { method: "DELETE" })
+          .then(() => { del.closest("details")?.remove(); loadScoreTrend(); })
+          .catch(() => { del.disabled = false; });
+      }
+    });
+
+    // Kept as a thin alias: showPane("history") calls this by name.
+    async function loadPastIdeas() {
+      renderHistKinds();
+      await loadHistory();
     }
 
     /* ── settings: profile ── */
@@ -5966,6 +6247,7 @@
       renderHoldings();
       renderActivity();
       if (state.briefing) renderMd($("#briefing"), state.briefing.content);
+      loadScoreTrend();
       stampUpdated();
     }
     async function loadQuotes(fresh) {
