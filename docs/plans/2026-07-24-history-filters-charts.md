@@ -3,7 +3,7 @@
 Branch: `vignesh` | Base: `main` | Commit: 5440b77 | Author: Vignesh
 Reviewed via /autoplan. Premise gate: **root-cause first** (D1=A), **auto-save scores** (D2=B).
 
-> **Status:** W1 and W2 are SHIPPED. W3.1 (filters) is SHIPPED. W3.2 (chart
+> **Status:** W1, W2 and W3.1 SHIPPED in PR #10 (2026-07-25). W3.2 (chart
 > numbers + hover) and W3.3 (AI concision) remain open.
 >
 > **Line numbers below were captured before the W1/W2 build** and index.html has

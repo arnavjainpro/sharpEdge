@@ -87,3 +87,20 @@
 **Depends on:** None
 
 ## Completed
+
+### History feed, persisted scores, one filter mechanism (PR #10, 2026-07-25)
+
+Shipped W1, W2 and W3.1 of `docs/plans/2026-07-24-history-filters-charts.md`.
+
+Root cause of "most things don't save": intraday analyses were written to
+`ideas` and then filtered out of every read path by `AND source != 'intraday'`.
+The Analyze tab's output was write-only.
+
+Also shipped: `artifacts` table (portfolio scores + backtests persist), merged
+`/api/history` feed with a row-wise `(ts, src, id)` cursor, filters collapsed
+from two mechanisms to one, Robinhood linking restored and buying power read
+from the live field. Bugs fixed: null market cap passing the cap filter,
+all-time portfolio return computed from a changing share set, no in-flight
+guard on portfolio scoring, unguarded `JSON.parse` 500ing the History tab.
+
+Remaining from that plan: W3.2 and W3.3 above.
