@@ -12,13 +12,16 @@
 import { db } from "../db";
 import { fetchDailyCandles } from "../ingest/yahoo";
 import { sectorEtf } from "../ingest/universe";
+import { isFuture } from "../ingest/futures";
 import { benchmarkCandles, refreshMarketContext } from "./market";
 import { computeIndicators, scoreLong, scoreShort, directionOf, isScanRunning, type Indicators } from "./screener";
 import { fetchCompanyNews } from "../ingest/finnhub";
 
 // Leading ^ allowed for index symbols (^GSPC); 1-6 letters/dot/dash otherwise.
+// Seeded futures symbols (ES=F, CL=F, …) are allowed explicitly — the `=` fails
+// the regex.
 const VALID = /^\^?[A-Za-z.\-]{1,6}$/;
-export const validTicker = (sym: string) => VALID.test(sym);
+export const validTicker = (sym: string) => isFuture(sym) || VALID.test(sym);
 
 export interface TickerNews { headline: string; url: string; source: string; datetime: number }
 export interface TickerResult {

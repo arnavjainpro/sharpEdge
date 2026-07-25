@@ -5,6 +5,7 @@ import { opusBreaker, haikuBreaker } from "../ai/breaker";
 import { askAdvisor, summarizeTickerNews, scorePortfolio, type ChatTurn } from "../ai/advisor";
 import { validateIdea, pickCandidates, recentIdeas, type IdeaReport, type IdeaFilters } from "../ai/validator";
 import { universeMeta } from "../ingest/universe";
+import { isFuture } from "../ingest/futures";
 import { analyzeIntraday, manageTrade, type IntradayRequest, type FollowupRequest } from "../ai/intraday";
 import { parseStrategy } from "../ai/strategy";
 import { runBacktest, stressBacktest, walkForward, type StrategySpec } from "../engine/backtest";
@@ -201,6 +202,9 @@ export function startServer() {
                WHEN name ILIKE ? || '%' THEN 2
                ELSE 3
              END,
+             -- Futures have market_cap 0, so without this they'd rank last and
+             -- get cut by LIMIT; surface a matching future at the top of its tier.
+             (sector = 'Futures') DESC,
              market_cap DESC, length(ticker)
            LIMIT 8`
         ).all(q, q, q, q, q) as { ticker: string; name: string }[];
@@ -587,7 +591,7 @@ export function startServer() {
         try {
           const body = (await req.json().catch(() => ({}))) as { ticker?: string };
           const ticker = String(body.ticker ?? "").toUpperCase().trim();
-          if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
+          if (!isFuture(ticker) && !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
           return Response.json({ ok: true, summary: await summarizeTickerNews(ticker) });
         } catch (err) {
           console.error("[server] news summarize failed:", err);
@@ -647,7 +651,7 @@ export function startServer() {
       // series + recent idea reports, in one call (no client-side waterfall).
       if (url.pathname.startsWith("/api/stock/")) {
         const ticker = decodeURIComponent(url.pathname.split("/").pop() ?? "").toUpperCase().trim();
-        if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
+        if (!isFuture(ticker) && !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
         const meta = await universeMeta(ticker);
         const row = await db.query(`SELECT * FROM screener WHERE ticker = ?`).get(ticker) as any;
         const fresh = url.searchParams.get("fresh") === "1"; // stock-page Refresh bypasses the 60s quote cache
@@ -670,6 +674,14 @@ export function startServer() {
             }
           }
         } catch {}
+        // Futures (and any symbol Finnhub can't quote) fall back to the last daily
+        // candle so the detail page shows a real price instead of $0.
+        if ((!quote || !quote.c) && spark && spark.closes.length) {
+          const closes = spark.closes;
+          const last = closes.at(-1)!;
+          const prev = closes.length > 1 ? closes.at(-2)! : last;
+          quote = { c: last, d: last - prev, dp: prev ? ((last - prev) / prev) * 100 : 0, h: last, l: last, o: prev, pc: prev };
+        }
         // Finnhub /company-news 4xxs on ^-index symbols; skip news for those.
         let news: { headline: string; url: string; source: string; datetime: number }[] = [];
         if (!ticker.startsWith("^")) {
@@ -697,7 +709,7 @@ export function startServer() {
       // timeframe to a Yahoo range/interval: intraday for 1D/5D, daily otherwise.
       if (url.pathname.startsWith("/api/candles/")) {
         const ticker = decodeURIComponent(url.pathname.split("/").pop() ?? "").toUpperCase().trim();
-        if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
+        if (!isFuture(ticker) && !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) return Response.json({ ok: false, error: "bad ticker" }, { status: 400 });
         const tf = (url.searchParams.get("tf") ?? "6M").toUpperCase();
         const intraday: Record<string, ["5m" | "15m" | "60m", string]> = { "1D": ["5m", "1d"], "1W": ["15m", "5d"] };
         const ranges: Record<string, string> = { "1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "3Y": "5y", "5Y": "5y", ALL: "max" };

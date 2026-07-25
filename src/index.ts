@@ -3,6 +3,7 @@ import { aiLive } from "./db";
 import { runScan } from "./engine/screener";
 import { evaluateActiveAlerts } from "./engine/alerts";
 import { refreshUniverse, scanUniverse } from "./ingest/universe";
+import { seedFutures } from "./ingest/futures";
 import { refreshMarketContext } from "./engine/market";
 import { sweepIndex, activeDynamicTickers } from "./engine/sweep";
 import { loadCikMap } from "./ingest/edgar";
@@ -336,6 +337,7 @@ setBriefingHandler(async () => {
 // Universe first (sector metadata + scan list), then CIK map so EDGAR lookups
 // work for any promoted mover across the whole universe.
 const universeList = await refreshUniverse(currentPortfolio(PRIMARY_USER_ID));
+await seedFutures(); // futures contracts join the universe (searchable/scorable/chartable)
 await loadCikMap(universeList);
 startServer();
 startTradeStream(bootTickers);

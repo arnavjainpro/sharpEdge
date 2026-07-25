@@ -7,6 +7,7 @@ import { yamlProvider, importProvider } from "./manual";
 import { robinhoodProvider } from "./robinhood";
 import { closeDetect, type PosSnap } from "./closeDetect";
 import { cachedQuote } from "../ingest/finnhub";
+import { isFuture } from "../ingest/futures";
 import { notifyTelegram, telegramEnabled } from "../notify/telegram";
 import type { BrokerSnapshot } from "./types";
 
@@ -165,7 +166,7 @@ async function watchlistPrefs(userId: number): Promise<{ add: string[]; remove: 
 
 export async function updateWatchlist(userId: number, rawTicker: string, action: "add" | "remove"): Promise<string[]> {
   const ticker = rawTicker.trim().toUpperCase();
-  if (!/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) throw new Error("bad ticker");
+  if (!isFuture(ticker) && !/^[A-Z][A-Z0-9.\-]{0,9}$/.test(ticker)) throw new Error("bad ticker");
   const wp = await watchlistPrefs(userId);
   if (action === "add") {
     wp.add = [...new Set([...wp.add, ticker])].slice(0, 50);
