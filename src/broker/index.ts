@@ -11,10 +11,6 @@ import { isFuture } from "../ingest/futures";
 import { notifyTelegram, telegramEnabled } from "../notify/telegram";
 import type { BrokerSnapshot } from "./types";
 
-// Matches index.ts: the one account the background pipeline monitors. Broker
-// close-detection runs only for it, since Activity events are a global feed.
-const PRIMARY_USER_ID = 1;
-
 // Priority: linked Robinhood > one-shot import > portfolio.yaml.
 const providers = [robinhoodProvider, importProvider, yamlProvider];
 
@@ -72,9 +68,11 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
         `[broker] snapshot via ${snap.source} (user ${userId}): ${snap.holdings.length} positions, ${snap.watchlist.length} watched, ` +
         `${snap.openOrders.length} open orders${snap.account.equity != null ? `, equity $${snap.account.equity.toLocaleString()}` : ""}`
       );
-      // F2b: only ever diff robinhood-vs-robinhood (real fills) for the monitored
-      // account — a fallback/import snapshot must never touch the baseline.
-      if (snap.source === "robinhood" && userId === PRIMARY_USER_ID) {
+      // F2b: only ever diff robinhood-vs-robinhood (real fills) — a fallback or
+      // import snapshot must never touch the baseline. Runs for every account
+      // with a live link now (SHARP-29); broker_positions is already keyed by
+      // user_id, so the baselines never collided, they were just never written.
+      if (snap.source === "robinhood") {
         try { await detectAndRecordCloses(userId, snap); } catch (err) { console.error("[broker] close-detect failed:", err); }
       }
       return snap;
@@ -141,7 +139,9 @@ async function detectAndRecordCloses(userId: number, snap: BrokerSnapshot): Prom
       const title = e.kind === "closed"
         ? `📓 Closed ${e.ticker} (${e.direction})${pnl} — journal it?`
         : `📓 Trimmed ${e.ticker} ${e.direction} to ${e.nowQty} of ${e.prevQty}${pnl} — journal it?`;
-      const id = await insertEvent({ ts: Math.floor(Date.now() / 1000), ticker: e.ticker, kind: "position_close", title, detail: { ...e, estPnlPct }, dedupeKey: `brokerclose:${userId}:${seq}` });
+      // Owned: this is your fill, not a market event — nobody else's Activity
+      // feed should show it.
+      const id = await insertEvent({ ts: Math.floor(Date.now() / 1000), ticker: e.ticker, kind: "position_close", title, detail: { ...e, estPnlPct }, dedupeKey: `brokerclose:${userId}:${seq}`, userId });
       if (id && telegramEnabled()) { try { await notifyTelegram(title + (e.note ? ` (${e.note})` : "")); } catch { /* delivery best-effort */ } }
     }
   }

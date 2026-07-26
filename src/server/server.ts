@@ -31,19 +31,30 @@ import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearC
 import { join } from "path";
 
 // ── SSE hub ──────────────────────────────────────────────────────────────────
-type SSEClient = { controller: ReadableStreamDefaultController; id: number };
+// Clients carry their userId so pushes can be addressed. Market-wide news
+// (regime refresh, screener finished) still goes to everyone via broadcast();
+// anything derived from a portfolio — an event's severity, a signal, a briefing
+// — goes through broadcastTo so it reaches only the account it was written for.
+type SSEClient = { controller: ReadableStreamDefaultController; id: number; userId: number };
 const clients = new Map<number, SSEClient>();
 let nextClientId = 1;
 
+function push(c: SSEClient, msg: string) {
+  try {
+    c.controller.enqueue(new TextEncoder().encode(msg));
+  } catch {
+    clients.delete(c.id);
+  }
+}
+
 export function broadcast(type: string, payload: object) {
   const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
-  for (const [id, c] of clients) {
-    try {
-      c.controller.enqueue(new TextEncoder().encode(msg));
-    } catch {
-      clients.delete(id);
-    }
-  }
+  for (const c of [...clients.values()]) push(c, msg);
+}
+
+export function broadcastTo(userId: number, type: string, payload: object) {
+  const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const c of [...clients.values()]) if (c.userId === userId) push(c, msg);
 }
 
 // Hook for dev-only test event injection; wired up by index.ts.
@@ -52,12 +63,15 @@ export function setTestEventHandler(fn: (body: any) => Promise<void>) {
   onTestEvent = fn;
 }
 
-// Hook for on-demand briefing generation; wired up by index.ts.
-let onBriefingRequest: (() => Promise<string>) | null = null;
-export function setBriefingHandler(fn: () => Promise<string>) {
+// Hook for on-demand briefing generation; wired up by index.ts. Takes the
+// requesting user so the briefing is written against THEIR portfolio.
+let onBriefingRequest: ((userId: number) => Promise<string>) | null = null;
+export function setBriefingHandler(fn: (userId: number) => Promise<string>) {
   onBriefingRequest = fn;
 }
-let briefingInFlight = false;
+// Per-user: two accounts asking for a briefing at once are two separate jobs,
+// and a global flag made the second one 429 on the first one's work.
+const briefingInFlight = new Set<number>();
 let generateInFlight = false;
 // Per-user, unlike generateInFlight: portfolio scoring is a per-account action.
 const scoreInFlight = new Set<number>();
@@ -146,7 +160,7 @@ export function startServer() {
         const id = nextClientId++;
         const stream = new ReadableStream({
           start(controller) {
-            clients.set(id, { controller, id });
+            clients.set(id, { controller, id, userId });
             controller.enqueue(new TextEncoder().encode(`event: hello\ndata: {}\n\n`));
           },
           cancel() {
@@ -164,16 +178,27 @@ export function startServer() {
 
       if (url.pathname === "/api/state") {
         const portfolio = currentPortfolio(userId);
+        // Per-account view of a shared event log. The event row is global market
+        // fact; the severity/rationale shown is THIS user's triage, and the
+        // attached signal is THIS user's analysis. COALESCE falls back to the
+        // global column for events recorded before the fan-out existed, so
+        // history doesn't go blank.
         const events = await db
           .query(
-            `SELECT e.*, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact
-             FROM events e LEFT JOIN signals s ON s.event_id = e.id
+            `SELECT e.id, e.ts, e.ticker, e.kind, e.title, e.detail,
+                    COALESCE(t.severity, e.severity) AS severity,
+                    COALESCE(t.rationale, e.triage_rationale) AS triage_rationale,
+                    s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact
+             FROM events e
+             LEFT JOIN event_triage t ON t.event_id = e.id AND t.user_id = ?
+             LEFT JOIN signals s ON s.event_id = e.id AND s.user_id = ?
+             WHERE e.user_id IS NULL OR e.user_id = ?
              ORDER BY e.ts DESC LIMIT 100`
           )
-          .all();
+          .all(userId, userId, userId);
         const briefing = await db
-          .query(`SELECT * FROM briefings ORDER BY ts DESC LIMIT 1`)
-          .get();
+          .query(`SELECT * FROM briefings WHERE user_id = ? ORDER BY ts DESC LIMIT 1`)
+          .get(userId);
         const broker = brokerSnapshot(userId);
         return Response.json({
           portfolio, events, briefing, marketPhase: marketPhase(), marketClock: nextMarketTransition(),
@@ -946,16 +971,16 @@ export function startServer() {
       // On-demand briefing (also generated automatically at 9:00 / 16:15 ET).
       if (url.pathname === "/api/briefing" && req.method === "POST") {
         if (!onBriefingRequest) return new Response("pipeline not ready", { status: 503 });
-        if (briefingInFlight) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
-        briefingInFlight = true;
+        if (briefingInFlight.has(userId)) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
+        briefingInFlight.add(userId);
         try {
-          const content = await onBriefingRequest();
+          const content = await onBriefingRequest(userId);
           return Response.json({ ok: true, content });
         } catch (err) {
           console.error("[server] briefing failed:", err);
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
         } finally {
-          briefingInFlight = false;
+          briefingInFlight.delete(userId);
         }
       }
 

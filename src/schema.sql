@@ -243,6 +243,50 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_user_kind ON artifacts(user_id, kind, t
 -- 'balanced' matches the behavior every existing row had before the setting existed.
 ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFAULT 'balanced';
 
+-- SHARP-29: background monitoring fans out to every account.
+--
+-- `events` stays GLOBAL and is deliberately not given a user_id. An event is a
+-- fact about the market — a 6% move on NVDA is the same event no matter who is
+-- watching — and dedupe_key is UNIQUE across the table, which is what lets the
+-- detector fetch each ticker once instead of once per user. Duplicating rows
+-- per user would break that dedupe and multiply the Finnhub call budget.
+--
+-- What IS per-user is the interpretation: triage weighs the event against your
+-- holdings, so the same event is "critical" to a holder and "info" to everyone
+-- else. That lives here, one row per (event, user).
+-- ...with one exception. Most events are public (a price move, a filing, a
+-- headline), but a couple are inherently about ONE account: "you closed NVDA,
+-- journal it?" and "your calls expire tomorrow". Those set user_id and are shown
+-- only to their owner. NULL means public market fact, which is the default and
+-- the overwhelming majority.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_events_owner ON events(user_id, ts DESC);
+
+CREATE TABLE IF NOT EXISTS event_triage (
+  event_id integer NOT NULL REFERENCES events(id),
+  user_id integer NOT NULL REFERENCES users(id),
+  severity text NOT NULL,            -- critical | high | info, for THIS user
+  rationale text,
+  ts integer NOT NULL,
+  PRIMARY KEY (event_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_event_triage_user ON event_triage(user_id, event_id);
+
+-- Signals and briefings are private analysis, not market fact — they name your
+-- positions and your sizing, so they are owned. NULL means "written before the
+-- fan-out existed", backfilled to user 1 below.
+ALTER TABLE signals ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id);
+ALTER TABLE briefings ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_signals_user ON signals(user_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_briefings_user ON briefings(user_id, ts DESC);
+
+-- One-time backfill: everything written before this change was produced against
+-- user 1's portfolio, because user 1 was the only account the pipeline watched.
+-- Idempotent — every row inserted from now on carries a user_id, so after the
+-- first boot this matches nothing.
+UPDATE signals SET user_id = 1 WHERE user_id IS NULL;
+UPDATE briefings SET user_id = 1 WHERE user_id IS NULL;
+
 -- An in-flight email change (SHARP-17). The new address lives here, NOT in
 -- users.email, until a code mailed to it comes back — so an unverified or
 -- mistyped address can never become the thing you sign in with. At most one

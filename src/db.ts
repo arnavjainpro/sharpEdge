@@ -250,6 +250,11 @@ export interface EventRow {
   triage_rationale: string | null;
 }
 
+// userId is for the rare event that is about ONE account rather than the market
+// — a detected position close, an expiry warning naming your contract count.
+// Leave it unset for market facts so every watcher shares the one row (and the
+// one round of detection). An owned event MUST also carry the user in its
+// dedupeKey, or the first account to trigger it silences the rest.
 export async function insertEvent(e: {
   ts: number;
   ticker: string;
@@ -257,16 +262,31 @@ export async function insertEvent(e: {
   title: string;
   detail?: object;
   dedupeKey: string;
+  userId?: number;
 }): Promise<number | null> {
   const res = await db
     .query(
-      `INSERT INTO events (ts, ticker, kind, title, detail, dedupe_key)
-       VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`
+      `INSERT INTO events (ts, ticker, kind, title, detail, dedupe_key, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`
     )
-    .get<{ id: number }>(e.ts, e.ticker, e.kind, e.title, JSON.stringify(e.detail ?? {}), e.dedupeKey);
+    .get<{ id: number }>(e.ts, e.ticker, e.kind, e.title, JSON.stringify(e.detail ?? {}), e.dedupeKey, e.userId ?? null);
   return res?.id ?? null;
 }
 
+// Every account the background pipeline monitors. "Everyone with a login" is
+// the honest answer to what the user asked for; an account with no holdings and
+// no watchlist contributes no tickers, so it costs nothing to include.
+export async function monitoredUserIds(): Promise<number[]> {
+  const rows = await db.query(`SELECT id FROM users ORDER BY id`).all<{ id: number }>();
+  return rows.map((r) => r.id);
+}
+
+// events.severity is the GLOBAL reading: how significant this event was to
+// whoever it mattered most to. It stays because the AI context builders
+// (analyst, advisor, briefing) query "what happened recently that mattered" and
+// an event is public market fact — there's nothing private in the headline.
+// Per-user severity, which weighs the event against that user's holdings, is a
+// separate row: see setTriageFor.
 export async function setTriage(eventId: number, severity: string, rationale: string) {
   await db.query(`UPDATE events SET severity = ?, triage_rationale = ? WHERE id = ?`).run(
     severity,
@@ -275,8 +295,26 @@ export async function setTriage(eventId: number, severity: string, rationale: st
   );
 }
 
+// One user's reading of one event. Re-triage overwrites rather than stacking —
+// a repeat run for the same (event, user) is a correction, not a second opinion.
+export async function setTriageFor(eventId: number, userId: number, severity: string, rationale: string) {
+  await db.query(
+    `INSERT INTO event_triage (event_id, user_id, severity, rationale, ts)
+     VALUES (?, ?, ?, ?, extract(epoch from now())::int)
+     ON CONFLICT (event_id, user_id) DO UPDATE SET severity = excluded.severity, rationale = excluded.rationale, ts = excluded.ts`
+  ).run(eventId, userId, severity, rationale);
+}
+
+// Severity ranking, used to decide whether a new per-user reading should raise
+// the global one. Anything unrecognised sorts below "info" rather than throwing.
+const SEVERITY_RANK: Record<string, number> = { info: 1, high: 2, critical: 3 };
+export const severityRank = (s: string | null | undefined) => SEVERITY_RANK[s ?? ""] ?? 0;
+
+// user_id is required: a signal names your positions and your sizing, so an
+// unowned one would surface on every account's dashboard.
 export async function insertSignal(s: {
   event_id: number;
+  user_id: number;
   ticker: string;
   action: string;
   conviction: string;
@@ -287,10 +325,10 @@ export async function insertSignal(s: {
 }): Promise<number> {
   const res = await db
     .query(
-      `INSERT INTO signals (event_id, ts, ticker, action, conviction, plain_headline, thesis, invalidation, portfolio_impact)
-       VALUES (?, extract(epoch from now())::int, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
+      `INSERT INTO signals (event_id, user_id, ts, ticker, action, conviction, plain_headline, thesis, invalidation, portfolio_impact)
+       VALUES (?, ?, extract(epoch from now())::int, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
     )
-    .get<{ id: number }>(s.event_id, s.ticker, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact);
+    .get<{ id: number }>(s.event_id, s.user_id, s.ticker, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact);
   return res!.id;
 }
 

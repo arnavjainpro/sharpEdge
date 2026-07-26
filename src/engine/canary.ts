@@ -16,7 +16,7 @@
 //    degradation half of a degradation test.
 import { fetchDailyCandles, fetchIntradayBars, type DailyCandles, type IntradayBars } from "../ingest/yahoo";
 import { fetchQuote, fetchCompanyNews, wsStatus, type Quote, type NewsItem } from "../ingest/finnhub";
-import { getBrokerLink, db } from "../db";
+import { db } from "../db";
 import { brokerSnapshot } from "../broker";
 import { marketPhase } from "../config";
 import { notifyTelegram, telegramEnabled } from "../notify/telegram";
@@ -34,11 +34,6 @@ export interface CanaryResult {
 const PROBE = "SPY";
 const NEWS_PROBE = "AAPL";
 
-// Background monitoring is single-tenant (see index.ts) — the canary watches the
-// same account the detectors do. Third local copy of this constant; index.ts and
-// broker/index.ts each keep their own, and exporting it from index.ts would be a
-// cycle. ponytail: living with the duplication, hoist to config.ts if a fourth appears.
-const PRIMARY_USER_ID = 1;
 
 // Prices outside this band mean the units changed, not that the market moved.
 const MIN_PRICE = 1;
@@ -149,44 +144,41 @@ async function probeAll(): Promise<CanaryResult[]> {
   // doesn't lose positions on one bad poll), which means a shape change shows up
   // ONLY as a snapshot that stopped ageing. That staleness is the signal.
   //
-  // The linked account is looked up rather than assumed to be PRIMARY_USER_ID:
-  // the link lives on whichever user did the linking, which is not necessarily
-  // the background-monitored one, and hardcoding user 1 here made this probe
-  // report "no account linked" while an account was in fact linked.
+  // Since SHARP-29 every linked account is refreshed on the broker timer, so a
+  // stale snapshot on ANY of them is a real signal rather than "that account
+  // just isn't watched". The worst (oldest) one is reported: one working link
+  // shouldn't mask another that's failing.
   const rhLabel = "Robinhood positions";
-  const linkedUser = await linkedRobinhoodUser();
-  if (linkedUser == null) {
+  const linked = await linkedRobinhoodUsers();
+  if (!linked.length) {
     out.push(skip("robinhood", rhLabel, "no account linked"));
   } else {
-    const snap = brokerSnapshot(linkedUser);
-    if (!snap) {
-      // Only PRIMARY_USER_ID is refreshed on a timer (see index.ts); any other
-      // user's snapshot is populated when they load the dashboard. Say so
-      // instead of reporting a break that isn't one.
-      out.push(skip("robinhood", rhLabel, linkedUser === PRIMARY_USER_ID
-        ? "linked, but no snapshot pulled yet this run"
-        : `linked to user ${linkedUser}, who isn't the background-monitored account — no snapshot to age-check`));
-    } else if (snap.source !== "robinhood") {
-      out.push(result("robinhood", rhLabel, `linked, but the live snapshot fell back to "${snap.source}" — the Robinhood pull is failing`));
+    const snaps = linked.map((id) => ({ id, snap: brokerSnapshot(id) }));
+    const fellBack = snaps.find((s) => s.snap && s.snap.source !== "robinhood");
+    const pulled = snaps.filter((s) => s.snap?.source === "robinhood");
+    if (fellBack) {
+      out.push(result("robinhood", rhLabel, `user ${fellBack.id}'s snapshot fell back to "${fellBack.snap!.source}" — their Robinhood pull is failing`));
+    } else if (!pulled.length) {
+      out.push(skip("robinhood", rhLabel, `${linked.length} linked account(s), none pulled yet this run`));
     } else {
-      const age = agoSec(snap.asOf);
-      out.push(result("robinhood", rhLabel, age > 3 * 3600 ? `snapshot is ${Math.round(age / 3600)}h old — refreshes are failing` : null));
+      const oldest = pulled.reduce((a, b) => (a.snap!.asOf <= b.snap!.asOf ? a : b));
+      const age = agoSec(oldest.snap!.asOf);
+      out.push(result("robinhood", rhLabel, age > 3 * 3600 ? `user ${oldest.id}'s snapshot is ${Math.round(age / 3600)}h old — refreshes are failing` : null));
     }
   }
 
   return out;
 }
 
-// Any user with a Robinhood link, preferring the monitored account when it has
-// one. "Are Robinhood's private endpoints still working" is a property of the
-// feed, not of one account.
-async function linkedRobinhoodUser(): Promise<number | null> {
-  if (await getBrokerLink(PRIMARY_USER_ID).catch(() => null)) return PRIMARY_USER_ID;
-  const row = await db
-    .query(`SELECT user_id FROM broker_links WHERE provider = 'robinhood' ORDER BY linked_at DESC LIMIT 1`)
-    .get<{ user_id: number }>()
-    .catch(() => null);
-  return row?.user_id ?? null;
+// Every account with a Robinhood link. "Are Robinhood's private endpoints still
+// working" is a property of the feed, not of one account — and since the broker
+// timer refreshes them all, all of them are evidence.
+async function linkedRobinhoodUsers(): Promise<number[]> {
+  const rows = await db
+    .query(`SELECT user_id FROM broker_links WHERE provider = 'robinhood' ORDER BY linked_at DESC`)
+    .all<{ user_id: number }>()
+    .catch(() => []);
+  return rows.map((r) => r.user_id);
 }
 
 // ── State + alerting ─────────────────────────────────────────────────────────

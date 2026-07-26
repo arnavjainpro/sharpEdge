@@ -42,7 +42,10 @@ export function daysToExpiry(expiryISO: string): number {
 
 // Warn at ≤7 days and again at ≤1 day. Events are deduped per option+threshold,
 // so each warning fires exactly once per contract.
-export async function checkOptionExpiries(portfolio: Portfolio): Promise<void> {
+// userId owns the warning: the title names YOUR contract count, and the dedupe
+// key has to include the account or the first holder of a contract silences the
+// warning for every other holder of the same one.
+export async function checkOptionExpiries(portfolio: Portfolio, userId: number): Promise<void> {
   for (const h of portfolio.holdings) {
     if (h.asset_class !== "option" || !h.option) continue;
     const dte = daysToExpiry(h.option.expiry);
@@ -52,7 +55,7 @@ export async function checkOptionExpiries(portfolio: Portfolio): Promise<void> {
     const title = `⏳ ${o.underlying} $${o.strike} ${o.type} expires ${dte <= 1 ? "TODAY/tomorrow" : `in ${dte} days`} (${o.expiry}) — you hold ${Math.abs(h.shares)} contract${Math.abs(h.shares) === 1 ? "" : "s"}`;
     const id = await insertEvent({
       ts: Math.floor(Date.now() / 1000), ticker: h.ticker, kind: "option_expiry",
-      title, detail: { dte, ...o }, dedupeKey: `optexp:${h.ticker}:${threshold}`,
+      title, detail: { dte, ...o }, dedupeKey: `optexp:${userId}:${h.ticker}:${threshold}`, userId,
     });
     if (id) { // first time this warning fires — push it
       console.log(`[insights] ${title}`);

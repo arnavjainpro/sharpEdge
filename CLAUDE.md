@@ -29,7 +29,7 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, `RESEND_API_KEY`, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/auth/emailChange.test.ts` and `src/engine/heatmap.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors). They're the only tests that write; keep them self-cleaning if you extend them.
+`src/auth/emailChange.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
 
 ## Architecture
 
@@ -37,7 +37,14 @@ Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `F
 
 Everything is one process. `index.ts` wires ingest → engine → AI → notify together and owns every `setInterval`/`setTimeout` (detectors ~90s/5m/30m by market phase, screener every 6h, sweep every 15m, briefings at 9:00/16:15 ET, broker refresh, etc). There's no job queue or external scheduler — if you're adding a recurring task, it goes here as another `schedule*()` function.
 
-**Background monitoring is single-tenant.** `PRIMARY_USER_ID = 1` (whoever signed up first) is the only account the detector/triage/briefing pipeline watches. Other users get the interactive, on-demand endpoints (validate, generate, intraday, chat, journal, their own linked broker) but no independent background event monitoring. This asymmetry is easy to miss when reading a single file — check `index.ts` before assuming a new background feature applies per-user.
+**Background monitoring covers every account** (SHARP-29; `PRIMARY_USER_ID` is gone). The split that makes it affordable, and the rule to follow when adding anything to the pipeline:
+
+- **Detection is shared.** Each ticker in the union of every account's holdings + watchlist is fetched **once** per cycle. `events` has no owner by default and `dedupe_key` is globally UNIQUE, so external API cost is driven by the size of the union, not by users × tickers. `buildWatchMap()` in `engine/fanout.ts` produces `ticker → [userId]`.
+- **Interpretation fans out.** Triage, deep analysis and briefings run per account against that account's portfolio, because "is this important" is a question about your positions. This is the part that costs tokens, and it only runs for accounts that actually watch the ticker.
+- **Ownership.** Per-user triage lives in `event_triage(event_id, user_id)`; `signals.user_id` and `briefings.user_id` scope private analysis. Most events are public market fact and leave `events.user_id` NULL — the exceptions are `position_close` and `option_expiry`, which are about one account and **must** set both `userId` and a user-qualified `dedupeKey` (otherwise the first holder silences the warning for every other holder).
+- **Pushing to the dashboard.** `broadcast()` goes to every connected client (market-wide news only); anything derived from a portfolio uses `broadcastTo(userId, …)`.
+
+If you add a background feature, decide which half it belongs to first. Adding a per-user loop around something detection-shaped multiplies the Finnhub bill; leaving something portfolio-shaped global leaks one account's positions into another's dashboard.
 
 ### Layers, in data-flow order
 

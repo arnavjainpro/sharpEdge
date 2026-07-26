@@ -8,7 +8,9 @@ import { claudeQueue } from "./queue";
 
 const client = new Anthropic();
 
-export async function generateBriefing(kind: "open" | "close", portfolio: Portfolio): Promise<string> {
+// One briefing per account: it reads that account's positions and its own
+// signals, and is stored owned so it only ever renders on that dashboard.
+export async function generateBriefing(kind: "open" | "close", portfolio: Portfolio, userId: number): Promise<string> {
   // Gather current quotes + today's events/signals as raw material.
   const tickers = allTickers(portfolio);
   const quotes: string[] = [];
@@ -20,12 +22,15 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
   }
 
   const since = Math.floor(Date.now() / 1000) - 24 * 3600;
+  // Events are public market fact, so the global list is the right raw material.
+  // Signals are this account's own prior calls — scoped, or the briefing would
+  // recap advice that was written for somebody else's positions.
   const events = await db
     .query(`SELECT ticker, kind, title, severity FROM events WHERE ts > ? AND severity IN ('critical','high') ORDER BY ts DESC LIMIT 25`)
     .all(since) as { ticker: string; kind: string; title: string; severity: string }[];
   const signals = await db
-    .query(`SELECT ticker, action, conviction, thesis FROM signals WHERE ts > ? ORDER BY ts DESC LIMIT 10`)
-    .all(since) as { ticker: string; action: string; conviction: string; thesis: string }[];
+    .query(`SELECT ticker, action, conviction, thesis FROM signals WHERE ts > ? AND user_id = ? ORDER BY ts DESC LIMIT 10`)
+    .all(since, userId) as { ticker: string; action: string; conviction: string; thesis: string }[];
 
   const positions = portfolio.holdings
     .map((h) => `- ${h.ticker}: ${h.shares} shares @ $${h.cost_basis}`)
@@ -72,6 +77,6 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
   }));
 
   const text = response.content.find((b) => b.type === "text")?.text ?? "";
-  await db.query(`INSERT INTO briefings (ts, kind, content) VALUES (extract(epoch from now())::int, ?, ?)`).run(kind, text);
+  await db.query(`INSERT INTO briefings (ts, kind, content, user_id) VALUES (extract(epoch from now())::int, ?, ?, ?)`).run(kind, text, userId);
   return text;
 }
