@@ -19,6 +19,8 @@ import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
 import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } from "../db";
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
+import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
+import { clearAuth } from "../broker/robinhood";
 import { getBrokerLink, insertArtifact, deleteArtifact, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
 import { allTickers } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
@@ -456,6 +458,40 @@ export function startServer() {
       }
       if (url.pathname === "/api/broker/import/clear" && req.method === "POST") {
         await clearImport(userId);
+        const snap = await refreshBroker(userId);
+        return Response.json({ ok: true, source: snap.source });
+      }
+
+      // Robinhood link, driven from Settings → Brokerage. Login runs in the
+      // background (device approval can take minutes) and the UI polls /status,
+      // POSTing /code when Robinhood asks for a verification code.
+      if (url.pathname === "/api/broker/link" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { username?: string; password?: string };
+        const username = String(body.username ?? "").trim();
+        const password = String(body.password ?? "");
+        if (!username || !password) return Response.json({ ok: false, error: "username and password required" }, { status: 400 });
+        startLink(userId, username, password);
+        return Response.json({ ok: true, ...linkState(userId) });
+      }
+      if (url.pathname === "/api/broker/link/status") {
+        const st = linkState(userId);
+        // A finished link is reported exactly once: pull the fresh positions,
+        // then drop the pending state. Leaving it set would re-refresh (a live
+        // Robinhood pull) and re-toast on every later visit to Settings.
+        if (st?.state === "linked") {
+          try { await refreshBroker(userId); } catch { /* still report linked; the next refresh retries */ }
+          clearLinkState(userId);
+        }
+        return Response.json({ ok: true, status: st, linked: (await getBrokerLink(userId))?.provider === "robinhood" });
+      }
+      if (url.pathname === "/api/broker/link/code" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { code?: string };
+        const accepted = submitLinkCode(userId, String(body.code ?? "").trim());
+        return Response.json({ ok: accepted, error: accepted ? undefined : "no code was being asked for" }, { status: accepted ? 200 : 409 });
+      }
+      if (url.pathname === "/api/broker/unlink" && req.method === "POST") {
+        await clearAuth(userId);
+        clearLinkState(userId);
         const snap = await refreshBroker(userId);
         return Response.json({ ok: true, source: snap.source });
       }

@@ -3139,9 +3139,9 @@
           <div id="broker-line"></div>
           <div id="pf-updated"></div>
           <div id="import-panel">
-            <div class="hint">Link Robinhood (read-only) for live positions — run <code>bun run link:robinhood</code>
-              once. It takes priority over this manual paste, which is the universal fallback for any broker's export.
-            </div>
+            <div class="hint">Link Robinhood (read-only) for live positions in <a href="#settings">Settings →
+                Brokerage</a>. It takes priority over this manual paste, which is the universal fallback for any
+              broker's export.</div>
             <textarea id="import-json" spellcheck="false"
               placeholder='{"positions":[{"ticker":"AAPL","shares":10,"cost_basis":180},{"ticker":"AAPL 2026-08-21 250C","shares":2,"cost_basis":5.20,"asset_class":"option","market_value":1240,"option":{"type":"call","strike":250,"expiry":"2026-08-21","underlying":"AAPL"}}],"watchlist":["NVDA"],"account":{"equity":25000}}'></textarea>
             <div class="hint" id="import-msg"></div>
@@ -3463,6 +3463,33 @@
         </section>
 
         <section data-pane="settings">
+          <h2>Brokerage</h2>
+          <div class="settings-card">
+            <div id="link-linked" style="display:none">
+              <div class="settings-row" style="align-items:center">
+                <span style="font-weight:600">Robinhood linked (read-only)</span>
+                <button type="button" class="advise-btn ghost" id="link-unlink" style="margin:0 0 0 auto">Unlink</button>
+              </div>
+            </div>
+            <form id="link-form">
+              <div class="settings-row">
+                <label>Robinhood email/username<input type="text" id="link-user" autocomplete="username"></label>
+                <label>Password<input type="password" id="link-pass" autocomplete="current-password"></label>
+                <button type="submit" class="advise-btn" style="margin-top:0">Link account</button>
+              </div>
+            </form>
+            <div class="settings-row" id="link-code-row" style="display:none">
+              <label>Verification code<input type="text" id="link-code" inputmode="numeric" autocomplete="one-time-code"></label>
+              <button type="button" class="advise-btn" id="link-code-go" style="margin-top:0">Submit code</button>
+            </div>
+            <div class="settings-msg" id="link-msg"></div>
+            <p style="font-size:12px;color:var(--faint)">Read-only: sharpEdge never places or cancels orders. Your
+              password goes straight to Robinhood and is never stored — only the returned access tokens are.
+              A linked account takes priority over the manual position import.</p>
+          </div>
+        </section>
+
+        <section data-pane="settings">
           <h2>Appearance</h2>
           <div class="settings-card">
             <div class="settings-row" style="align-items:center">
@@ -3711,7 +3738,7 @@
       const badge = document.querySelector(`#nav button[data-tab="${name}"] .badge`);
       if (badge) { badge.classList.remove("show"); badge.textContent = ""; }
       if (name === "portfolio") loadConcentration();
-      if (name === "settings") { loadProfile(); syncAppearanceTabs(); }
+      if (name === "settings") { loadProfile(); loadLinkStatus(); syncAppearanceTabs(); }
       if (name === "history") { loadJournal(); loadPastIdeas(); loadCalibration(); loadScoreboard(); }
       if (name === "analyze") loadRiskPrefs();
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
@@ -5232,6 +5259,64 @@
       msg.textContent = res.ok ? "Saved." : `Failed: ${res.error}`;
       if (res.ok) toast("Profile saved"); else toast(`Save failed: ${res.error}`, "err");
       setTimeout(() => { msg.textContent = ""; }, 5000);
+    });
+
+    /* ── settings: brokerage link ── */
+    let linkPoll = null, linkPrevState = null;
+    function renderLink(linked, status) {
+      const state = status?.state ?? null;
+      $("#link-linked").style.display = linked ? "block" : "none";
+      $("#link-form").style.display = linked ? "none" : "block";
+      $("#link-code-row").style.display = state === "need_code" ? "flex" : "none";
+      $("#link-msg").textContent = linked && state !== "error" ? "" : (status?.message ?? "");
+      // Only on the transition — this runs every 2s while polling, and re-focusing
+      // would yank the cursor back (and re-open the phone keyboard) each tick.
+      if (state === "need_code" && linkPrevState !== "need_code") $("#link-code").focus();
+      linkPrevState = state;
+    }
+    async function loadLinkStatus() {
+      try {
+        const r = await (await fetch("/api/broker/link/status")).json();
+        renderLink(r.linked, r.status);
+        // Stop polling once the flow settles; a finished link changes the portfolio.
+        if (r.status && (r.status.state === "linked" || r.status.state === "error")) {
+          clearInterval(linkPoll); linkPoll = null;
+          if (r.status.state === "linked") { toast("Robinhood linked"); loadState(); }
+        }
+      } catch { }
+    }
+    function pollLink() {
+      clearInterval(linkPoll);
+      linkPoll = setInterval(loadLinkStatus, 2000);
+    }
+    $("#link-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const username = $("#link-user").value.trim(), password = $("#link-pass").value;
+      if (!username || !password) { $("#link-msg").textContent = "Enter your Robinhood email and password."; return; }
+      $("#link-msg").textContent = "Signing in…";
+      const r = await (await fetch("/api/broker/link", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username, password }),
+      })).json();
+      $("#link-pass").value = ""; // never keep the password sitting in the DOM
+      if (!r.ok) { $("#link-msg").textContent = `Failed: ${r.error}`; return; }
+      pollLink();
+    });
+    $("#link-code-go").addEventListener("click", async () => {
+      const code = $("#link-code").value.trim();
+      if (!code) return;
+      const r = await (await fetch("/api/broker/link/code", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }),
+      })).json();
+      $("#link-code").value = "";
+      if (r.ok) { $("#link-code-row").style.display = "none"; $("#link-msg").textContent = "Verifying…"; }
+      else $("#link-msg").textContent = `Failed: ${r.error}`;
+    });
+    $("#link-unlink").addEventListener("click", async () => {
+      if (!confirm("Unlink Robinhood? Positions fall back to your manual import or portfolio.yaml.")) return;
+      await fetch("/api/broker/unlink", { method: "POST" });
+      renderLink(false, null);
+      toast("Robinhood unlinked");
+      loadState();
     });
 
     /* ── settings: appearance (theme + chart type, per-browser) ── */

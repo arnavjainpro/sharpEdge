@@ -37,7 +37,7 @@ A personal trading research and decision-support engine. It scans a **~1,500-sto
 
 **Telegram (required for alerts to reach you):** set `TELEGRAM_BOT_TOKEN` (bot via @BotFather) and `TELEGRAM_CHAT_ID` (from @userinfobot) in `.env`. Without it, price/score alerts still evaluate and fire correctly but have nowhere to land — the only other channel is a native macOS notification, which off macOS just fails and writes a `[notify:mac] failed:` line to the log on every delivery. Signals (buy/sell advice) use the same channel.
 
-Optional: Robinhood link (`bun run link:robinhood` — read-only, stores tokens locally; it first asks which sharpEdge account email to link to, then complete the SMS code or approve the login in the Robinhood app when prompted). Robinhood has no official public API; this uses the same private endpoints robin_stocks does (including the device-approval workflow) and can break without notice — the app degrades to import/YAML if so.
+Optional: Robinhood link (read-only, stores tokens locally). Do it in the dashboard under **Settings → Brokerage**: enter your Robinhood email and password, then approve the login in the Robinhood app or type the SMS/email code when it asks. The terminal equivalent is `bun run link:robinhood`, which additionally asks which sharpEdge account email to link to. Robinhood has no official public API; this uses the same private endpoints robin_stocks does (including the device-approval workflow) and can break without notice — the app degrades to import/YAML if so.
 
 ## Config files
 
