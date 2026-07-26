@@ -24,7 +24,8 @@ import { clearAuth } from "../broker/robinhood";
 import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
 import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
-import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, updateEmail, createSession, destroySession } from "../auth";
+import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail, createSession, destroySession } from "../auth";
+import { sendEmail, emailEnabled } from "../notify/email";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
 import { join } from "path";
 
@@ -642,7 +643,12 @@ export function startServer() {
             const fields = { full_name: str(body.full_name, 120), phone: str(body.phone, 32) };
             const current = await getProfile(userId);
             const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
+            // A new address is STAGED, never applied here — it only becomes the
+            // login once a code mailed to it comes back to /confirm-email.
             if (email && email !== current?.email) {
+              if (!emailEnabled()) {
+                return Response.json({ ok: false, error: "email changes need a mail provider — set RESEND_API_KEY (see .env.example)" }, { status: 503 });
+              }
               if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
                 return Response.json({ ok: false, error: "that doesn't look like an email address" }, { status: 400 });
               }
@@ -650,17 +656,42 @@ export function startServer() {
               if (!hash || !(await verifyPassword(String(body.password ?? ""), hash))) {
                 return Response.json({ ok: false, error: "current password is wrong" }, { status: 403 });
               }
-              if (!(await updateEmail(userId, email))) {
+              // Advisory — the binding check is the UNIQUE index at confirm
+              // time. This one just fails fast with a clearer message.
+              if (await findUserByEmail(email)) {
                 return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
               }
+              const code = await startEmailChange(userId, email);
+              if (!(await sendEmail(email, "Confirm your sharpEdge email address",
+                `Your confirmation code is ${code}\n\nEnter it in Settings to finish moving your sharpEdge sign-in to this address. It expires in 15 minutes.\n\nIf you didn't request this, ignore this email — nothing has changed and your current address still works.`))) {
+                // Don't leave a change staged that the user can never confirm.
+                await cancelEmailChange(userId);
+                return Response.json({ ok: false, error: "couldn't send the confirmation email — check the server log" }, { status: 502 });
+              }
+              await updateProfile(userId, fields);
+              return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: email });
             }
             await updateProfile(userId, fields);
-            return Response.json({ ok: true, profile: await getProfile(userId) });
+            return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: await getPendingEmail(userId) });
           } catch (err) {
             return Response.json({ ok: false, error: String(err) }, { status: 400 });
           }
         }
-        return Response.json({ ok: true, profile: await getProfile(userId) });
+        // pendingEmail keeps the "enter your code" box on screen across a reload.
+        return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: await getPendingEmail(userId), emailChangeAvailable: emailEnabled() });
+      }
+
+      // Second half of an email change: the code proves the new inbox is real.
+      if (url.pathname === "/api/profile/confirm-email" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { code?: string; cancel?: boolean };
+        if (body.cancel) {
+          await cancelEmailChange(userId);
+          return Response.json({ ok: true, cancelled: true });
+        }
+        const res = await confirmEmailChange(userId, String(body.code ?? ""));
+        return res.ok
+          ? Response.json({ ok: true, email: res.email })
+          : Response.json({ ok: false, error: res.error }, { status: 400 });
       }
 
       // Master switch for automatic AI spend (triage/analysis/scheduled briefings).

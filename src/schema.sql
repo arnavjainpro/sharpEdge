@@ -243,6 +243,16 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_user_kind ON artifacts(user_id, kind, t
 -- 'balanced' matches the behavior every existing row had before the setting existed.
 ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFAULT 'balanced';
 
+-- An in-flight email change (SHARP-17). The new address lives here, NOT in
+-- users.email, until a code mailed to it comes back — so an unverified or
+-- mistyped address can never become the thing you sign in with. At most one
+-- pending change per user, which is why these are columns and not a table.
+-- attempts caps guessing of the 6-digit code; expires bounds the window.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_code text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_expires integer;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_attempts integer NOT NULL DEFAULT 0;
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);
