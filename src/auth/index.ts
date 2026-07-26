@@ -72,6 +72,70 @@ export async function getPasswordHash(id: number): Promise<string | null> {
   return row?.password_hash ?? null;
 }
 
+// ── Signup verification: no account exists until the code comes back ─────────
+//
+// Shares the code generator, TTL and attempt cap with the email-change flow
+// below — same threat, same shape, so it would be odd for them to differ.
+
+// Stages a signup and returns the code for the caller to email. Signing up
+// again with the same address overwrites the pending row and resets attempts,
+// which is also how "resend me the code" works — there's no separate endpoint.
+export async function startSignup(email: string, passwordHash: string): Promise<string> {
+  const code = sixDigitCode();
+  await db.query(
+    `INSERT INTO pending_signups (email, password_hash, code, expires_at, attempts, created_at)
+     VALUES (?, ?, ?, extract(epoch from now())::int + ?, 0, extract(epoch from now())::int)
+     ON CONFLICT (email) DO UPDATE SET password_hash = excluded.password_hash, code = excluded.code,
+       expires_at = excluded.expires_at, attempts = 0, created_at = excluded.created_at`
+  ).run(email.toLowerCase().trim(), passwordHash, code, EMAIL_CODE_TTL_SEC);
+  return code;
+}
+
+export async function pendingSignupExists(email: string): Promise<boolean> {
+  const row = await db.query(
+    `SELECT 1 AS x FROM pending_signups WHERE email = ? AND expires_at > extract(epoch from now())::int`
+  ).get(email.toLowerCase().trim());
+  return !!row;
+}
+
+// Creates the real account, but only on a matching code. Same attempt cap as the
+// email change: five misses and the pending signup is thrown away, so the
+// 6-digit space can't be walked to activate someone else's staged address.
+export async function confirmSignup(email: string, code: string): Promise<{ ok: true; userId: number } | { ok: false; error: string }> {
+  const key = email.toLowerCase().trim();
+  const row = await db.query(
+    `SELECT password_hash, code, expires_at, attempts FROM pending_signups WHERE email = ?`
+  ).get<{ password_hash: string; code: string; expires_at: number; attempts: number }>(key);
+
+  if (!row) return { ok: false, error: "no signup is pending for that address — create the account again" };
+  if (row.expires_at <= Math.floor(Date.now() / 1000)) {
+    await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(key);
+    return { ok: false, error: "that code expired — create the account again" };
+  }
+  if (row.code !== String(code).trim()) {
+    const attempts = row.attempts + 1;
+    if (attempts >= EMAIL_CODE_MAX_ATTEMPTS) {
+      await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(key);
+      return { ok: false, error: "too many wrong codes — create the account again" };
+    }
+    await db.query(`UPDATE pending_signups SET attempts = ? WHERE email = ?`).run(attempts, key);
+    return { ok: false, error: `that code is wrong — ${EMAIL_CODE_MAX_ATTEMPTS - attempts} attempts left` };
+  }
+  // Someone may have claimed the address by other means while this sat pending.
+  if (await findUserByEmail(key)) {
+    await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(key);
+    return { ok: false, error: "an account with that email already exists — sign in instead" };
+  }
+
+  const userId = await createUser(key, row.password_hash);
+  await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(key);
+  return { ok: true, userId };
+}
+
+export async function cleanupExpiredSignups() {
+  await db.query(`DELETE FROM pending_signups WHERE expires_at < ?`).run(Math.floor(Date.now() / 1000));
+}
+
 // ── Email change: password to start it, a mailed code to finish it ───────────
 //
 // Email is the sign-in identity, so changing it needs two independent proofs:

@@ -1,6 +1,6 @@
 import { config, allTickers, marketPhase, etNow, type Portfolio } from "./config";
 import { aiLive, monitoredUserIds, setTriage, setTriageFor, severityRank } from "./db";
-import { findUserById } from "./auth";
+import { findUserById, cleanupExpiredSessions, cleanupExpiredSignups } from "./auth";
 import { runScan } from "./engine/screener";
 import { evaluateActiveAlerts } from "./engine/alerts";
 import { refreshUniverse, scanUniverse } from "./ingest/universe";
@@ -335,6 +335,24 @@ function scheduleCanaries() {
   setInterval(tick, 30 * 60_000);
 }
 
+// Expired sessions and abandoned signups, swept daily. cleanupExpiredSessions()
+// has existed since auth was added but was never actually called, so sessions
+// accumulated forever — 14 rows survived across three accounts before the last
+// reset. Neither is load-bearing (every read path already checks expiry), this
+// just stops dead rows piling up.
+function scheduleAuthCleanup() {
+  const tick = async () => {
+    try {
+      await cleanupExpiredSessions();
+      await cleanupExpiredSignups();
+    } catch (err) {
+      console.error("[auth] cleanup:", err);
+    }
+  };
+  setTimeout(tick, 120_000);
+  setInterval(tick, 24 * 3600_000);
+}
+
 // Universe: rebuild daily (constituents/market caps drift slowly).
 function scheduleUniverse() {
   setInterval(async () => {
@@ -459,5 +477,6 @@ scheduleUniverse();
 scheduleBroker();
 scheduleInsights();
 scheduleCanaries();
+scheduleAuthCleanup();
 startCacheHeartbeat(unionPortfolio(await monitoredUsers()));
 console.log(`[sharpEdge] running — market is currently ${marketPhase()}`);

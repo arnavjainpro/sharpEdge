@@ -287,6 +287,20 @@ CREATE INDEX IF NOT EXISTS idx_briefings_user ON briefings(user_id, ts DESC);
 UPDATE signals SET user_id = 1 WHERE user_id IS NULL;
 UPDATE briefings SET user_id = 1 WHERE user_id IS NULL;
 
+-- Signups awaiting email confirmation. Deliberately NOT a flag on `users`: a row
+-- in users is a real, verified account, and everything downstream depends on
+-- that. An unverified row there would join monitoredUserIds() and start costing
+-- AI tokens immediately, and it would hold the UNIQUE email slot — letting
+-- anyone squat an address they don't control. Nothing here is an account yet.
+CREATE TABLE IF NOT EXISTS pending_signups (
+  email text PRIMARY KEY,
+  password_hash text NOT NULL,       -- already bcrypt-hashed, never plaintext
+  code text NOT NULL,
+  expires_at integer NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,
+  created_at integer NOT NULL
+);
+
 -- An in-flight email change (SHARP-17). The new address lives here, NOT in
 -- users.email, until a code mailed to it comes back — so an unverified or
 -- mistyped address can never become the thing you sign in with. At most one

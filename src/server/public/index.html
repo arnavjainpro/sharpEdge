@@ -3620,6 +3620,9 @@
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required
         minlength="8">
+      <!-- Step two of signup, shown only once a code has actually been sent. -->
+      <input type="text" id="auth-code" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code"
+        maxlength="6" hidden>
       <div id="auth-error"></div>
       <button type="submit" class="advise-btn" id="auth-submit">Sign in</button>
       <button type="button" id="auth-flip">New here? Create an account</button>
@@ -7464,28 +7467,65 @@
       setInterval(loadMarket, 10 * 60_000);
     }
 
+    // "login" | "signup" | "verify" — verify is signup's second step, entered
+    // only when the server confirms a code actually went out.
     let authMode = "login";
     function renderAuthMode() {
       const signup = authMode === "signup";
-      $("#auth-blurb").textContent = signup ? "Create your account." : "Sign in to your account.";
-      $("#auth-submit").textContent = signup ? "Create account" : "Sign in";
-      $("#auth-flip").textContent = signup ? "Already have an account? Sign in" : "New here? Create an account";
+      const verify = authMode === "verify";
+      $("#auth-blurb").textContent = verify
+        ? `Enter the 6-digit code sent to ${$("#auth-email").value.trim()}.`
+        : signup ? "Create your account." : "Sign in to your account.";
+      $("#auth-submit").textContent = verify ? "Confirm and continue" : signup ? "Create account" : "Sign in";
+      $("#auth-flip").textContent = verify
+        ? "Use a different email"
+        : signup ? "Already have an account? Sign in" : "New here? Create an account";
       $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
+      // The email and password are already staged server-side during verify —
+      // showing them again invites edits that would silently not apply.
+      $("#auth-email").hidden = verify;
+      $("#auth-password").hidden = verify;
+      $("#auth-code").hidden = !verify;
+      $("#auth-email").required = !verify;
+      $("#auth-password").required = !verify;
+      $("#auth-code").required = verify;
       $("#auth-error").textContent = "";
+      if (verify) $("#auth-code").focus();
     }
-    $("#auth-flip").addEventListener("click", () => { authMode = authMode === "login" ? "signup" : "login"; renderAuthMode(); });
+    $("#auth-flip").addEventListener("click", () => {
+      // From the code step, "use a different email" abandons the staged signup
+      // and goes back to a blank form (the pending row expires on its own).
+      if (authMode === "verify") { $("#auth-code").value = ""; authMode = "signup"; }
+      else authMode = authMode === "login" ? "signup" : "login";
+      renderAuthMode();
+    });
     $("#auth-card").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const btn = $("#auth-submit");
       btn.disabled = true;
       try {
-        const res = await (await fetch(`/api/auth/${authMode}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: $("#auth-email").value, password: $("#auth-password").value }),
+        const path = authMode === "verify" ? "verify-signup" : authMode;
+        const body = authMode === "verify"
+          ? { email: $("#auth-email").value, code: $("#auth-code").value.trim() }
+          : { email: $("#auth-email").value, password: $("#auth-password").value };
+        const res = await (await fetch(`/api/auth/${path}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         })).json();
+        // A pending signup means no account exists yet — hand over to the code
+        // step instead of reloading into a session that isn't there.
+        if (res.ok && res.pending) { authMode = "verify"; renderAuthMode(); return; }
         if (res.ok) location.reload(); // rerun the full boot against the new session
-        else $("#auth-error").textContent = res.error || "Something went wrong.";
+        else {
+          $("#auth-error").textContent = res.error || "Something went wrong.";
+          // Codes are single-use once burnt; a dead one drops you back to signup
+          // rather than leaving you typing into a form that can't succeed.
+          if (authMode === "verify" && /create the account again/.test(res.error ?? "")) {
+            authMode = "signup";
+            const msg = res.error;
+            renderAuthMode();
+            $("#auth-error").textContent = msg;
+          }
+        }
       } catch (e) {
         $("#auth-error").textContent = "Could not reach the server.";
       } finally {

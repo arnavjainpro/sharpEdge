@@ -25,7 +25,7 @@ import { clearAuth } from "../broker/robinhood";
 import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
 import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
-import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail, createSession, destroySession } from "../auth";
+import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail, startSignup, confirmSignup, pendingSignupExists, createSession, destroySession } from "../auth";
 import { sendEmail, emailEnabled } from "../notify/email";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
 import { join } from "path";
@@ -114,9 +114,42 @@ export function startServer() {
           if (!email || !email.includes("@")) return Response.json({ ok: false, error: "invalid email" }, { status: 400 });
           if (password.length < 8) return Response.json({ ok: false, error: "password must be at least 8 characters" }, { status: 400 });
           if (await findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
-          const userId = await createUser(email, await hashPassword(password));
-          const token = await createSession(userId);
-          return Response.json({ ok: true, email }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
+          const passwordHash = await hashPassword(password);
+
+          // No mail provider → no way to verify, so the account is created
+          // directly. Gating signup on a key that isn't set would brick the app
+          // for anyone who hasn't configured Resend; like every other optional
+          // key here, an unset one degrades exactly one feature.
+          if (!emailEnabled()) {
+            const userId = await createUser(email, passwordHash);
+            const token = await createSession(userId);
+            return Response.json({ ok: true, email, verified: false }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
+          }
+
+          // Otherwise nothing is created yet — the account comes into existence
+          // in /api/auth/verify-signup, once the code proves the inbox is real.
+          const code = await startSignup(email, passwordHash);
+          if (!(await sendEmail(email, "Confirm your sharpEdge account",
+            `Your confirmation code is ${code}\n\nEnter it to finish creating your sharpEdge account. It expires in 15 minutes.\n\nIf you didn't sign up, ignore this email — no account has been created.`))) {
+            await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(email);
+            return Response.json({ ok: false, error: "couldn't send the confirmation email — check the server log" }, { status: 502 });
+          }
+          return Response.json({ ok: true, email, pending: true });
+        } catch (err) {
+          return Response.json({ ok: false, error: String(err) }, { status: 400 });
+        }
+      }
+
+      // Second half of signup: the code proves the inbox, and the account is
+      // created here. Logs straight in — re-typing the password you just chose
+      // adds nothing when you've already proven both factors.
+      if (url.pathname === "/api/auth/verify-signup" && req.method === "POST") {
+        try {
+          const body = (await req.json()) as { email?: string; code?: string };
+          const res = await confirmSignup(String(body.email ?? ""), String(body.code ?? ""));
+          if (!res.ok) return Response.json({ ok: false, error: res.error }, { status: 400 });
+          const token = await createSession(res.userId);
+          return Response.json({ ok: true }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
         }
@@ -129,6 +162,13 @@ export function startServer() {
           const password = String(body.password ?? "");
           const user = await findUserByEmail(email);
           if (!user || !(await verifyPassword(password, user.password_hash))) {
+            // A staged signup isn't an account yet, so the lookup above misses
+            // and the generic message leaves you stuck with no way forward.
+            // Naming it is a mild account-enumeration leak; on a personal tool
+            // with a handful of logins, being unable to get in is the worse bug.
+            if (await pendingSignupExists(email)) {
+              return Response.json({ ok: false, error: "that signup hasn't been confirmed yet — check your email for the code, or sign up again to get a new one" }, { status: 401 });
+            }
             return Response.json({ ok: false, error: "invalid email or password" }, { status: 401 });
           }
           const token = await createSession(user.id);
