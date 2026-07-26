@@ -239,6 +239,10 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_user_kind ON artifacts(user_id, kind, t
 -- requires its own explicit line:
 --   ALTER TABLE <t> ADD COLUMN IF NOT EXISTS <col> <type>;
 
+-- Which options structures the swing analyzer may propose for this trader.
+-- 'balanced' matches the behavior every existing row had before the setting existed.
+ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFAULT 'balanced';
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);

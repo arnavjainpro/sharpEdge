@@ -21,10 +21,10 @@ import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } 
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
 import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
 import { clearAuth } from "../broker/robinhood";
-import { getBrokerLink, insertArtifact, deleteArtifact, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
-import { allTickers } from "../config";
+import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
+import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
-import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, createSession, destroySession } from "../auth";
+import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, updateEmail, createSession, destroySession } from "../auth";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
 import { join } from "path";
 
@@ -617,6 +617,7 @@ export function startServer() {
               max_risk_per_trade_pct: Math.min(Math.max(num(body.max_risk_per_trade_pct, cur.max_risk_per_trade_pct), 0.1), 10),
               max_position_pct: Math.min(Math.max(num(body.max_position_pct, cur.max_position_pct), 1), 100),
               target_rr_ratio: Math.min(Math.max(num(body.target_rr_ratio, cur.target_rr_ratio), 1), 10),
+              risk_appetite: body.risk_appetite === undefined ? cur.risk_appetite : asRiskAppetite(body.risk_appetite),
             };
             await setRiskPrefs(userId, prefs);
             return Response.json({ ok: true, prefs });
@@ -627,7 +628,9 @@ export function startServer() {
         return Response.json({ prefs: await loadRiskConfigFor(userId), customized: !!(await getRiskPrefs(userId)) });
       }
 
-      // Profile: name/phone are editable; email is the login identity and stays read-only.
+      // Profile: name/phone edit freely. Email is the sign-in identity, so a
+      // change to it is gated on the current password — an unlocked laptop
+      // shouldn't be enough to move the account to an attacker's address.
       if (url.pathname === "/api/profile") {
         if (req.method === "PUT") {
           try {
@@ -637,6 +640,20 @@ export function startServer() {
               return s || null;
             };
             const fields = { full_name: str(body.full_name, 120), phone: str(body.phone, 32) };
+            const current = await getProfile(userId);
+            const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
+            if (email && email !== current?.email) {
+              if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
+                return Response.json({ ok: false, error: "that doesn't look like an email address" }, { status: 400 });
+              }
+              const hash = await getPasswordHash(userId);
+              if (!hash || !(await verifyPassword(String(body.password ?? ""), hash))) {
+                return Response.json({ ok: false, error: "current password is wrong" }, { status: 403 });
+              }
+              if (!(await updateEmail(userId, email))) {
+                return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
+              }
+            }
             await updateProfile(userId, fields);
             return Response.json({ ok: true, profile: await getProfile(userId) });
           } catch (err) {
@@ -729,7 +746,8 @@ export function startServer() {
               cursor: `${r.ts}.${r.src}.${r.id}`,
               id: r.id, ts: r.ts, kind: r.kind, ticker: r.ticker,
               direction: r.direction, rating: r.rating, score: r.score, summary: r.summary,
-              deletable: r.src === "a",
+              src: r.src,          // which table the id belongs to — DELETE needs it
+              deletable: true,
               payload,
             };
           });
@@ -740,10 +758,15 @@ export function startServer() {
         }
       }
 
+      // The feed spans two tables with independent id sequences, so the row's
+      // `src` ('i' = ideas/intraday, 'a' = artifacts) has to come back with the
+      // id. Defaults to 'a' — the only source that was deletable before.
       if (url.pathname.startsWith("/api/history/") && req.method === "DELETE") {
         const id = Number(url.pathname.split("/").pop());
         if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
-        return Response.json({ ok: await deleteArtifact(userId, id) });
+        const src = url.searchParams.get("src") ?? "a";
+        if (src !== "i" && src !== "a") return Response.json({ ok: false, error: "bad src" }, { status: 400 });
+        return Response.json({ ok: src === "i" ? await deleteIdea(userId, id) : await deleteArtifact(userId, id) });
       }
 
       // Conversational advisor
@@ -834,7 +857,7 @@ export function startServer() {
         // Intraday plans included: History links here, and excluding them meant
         // the analysis you clicked through to wasn't on the page.
         const ideaRows = await db
-          .query(`SELECT ts, source, ticker, direction, rating, report FROM ideas WHERE user_id = ? AND ticker = ? ORDER BY ts DESC LIMIT 5`)
+          .query(`SELECT id, ts, source, ticker, direction, rating, report FROM ideas WHERE user_id = ? AND ticker = ? ORDER BY ts DESC LIMIT 5`)
           .all(userId, ticker) as any[];
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;
         return Response.json({
@@ -842,7 +865,9 @@ export function startServer() {
           screener: row ? { ...row, indicators: JSON.parse(row.indicators) } : null,
           ideas: ideaRows.flatMap((r) => {
             try {
-              return [{ ...JSON.parse(r.report), ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
+              // `id` rides along so the card's ✕ can delete the stored row, not
+              // just the DOM node — dismissing here used to leave it in history.
+              return [{ ...JSON.parse(r.report), id: r.id, ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
             } catch { return []; }
           }),
         });

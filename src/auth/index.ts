@@ -67,6 +67,24 @@ export async function updateProfile(id: number, fields: { full_name: string | nu
   await db.query(`UPDATE users SET full_name = ?, phone = ? WHERE id = ?`).run(fields.full_name, fields.phone, id);
 }
 
+export async function getPasswordHash(id: number): Promise<string | null> {
+  const row = await db.query(`SELECT password_hash FROM users WHERE id = ?`).get<{ password_hash: string }>(id);
+  return row?.password_hash ?? null;
+}
+
+// Email is the sign-in identity, so this changes what the account logs in as.
+// Callers must have verified the current password first. Returns false when the
+// address is already taken — checked by the UNIQUE index, not a prior SELECT,
+// so two simultaneous changes can't both win.
+export async function updateEmail(id: number, email: string): Promise<boolean> {
+  try {
+    await db.query(`UPDATE users SET email = ? WHERE id = ?`).run(email.toLowerCase().trim(), id);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function createSession(userId: number): Promise<string> {
   const token = crypto.randomUUID() + crypto.randomUUID(); // 256+ bits, unguessable
   const now = Math.floor(Date.now() / 1000);

@@ -2,7 +2,7 @@ import { SQL } from "bun";
 import { AsyncLocalStorage } from "async_hooks";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { config } from "./config";
+import { config, asRiskAppetite, type RiskAppetite } from "./config";
 
 if (!config.databaseUrl) {
   throw new Error("DATABASE_URL is not set — point it at your Supabase Postgres connection string (see .env.example).");
@@ -80,19 +80,23 @@ export interface RiskPrefs {
   max_risk_per_trade_pct: number;
   max_position_pct: number;
   target_rr_ratio: number; // minimum R:R for a "strong" rating in idea validation
+  risk_appetite: RiskAppetite;
 }
 
 export async function getRiskPrefs(userId: number): Promise<RiskPrefs | null> {
-  return await db.query(`SELECT account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio FROM risk_prefs WHERE user_id = ?`).get<RiskPrefs>(userId);
+  const row = await db.query(`SELECT account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio, risk_appetite FROM risk_prefs WHERE user_id = ?`).get<RiskPrefs>(userId);
+  // Rows written before the column existed default to 'balanced' at the DB level,
+  // but coerce anyway — this value selects which structures the analyzer may propose.
+  return row && { ...row, risk_appetite: asRiskAppetite(row.risk_appetite) };
 }
 
 export async function setRiskPrefs(userId: number, prefs: RiskPrefs) {
   await db.query(
-    `INSERT INTO risk_prefs (user_id, account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO risk_prefs (user_id, account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio, risk_appetite) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET account_equity = excluded.account_equity,
        max_risk_per_trade_pct = excluded.max_risk_per_trade_pct, max_position_pct = excluded.max_position_pct,
-       target_rr_ratio = excluded.target_rr_ratio`
-  ).run(userId, prefs.account_equity, prefs.max_risk_per_trade_pct, prefs.max_position_pct, prefs.target_rr_ratio);
+       target_rr_ratio = excluded.target_rr_ratio, risk_appetite = excluded.risk_appetite`
+  ).run(userId, prefs.account_equity, prefs.max_risk_per_trade_pct, prefs.max_position_pct, prefs.target_rr_ratio, asRiskAppetite(prefs.risk_appetite));
 }
 
 export interface BrokerLink {
@@ -138,6 +142,27 @@ export async function deleteArtifact(userId: number, id: number): Promise<boolea
   // Scoped by user_id so an id from another account can't be deleted.
   const rows = await db.query(`DELETE FROM artifacts WHERE user_id = ? AND id = ? RETURNING id`).all(userId, id);
   return rows.length > 0;
+}
+
+// Validated ideas and intraday plans live in `ideas`, the other half of the
+// history feed. Without this they could only be dismissed from the DOM and came
+// straight back on reload — which is what "I can't delete it" meant.
+//
+// outcomes.idea_id and tracked_trades.idea_id reference this row with no ON
+// DELETE rule, so they're detached first, inside one transaction. The journal
+// entry and the tracked trade survive on their own; only the link goes.
+export async function deleteIdea(userId: number, id: number): Promise<boolean> {
+  return await db.transaction(async () => {
+    // Ownership is checked before anything is detached: the FKs force the
+    // UPDATEs to run first, and an id belonging to another account must not get
+    // its journal links cleared on the way to a DELETE that matches nothing.
+    const own = await db.query(`SELECT id FROM ideas WHERE id = ? AND user_id = ?`).get(id, userId);
+    if (!own) return false;
+    await db.query(`UPDATE outcomes SET idea_id = NULL WHERE idea_id = ?`).run(id);
+    await db.query(`UPDATE tracked_trades SET idea_id = NULL WHERE idea_id = ?`).run(id);
+    await db.query(`DELETE FROM ideas WHERE id = ?`).run(id);
+    return true;
+  })();
 }
 
 export async function scoreHistory(userId: number, limit = 30): Promise<{ ts: number; score: number }[]> {

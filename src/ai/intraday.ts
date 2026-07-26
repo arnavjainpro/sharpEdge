@@ -6,7 +6,7 @@
 // 1-minute setups must be validated against higher-timeframe structure before
 // they count as anything more than noise.
 import Anthropic from "@anthropic-ai/sdk";
-import { config, marketPhase, type Portfolio } from "../config";
+import { config, marketPhase, type Portfolio, type RiskAppetite } from "../config";
 import { db } from "../db";
 import { fetchIntradayBars, fetchDailyCandles, type IntradayBars } from "../ingest/yahoo";
 import { fetchCompanyNews, fetchNextEarnings, cachedQuote } from "../ingest/finnhub";
@@ -88,23 +88,23 @@ export interface OptionsStrategy {
 const PLAN_SCHEMA = {
   type: "object",
   properties: {
-    regime: { type: "string", description: "One sentence: the market tape today + this stock's session character (trending, ranging, gappy, news-driven)." },
+    regime: { type: "string", description: "ONE sentence: the market tape today + this stock's session character (trending, ranging, gappy, news-driven)." },
     setup_quality: { type: "string", enum: ["strong", "moderate", "weak", "no_trade"] },
     direction: { type: "string", enum: ["long", "short", "no_trade"] },
     trade_type: { type: "string", enum: ["scalp", "momentum", "trend_continuation", "mean_reversion", "no_trade"] },
-    timeframe_note: { type: "string", description: "The noise check: is this move real or 1-minute noise? Does higher-timeframe structure support it?" },
-    chart_read: { type: "string", description: "What the chart (screenshot and/or data) actually shows: trend structure, key levels, volume behavior, momentum. If a screenshot conflicts with the live data, say so." },
+    timeframe_note: { type: "string", description: "ONE sentence, the noise check: is this move real or 1-minute noise, and does higher-timeframe structure back it?" },
+    chart_read: { type: "string", description: "At most 3 short sentences, each carrying a number: trend structure, the key levels, volume behavior. Levels and prices, not adjectives. If a screenshot conflicts with the live data, that mismatch replaces one of the sentences." },
     entry_zone: { type: "string" },
     stop_loss: { type: "string" },
     targets: { type: "array", items: { type: "string" } },
-    invalidation: { type: "string", description: "The observable condition that kills the setup (level lost, VWAP reclaim against you, volume dying...)." },
+    invalidation: { type: "string", description: "ONE observable condition that kills the setup, with its level (e.g. '5m close below 178.40')." },
     holding_period: { type: "string" },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     risk_reward: { type: "string" },
-    exit_plan: { type: "string", description: "Scale-out/trail rules AND the early-exit condition if the setup stalls." },
-    sizing: { type: "string", description: "Concrete sizing from the provided account math; if no equity known, express as % risk. Include max risk per trade." },
-    what_would_improve: { type: "string", description: "The confirmation that would upgrade this setup (e.g. 'a 5m close above VWAP on >1.5x volume')." },
-    warnings: { type: "array", items: { type: "string" } },
+    exit_plan: { type: "string", description: "At most 2 short sentences: the scale-out/trail rule, then the early-exit trigger if the setup stalls. Levels and times, no rationale." },
+    sizing: { type: "string", description: "One line of numbers from the provided account math: share/contract count, dollars at risk, % of equity. If no equity is known, % risk only. No explanation." },
+    what_would_improve: { type: "string", description: "ONE concrete confirmation that would upgrade this setup (e.g. 'a 5m close above VWAP on >1.5x volume')." },
+    warnings: { type: "array", items: { type: "string" }, description: "At most 3, one short line each, only things that change the decision. Empty array is a valid answer." },
     options_view: {
       type: "object",
       description: "Only when options data was provided in the input.",
@@ -112,9 +112,9 @@ const PLAN_SCHEMA = {
         stance: { type: "string", enum: ["calls", "puts", "spread", "neutral", "avoid"] },
         strike_range: { type: "string" },
         expiry_range: { type: "string" },
-        iv_context: { type: "string" },
-        upside_risk: { type: "string" },
-        downside_risk: { type: "string" },
+        iv_context: { type: "string", description: "ONE sentence: is premium cheap or expensive here, and the IV number behind that call." },
+        upside_risk: { type: "string", description: "One short phrase." },
+        downside_risk: { type: "string", description: "One short phrase." },
         strategy: {
           type: "object",
           description: "A concrete, executable options structure. Strikes and expiries MUST come from the provided chain. Include only when an options play is warranted.",
@@ -142,7 +142,7 @@ const PLAN_SCHEMA = {
             max_loss: { type: "string" },
             max_gain: { type: "string" },
             breakevens: { type: "array", items: { type: "string" } },
-            rationale: { type: "string" },
+            rationale: { type: "string", description: "At most 2 short sentences: why this structure over the obvious alternative, and what IV is doing to it." },
           },
           required: ["structure", "legs", "net_debit_credit", "max_loss", "max_gain", "breakevens", "rationale"],
           additionalProperties: false,
@@ -171,7 +171,34 @@ Hard rules:
 - Respect the tape: fighting a strong index trend requires extra evidence. If the market phase is closed/extended, note that the plan is for the next session and levels may gap.
 - Position sizing: use the provided account math; never suggest risking more than the trader's max risk per trade. If equity is unknown, express size as % risk.
 - SWING MODE: when the input is multi-timeframe charts (1D/1W/1M) the horizon is days-to-weeks, not minutes. Weight the higher-timeframe (weekly/monthly) structure and the week's news sentiment; entry/stop/targets should be swing levels, not scalp ticks. Fill options_view.strategy with a concrete structure whose legs use ONLY strikes and expiries that appear in the provided chain — an invented strike is a hard error. Prefer defined-risk structures (verticals, iron condors) when IV is elevated; naked long premium only when IV is cheap and a real catalyst is expected. State max loss and max gain in dollars.
-- Ground every number in the provided data or the visible chart. Never invent prices or levels. Plain English; explain technical terms in the same sentence. Decision support, not licensed financial advice.`;
+- Ground every number in the provided data or the visible chart. Never invent prices or levels. Plain English; explain technical terms in the same sentence. Decision support, not licensed financial advice.
+- BE TERSE. This is read on a phone while the setup is still live, not studied afterwards. Respect the length cap in each field's description — they are limits, not targets, and shorter is better. Every prose sentence must carry a level, a number, or a trigger; if it carries none, delete it. No preamble, no restating the inputs back, no hedging both ways, and never repeat something another field already says. Two sharp sentences beat five padded ones, and the structured fields (entry/stop/targets/R:R) do the talking — prose only explains what they can't.`;
+
+// What the trader's risk appetite means in actual structures. The appetite is set
+// in the Analyze tab's "Position sizing & risk" block; this is the one place that
+// turns it into an instruction, and the same allowlist gates the model's answer
+// afterwards. Ordering within each list is a preference hint, best fit first.
+//
+// Note what is absent at EVERY level: an uncovered short call. Undefined-risk
+// short premium stays off the menu no matter how aggressive the trader is — the
+// structure enum has never contained it and appetite doesn't unlock it.
+export const APPETITE_PLAYBOOK: Record<RiskAppetite, { profile: string; structures: OptionsStrategy["structure"][] }> = {
+  conservative: {
+    profile:
+      "income and capital preservation — wants a high probability of a small win, and a worst case that is known and capped before entry. Would rather collect premium than pay it, and would rather miss a move than lose the premium outright.",
+    structures: ["covered_call", "cash_secured_put", "vertical_put_spread", "vertical_call_spread", "iron_condor"],
+  },
+  balanced: {
+    profile:
+      "defined-risk directional — will pay a debit when there is a real edge, but every position must have a known maximum loss at entry. Comfortable with spreads, not with all-or-nothing premium.",
+    structures: ["vertical_call_spread", "vertical_put_spread", "calendar", "covered_call", "cash_secured_put", "iron_condor"],
+  },
+  aggressive: {
+    profile:
+      "convexity — accepts a low win rate and losing the full premium in exchange for an outsized payoff when the call is right. Will buy naked long premium outright rather than cap the upside with a spread.",
+    structures: ["long_call", "long_put", "straddle", "strangle", "vertical_call_spread", "vertical_put_spread", "calendar", "iron_condor"],
+  },
+};
 
 // Session stats computed from intraday bars (last session in the series).
 function sessionStats(bars: IntradayBars) {
@@ -203,7 +230,7 @@ function sessionStats(bars: IntradayBars) {
   };
 }
 
-async function buildDataContext(userId: number, req: IntradayRequest): Promise<{ text: string; ticker: string }> {
+async function buildDataContext(userId: number, req: IntradayRequest): Promise<{ text: string; ticker: string; appetite: RiskAppetite }> {
   const swing = req.mode === "swing";
   const ticker = (req.ticker ?? "").toUpperCase().trim();
   if (!ticker) {
@@ -215,6 +242,7 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
         await marketContextText(),
         accountContextText(userId),
       ].join("\n"),
+      appetite: (await loadRiskConfigFor(userId)).risk_appetite,
     };
   }
 
@@ -313,20 +341,27 @@ async function buildDataContext(userId: number, req: IntradayRequest): Promise<{
   }
   lines.push(accountContextText(userId));
 
-  // The trader's own reward:risk bar (Analyze tab) drives what counts as a strong
-  // short-term setup here — this is the one place target_rr is consumed now.
-  const targetRR = (await loadRiskConfigFor(userId)).target_rr_ratio;
-  lines.push(`TARGET REWARD:RISK — the trader wants at least ${targetRR.toFixed(1)}:1 to the first target for a "strong" setup; below that, rate the R:R leg weak and say so.`);
+  // The trader's own reward:risk bar and risk appetite (Analyze tab) drive what
+  // counts as a strong setup here, and which options structures are on the menu.
+  const riskCfg = await loadRiskConfigFor(userId);
+  const appetite = riskCfg.risk_appetite;
+  lines.push(`TARGET REWARD:RISK — the trader wants at least ${riskCfg.target_rr_ratio.toFixed(1)}:1 to the first target for a "strong" setup; below that, rate the R:R leg weak and say so.`);
+  lines.push(`RISK APPETITE — ${appetite}: ${APPETITE_PLAYBOOK[appetite].profile} Match the whole plan to this, not just the options leg: a conservative trader wants confirmation before entry, an aggressive one will anticipate it.`);
 
   if (req.options || swing) {
     lines.push(``, optionsContextText(await fetchOptionsSummary(ticker)),
       `Include an options_view: calls/puts/spread/neutral/avoid for this setup, strike + expiry ranges from the chain, and premium risk (IV, theta for short-dated contracts) in plain terms.`);
     if (swing) lines.push(
-      `SWING MODE — also fill options_view.strategy with a concrete, executable structure: pick the structure that fits the thesis and IV (elevated IV → favor defined-risk spreads / credit structures over naked long premium), list every leg with real strikes and expiries FROM THE CHAIN ABOVE, and state net debit/credit, max loss, max gain, and breakeven(s) in dollars. If no options play is warranted, set structure "none" with an empty legs array.`);
+      `SWING MODE — also fill options_view.strategy with a concrete, executable structure: pick the structure that fits the thesis and IV (elevated IV → favor defined-risk spreads / credit structures over naked long premium), list every leg with real strikes and expiries FROM THE CHAIN ABOVE, and state net debit/credit, max loss, max gain, and breakeven(s) in dollars. If no options play is warranted, set structure "none" with an empty legs array.`,
+      // Appetite picks the menu; IV and the thesis pick from it. Both constraints
+      // bind — an aggressive trader in expensive IV still shouldn't be handed a
+      // naked long call, they should be told the premium is the problem.
+      `ALLOWED STRUCTURES for this ${appetite} trader — choose ONLY from: ${APPETITE_PLAYBOOK[appetite].structures.join(", ")}, or "none". Anything outside that list is wrong for this trader even if it would otherwise be the better trade; if the setup only works with an excluded structure, return "none" and say in the rationale which structure you would have used and why it is off their menu.`,
+      `covered_call requires the trader to ALREADY hold at least 100 shares per contract written — check the POSITION line and do not propose it otherwise. cash_secured_put requires enough buying power to be assigned the full 100 shares per contract at the strike; size it against the buying power above, not the max-risk figure.`);
   }
   if (req.notes) lines.push(``, `TRADER'S NOTES: ${req.notes}`);
 
-  return { ticker, text: lines.join("\n") };
+  return { ticker, text: lines.join("\n"), appetite };
 }
 
 function intraPct(last: number, prev: number | null): string {
@@ -352,7 +387,7 @@ export async function analyzeIntraday(userId: number, req: IntradayRequest, port
   // and the plan degrades to reading a picture.
   if (!req.ticker?.trim()) return { error: "a ticker is required — enter the symbol you're analyzing" };
 
-  const { ticker, text } = await buildDataContext(userId, req);
+  const { ticker, text, appetite } = await buildDataContext(userId, req);
   const held = portfolio.holdings.find((h) => h.ticker === ticker);
 
   const content: Anthropic.ContentBlockParam[] = [];
@@ -389,6 +424,15 @@ export async function analyzeIntraday(userId: number, req: IntradayRequest, port
     // sees is computed deterministically (Black-Scholes), never taken on the
     // model's word. Attaches to strategy.stress.
     const strat = plan.options_view?.strategy;
+    // The allowlist is an instruction, so treat it as one the model can miss. A
+    // structure off the trader's menu still gets priced and shown — silently
+    // dropping it would be worse — but it is labeled, not slipped through.
+    if (strat && strat.structure !== "none" && !APPETITE_PLAYBOOK[appetite].structures.includes(strat.structure)) {
+      plan.warnings = [
+        `${strat.structure.replace(/_/g, " ")} is outside your ${appetite} risk appetite — the analyzer proposed it anyway. Change the appetite in Position sizing & risk, or size this one deliberately.`,
+        ...(plan.warnings ?? []),
+      ];
+    }
     if (req.mode === "swing" && strat?.legs?.length && strat.structure !== "none") {
       try {
         const summ = await fetchOptionsSummary(ticker);

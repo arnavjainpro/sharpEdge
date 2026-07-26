@@ -1963,6 +1963,12 @@
       align-items: flex-end;
     }
 
+    /* display:flex above outranks the UA [hidden] rule — without this the
+       email-confirm row would be visible no matter what the .hidden flag says. */
+    .settings-row[hidden] {
+      display: none;
+    }
+
     .settings-row label {
       display: flex;
       flex-direction: column;
@@ -1980,6 +1986,12 @@
       font: 13px var(--sans);
       background: var(--gray-soft);
       width: 120px;
+    }
+
+    /* "Conservative" + the dropdown arrow overflows the 120px default. */
+    #rp-appetite {
+      width: auto;
+      min-width: 140px;
     }
 
     #profile-form .settings-row input[type="email"],
@@ -3834,31 +3846,17 @@
             </div>
             <div class="flabel">Add a rule</div>
             <div class="cf-row">
-              <select id="cf-metric" aria-label="Metric">
-                <option value="score">Score</option>
-                <option value="mcapB">Market cap $B</option>
-                <option value="rsi14">RSI (14d)</option>
-                <option value="pctVs200">% vs 200-day</option>
-                <option value="mom1m">1-mo return %</option>
-                <option value="mom3m">3-mo return %</option>
-                <option value="mom6m">6-mo return %</option>
-                <option value="rsSpy1m">vs S&amp;P 1m (pp)</option>
-                <option value="rsSector1m">vs sector 1m (pp)</option>
-                <option value="volTrend">Volume trend ×</option>
-                <option value="atrPct">ATR %</option>
-                <option value="pct52w">52-wk range %</option>
-              </select>
+              <!-- Options are rendered from CUSTOM_METRICS so the list can't drift
+                   from the metrics the filter actually knows how to read. -->
+              <select id="cf-metric" aria-label="Metric"></select>
               <select id="cf-op" aria-label="Comparison">
-                <option value=">=">at least</option>
-                <option value=">">above</option>
-                <option value="<">below</option>
-                <option value="<=">at most</option>
+                <option value=">">&gt; greater than</option>
+                <option value="<">&lt; less than</option>
               </select>
               <input type="number" id="cf-val" step="any" placeholder="value" style="width:74px">
               <button class="refresh-btn" id="cf-add" title="Add this rule as a removable filter">+ Add rule</button>
             </div>
-            <p style="font-size:11.5px;color:var(--faint);margin:6px 0 0">e.g. “RSI (14d) below 35” for oversold names,
-              or “% vs 200-day above 0” for uptrends. Stack as many rules as you like.</p>
+            <p style="font-size:11.5px;color:var(--faint);margin:6px 0 0" id="cf-hint"></p>
             <div class="flabel">Active filters</div>
             <div id="modal-filter-chips" class="filter-bar" style="margin:0"></div>
             <div class="cf-row" style="margin-top:16px;justify-content:flex-end">
@@ -3887,9 +3885,16 @@
                   <label>Max position %<input type="number" id="rp-pos" min="1" max="100" step="1"></label>
                   <label>Target reward : risk<input type="number" id="rp-rr" min="1" max="10" step="0.5"
                       title="Minimum reward-to-risk for a setup here to rate 'strong' — raise it and the analyzer grades setups more harshly"></label>
+                  <label>Risk appetite<select id="rp-appetite"
+                      title="Which options structures the swing analyzer may propose, and how much confirmation it wants before an entry">
+                      <option value="conservative">Conservative</option>
+                      <option value="balanced">Balanced</option>
+                      <option value="aggressive">Aggressive</option>
+                    </select></label>
                   <button type="submit" class="advise-btn" style="margin-top:0">Save</button>
                 </div>
                 <div class="settings-msg" id="risk-msg"></div>
+                <p style="font-size:12px;color:var(--faint)" id="appetite-note"></p>
                 <p style="font-size:12px;color:var(--faint)"><span id="equity-note"></span> Position sizing is against
                   your available buying power. These settings only affect this analyzer — not the Ideas tab, not your
                   portfolio.</p>
@@ -4009,13 +4014,20 @@
           <h2>Profile</h2>
           <form class="settings-card" id="profile-form">
             <div class="settings-row">
-              <label>Email<input type="email" id="pf-email" disabled
-                  title="Email is your sign-in identity and can't be changed here"></label>
+              <label>Email<input type="email" id="pf-email" maxlength="254"
+                  title="This is what you sign in with — changing it needs your current password"></label>
               <label>Full name<input type="text" id="pf-name" maxlength="120" placeholder="optional"></label>
               <label>Phone<input type="tel" id="pf-phone" maxlength="32" placeholder="optional"></label>
               <button type="submit" class="advise-btn" style="margin-top:0">Save</button>
               <button type="button" id="logout-btn" title="Sign out of this account" style="margin-left:auto">Log
                 out</button>
+            </div>
+            <!-- Only shown once the email field actually differs from the saved one. -->
+            <div class="settings-row" id="pf-email-confirm" hidden>
+              <label>Confirm new email<input type="email" id="pf-email2" maxlength="254"
+                  placeholder="type it again"></label>
+              <label>Current password<input type="password" id="pf-password" autocomplete="current-password"
+                  placeholder="required to change email"></label>
             </div>
             <div class="settings-msg" id="profile-msg"></div>
           </form>
@@ -5239,6 +5251,10 @@
     // chip type, and removal handler — duplicating CUSTOM_METRICS.score and
     // .mcapB, which already existed but were hidden from the dropdown. They're
     // now exposed as ordinary rules and numFilters is gone.
+    // Four comparisons for continuous metrics was three too many — "at least"
+    // vs "above" is the same intent on a float, and picking between them was
+    // pure friction. The dialog now offers only > and <. ≥/≤ stay here so rules
+    // saved (or preset-shared) before the change keep evaluating as written.
     const FILTER_OPS = {
       ">=": (v, t) => v >= t,
       ">": (v, t) => v > t,
@@ -5305,7 +5321,43 @@
         renderFilterBar(); renderIdeas();
       }
     });
-    $("#filters-btn").addEventListener("click", () => $("#filters-modal").showModal());
+    // The metric dropdown is generated from CUSTOM_METRICS — it used to be a
+    // hand-maintained <option> list that had already drifted ("Market cap $B"
+    // in the dialog, "Mkt cap $B" on the chip).
+    $("#cf-metric").innerHTML = Object.entries(CUSTOM_METRICS)
+      .map(([k, m]) => `<option value="${k}">${esc(m.label)}</option>`).join("");
+
+    // Live range of the selected metric across the setups currently on screen,
+    // so the threshold you type is anchored to real values instead of guesswork.
+    function metricRange(metric) {
+      const isLong = ideasTab === "long";
+      const vals = [];
+      for (const bd of market?.boards ?? [])
+        for (const item of (isLong ? bd.longs : bd.shorts)) {
+          const v = CUSTOM_METRICS[metric]?.get(screener[item.ticker]?.indicators, item, isLong);
+          if (Number.isFinite(v)) vals.push(v);
+        }
+      if (!vals.length) return null;
+      vals.sort((a, b) => a - b);
+      return { min: vals[0], max: vals.at(-1), mid: vals[Math.floor(vals.length / 2)], n: vals.length };
+    }
+    function syncCfHint() {
+      const metric = $("#cf-metric").value;
+      const r = metricRange(metric);
+      const val = $("#cf-val");
+      const round = (n) => (Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(1));
+      if (!r) {
+        val.placeholder = "value";
+        $("#cf-hint").textContent = "Stack as many rules as you like — they all have to pass.";
+        return;
+      }
+      val.placeholder = round(r.mid);
+      $("#cf-hint").textContent =
+        `${CUSTOM_METRICS[metric].label} across the ${r.n} ${ideasTab} setups on screen: ${round(r.min)} to ${round(r.max)}, middle ${round(r.mid)}. Stack as many rules as you like — they all have to pass.`;
+    }
+    $("#cf-metric").addEventListener("change", syncCfHint);
+
+    $("#filters-btn").addEventListener("click", () => { syncCfHint(); $("#filters-modal").showModal(); });
     $("#filters-done").addEventListener("click", () => $("#filters-modal").close());
     $("#filters-modal").addEventListener("click", (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
     $("#filters-clear").addEventListener("click", () => {
@@ -5318,9 +5370,12 @@
       const op = $("#cf-op").value;
       const value = parseFloat($("#cf-val").value);
       if (!CUSTOM_METRICS[metric] || !FILTER_OPS[op] || !Number.isFinite(value)) return;
-      // Re-adding the same metric+op replaces it rather than stacking a second
-      // contradictory rule ("Score ≥ 70" then "Score ≥ 80" is one intent).
-      const dup = customFilters.findIndex((f) => f.metric === metric && f.op === op);
+      // One lower bound and one upper bound per metric, no more. Matching on the
+      // direction rather than the exact operator is what lets a new "Score > 80"
+      // replace a legacy "Score ≥ 70" instead of stacking two rules that say the
+      // same thing — the redundancy this dialog kept accumulating.
+      const bound = (o) => (o === ">" || o === ">=" ? "min" : "max");
+      const dup = customFilters.findIndex((f) => f.metric === metric && bound(f.op) === bound(op));
       if (dup >= 0) customFilters[dup] = { metric, op, value };
       else customFilters.push({ metric, op, value });
       saveCustomFilters();
@@ -5558,11 +5613,27 @@
       return html;
     }
 
+    // A report that came back with an `id` is a stored row (the stock page's
+    // "Past analyses"), so its ✕ deletes it for real — closing one used to drop
+    // the node and leave the row sitting in history. A freshly generated report
+    // has no id yet and keeps the old dismiss-only behaviour.
     function showReport(rep, container) {
       const div = document.createElement("div");
-      div.innerHTML = reportCardHtml(rep);
+      div.innerHTML = rep.source === "intraday" ? planCardHtml(rep) : reportCardHtml(rep);
       const node = div.firstElementChild;
-      node.querySelector(".close-report").addEventListener("click", () => node.remove());
+      const x = node.querySelector(".close-report");
+      if (rep.id == null) x.addEventListener("click", () => node.remove());
+      else {
+        x.title = "Delete this analysis";
+        x.addEventListener("click", async () => {
+          x.disabled = true;
+          try {
+            const r = await (await fetch(`/api/history/${rep.id}?src=i`, { method: "DELETE" })).json();
+            if (!r.ok) throw new Error(r.error || "delete failed");
+            node.remove();
+          } catch { x.disabled = false; toast("Couldn't delete that analysis", "err"); }
+        });
+      }
       container.prepend(node);
       node.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -5868,7 +5939,7 @@
       const open = it.ticker
         ? `<button class="hist-open" data-tkr="${esc(it.ticker)}" title="Open ${esc(it.ticker)} in full view">Open →</button>` : "";
       const del = it.deletable
-        ? `<button class="hist-del" data-hid="${it.id}" title="Delete this entry">${icon("close", 12)}</button>` : "";
+        ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry">${icon("close", 12)}</button>` : "";
       let label, metric;
       if (it.kind === "portfolio_score") {
         label = "Portfolio";
@@ -5972,9 +6043,14 @@
         e.preventDefault(); e.stopPropagation();
         const id = del.dataset.hid;
         del.disabled = true;
-        fetch(`/api/history/${id}`, { method: "DELETE" })
-          .then(() => { del.closest("details")?.remove(); loadScoreTrend(); })
-          .catch(() => { del.disabled = false; });
+        fetch(`/api/history/${id}?src=${encodeURIComponent(del.dataset.hsrc || "a")}`, { method: "DELETE" })
+          .then((r) => r.json())
+          .then((r) => {
+            if (!r.ok) throw new Error(r.error || "delete failed");
+            del.closest("details")?.remove();
+            loadScoreTrend();
+          })
+          .catch(() => { del.disabled = false; toast("Couldn't delete that entry", "err"); });
       }
     });
 
@@ -5985,11 +6061,23 @@
     }
 
     /* ── settings: profile ── */
+    // The saved address, so the form can tell "they edited the email" from
+    // "they saved their phone number and the email field happened to be filled".
+    let savedEmail = "";
+    function syncEmailConfirm() {
+      const changed = $("#pf-email").value.trim().toLowerCase() !== savedEmail;
+      $("#pf-email-confirm").hidden = !changed;
+      if (!changed) { $("#pf-email2").value = ""; $("#pf-password").value = ""; }
+    }
+    $("#pf-email").addEventListener("input", syncEmailConfirm);
+
     async function loadProfile() {
       try {
         const { profile } = await (await fetch("/api/profile")).json();
         if (!profile) return;
         $("#pf-email").value = profile.email ?? "";
+        savedEmail = (profile.email ?? "").trim().toLowerCase();
+        syncEmailConfirm();
         $("#pf-name").value = profile.full_name ?? "";
         $("#pf-phone").value = profile.phone ?? "";
         const name = (profile.full_name || profile.email || "").trim();
@@ -6003,12 +6091,38 @@
     }
     $("#profile-form").addEventListener("submit", async (ev) => {
       ev.preventDefault();
+      const msg = $("#profile-msg");
+      const email = $("#pf-email").value.trim().toLowerCase();
+      const changingEmail = email !== savedEmail;
+      // Typed twice on purpose: this address is the login, and there is no
+      // "email me a reset link" path in this app to recover from a typo.
+      if (changingEmail) {
+        if (email !== $("#pf-email2").value.trim().toLowerCase()) {
+          msg.textContent = "The two email addresses don't match.";
+          toast("Emails don't match", "err");
+          return;
+        }
+        if (!$("#pf-password").value) {
+          msg.textContent = "Enter your current password to change the sign-in email.";
+          toast("Current password required", "err");
+          return;
+        }
+      }
       const res = await (await fetch("/api/profile", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: $("#pf-name").value, phone: $("#pf-phone").value }),
+        body: JSON.stringify({
+          full_name: $("#pf-name").value,
+          phone: $("#pf-phone").value,
+          ...(changingEmail ? { email, password: $("#pf-password").value } : {}),
+        }),
       })).json();
-      const msg = $("#profile-msg");
-      msg.textContent = res.ok ? "Saved." : `Failed: ${res.error}`;
+      if (res.ok) {
+        savedEmail = (res.profile?.email ?? email).trim().toLowerCase();
+        $("#pf-email").value = res.profile?.email ?? email;
+        syncEmailConfirm();
+        loadProfile();  // header name/initials follow the new address
+      }
+      msg.textContent = res.ok ? (changingEmail ? "Saved — sign in with the new email next time." : "Saved.") : `Failed: ${res.error}`;
       if (res.ok) toast("Profile saved"); else toast(`Save failed: ${res.error}`, "err");
       setTimeout(() => { msg.textContent = ""; }, 5000);
     });
@@ -6095,12 +6209,26 @@
     });
 
     /* ── settings: risk prefs ── */
+    // Mirrors APPETITE_PLAYBOOK in src/ai/intraday.ts — the analyzer enforces the
+    // list, this only tells the trader what they just picked. Keep them in step.
+    const APPETITE_NOTE = {
+      conservative: "Swing analyzer will propose covered calls, cash-secured puts, credit spreads and iron condors — capped downside, premium collected rather than paid.",
+      balanced: "Swing analyzer will propose debit and credit verticals, calendars, covered calls and cash-secured puts — every position has a known worst case.",
+      aggressive: "Swing analyzer will also propose naked long calls/puts, straddles and strangles — full premium at risk for an outsized payoff. Uncovered short calls are never proposed at any setting.",
+    };
+    function syncAppetiteNote() {
+      $("#appetite-note").textContent = APPETITE_NOTE[$("#rp-appetite").value] ?? "";
+    }
+    $("#rp-appetite").addEventListener("change", syncAppetiteNote);
+
     async function loadRiskPrefs() {
       try {
         const { prefs } = await (await fetch("/api/risk-prefs")).json();
         $("#rp-risk").value = prefs.max_risk_per_trade_pct;
         $("#rp-pos").value = prefs.max_position_pct;
         $("#rp-rr").value = prefs.target_rr_ratio;
+        $("#rp-appetite").value = prefs.risk_appetite ?? "balanced";
+        syncAppetiteNote();
         const bp = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
         $("#equity-note").innerHTML = bp != null
           ? `Sizing against your available buying power of <b>${money(bp)}</b>, live from your ${brokerInfo.source === "robinhood" ? "linked Robinhood account" : "imported positions"}.`
@@ -6115,6 +6243,7 @@
           max_risk_per_trade_pct: $("#rp-risk").value,
           max_position_pct: $("#rp-pos").value,
           target_rr_ratio: $("#rp-rr").value,
+          risk_appetite: $("#rp-appetite").value,
         }),
       })).json();
       const msg = $("#risk-msg");
@@ -6355,7 +6484,9 @@
     function clearIntradayImage() {
       intradayImage = null;
       $("#img-preview-wrap").style.display = "none";
-      dropZone.style.display = "";
+      // Swing mode uses the labelled slots, not the single drop zone — clearing
+      // must not un-hide it there.
+      dropZone.style.display = analyzeMode === "swing" ? "none" : "";
     }
     $("#img-clear").addEventListener("click", clearIntradayImage);
     dropZone.addEventListener("click", () => $("#file-input").click());
@@ -6564,6 +6695,18 @@
       });
     });
 
+    // Wipe the inputs once an analysis lands, so the next ticker can't inherit
+    // the last one's screenshots or notes. The result card is already rendered
+    // and keeps its own copy — nothing here is needed to read it.
+    function resetIntradayForm() {
+      $("#intraday-ticker").value = "";
+      $("#intraday-notes").value = "";
+      clearIntradayImage();
+      Object.values(slotApi).forEach((s) => s.clear());
+      swingTray.querySelectorAll(".tray-item").forEach((el) => el.remove());
+      syncTray();
+    }
+
     function strategyHtml(s) {
       if (!s || s.structure === "none" || !s.legs?.length) return "";
       const legs = s.legs.map((l) => `<li>${esc(l.action)} ${l.quantity}× ${esc(l.right)} $${l.strike} exp ${esc(l.expiry)}</li>`).join("");
@@ -6727,6 +6870,7 @@
           attachFollowup(node, res.plan, res.plan.ticker || ticker, swing);
           $("#intraday-result").prepend(node);
           node.scrollIntoView({ behavior: "smooth", block: "start" });
+          resetIntradayForm();
         } else alert(`Analysis failed: ${res.error}`);
       } catch (e) { alert(`Analysis failed: ${e}`); }
       finally { btn.disabled = false; btn.textContent = orig; }
