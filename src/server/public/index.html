@@ -3708,7 +3708,6 @@
           <div class="widget">
             <div class="widget-head">
               <h3>Your stocks</h3>
-              <span class="act" id="holdings-count"></span>
             </div>
             <div class="pos-grid" id="holdings"></div>
             <button class="widget-more" id="holdings-toggle" hidden></button>
@@ -5116,10 +5115,6 @@
       const shown = holdingsExpanded ? ranked : ranked.slice(0, TOP_STOCKS);
       for (const h of shown) card.appendChild(holdingCard(h));
       if (!stocks.length) card.innerHTML = `<div class="empty">No stock positions.</div>`;
-      const hidden = stocks.length - shown.length;
-      $("#holdings-count").textContent = !stocks.length ? ""
-        : hidden > 0 ? `top ${shown.length} of ${stocks.length}`
-          : `${stocks.length} position${stocks.length === 1 ? "" : "s"}`;
       const more = $("#holdings-toggle");
       more.hidden = stocks.length <= TOP_STOCKS;
       more.textContent = holdingsExpanded ? "Show fewer" : `View all ${stocks.length} stocks`;
