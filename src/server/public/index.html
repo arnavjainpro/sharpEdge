@@ -5,6 +5,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>sharpEdge</title>
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <!-- Stamp the stored theme before first paint. The app script runs at the end of
+       <body>, so without this a user whose saved choice contradicts their OS sees a
+       flash of the wrong theme — very visible now that light mode is sage, not white. -->
+  <script>
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) { /* storage blocked — fall back to prefers-color-scheme */ }
+  </script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -13,28 +23,34 @@
      existing theme JS (System / Light / Dark) keeps working; dark values live in
      the prefers-color-scheme + [data-theme="dark"] blocks below. */
     :root {
-      --bg: #f4f4f2;
+      --bg: #e8ede7;
       --surface: #ffffff;
-      --surface-2: #f0f0ed;
-      --surface-3: #e7e7e2;
-      --line: #e3e2dd;
-      --line-soft: #eeede9;
-      --text: #16181d;
-      --dim: #5c6370;
-      --faint: #8b93a1;
+      --surface-2: #f2f5f0;
+      --surface-3: #e4eae1;
+      --line: #dde3da;
+      --line-soft: #eaefe7;
+      --text: #14181a;
+      --dim: #5a6560;
+      --faint: #8b968f;
       --green: #0e9f5c;
       --green-ink: #0b7c48;
       --green-soft: rgba(14, 159, 92, .1);
-      --brand: #4f46e5;
-      --brand-ink: #4338ca;
-      --brand-soft: rgba(79, 70, 229, .09);
-      --red: #e5484d;
-      --red-soft: rgba(229, 72, 77, .09);
+      /* brand leans pine/teal so it stays tellable apart from market --green in
+         both themes — a pure forest hue collides with it once lightened for dark */
+      --brand: #14684c;
+      --brand-ink: #0f5039;
+      --brand-soft: rgba(20, 104, 76, .1);
+      /* ink that sits ON a --brand fill. Flips with the theme because dark-mode
+         brand is a light mint — white text on it would fail contrast. */
+      --on-brand: #ffffff;
+      --red: #c8453a;
+      --red-soft: rgba(200, 69, 58, .09);
+      --sell: var(--red);
       --amber: #b07a08;
       --amber-soft: rgba(176, 122, 8, .12);
       --blue: #2f6fe0;
       --blue-soft: rgba(47, 111, 224, .1);
-      --shadow: 0 1px 2px rgba(20, 22, 26, .05), 0 6px 20px -12px rgba(20, 22, 26, .14);
+      --shadow: 0 1px 2px rgba(20, 30, 24, .04), 0 8px 24px -16px rgba(20, 30, 24, .12);
       --sans: "Inter", -apple-system, system-ui, sans-serif;
       --mono: "JetBrains Mono", ui-monospace, monospace;
       /* legacy aliases → keep older CSS/JS that reference these resolving correctly */
@@ -43,18 +59,20 @@
       --card-alt: var(--surface-2);
       --header-bg: color-mix(in srgb, var(--bg) 86%, transparent);
       /* radius ramp — hierarchy instead of uniform rounding */
-      --radius: 12px;
-      --radius-lg: 16px;
-      --radius-sm: 8px;
-      --radius-xs: 6px;
+      --radius: 14px;
+      --radius-lg: 20px;
+      --radius-sm: 10px;
+      --radius-xs: 8px;
       /* type scale */
-      --fs-hero: 44px;
+      --fs-hero: 46px;
       --fs-title: 20px;
       --fs-h2: 16px;
       --fs-body: 14px;
       --fs-data: 13px;
       --fs-meta: 12px;
       --fs-micro: 11px;
+      --fs-label: 11.5px;
+      --tracking-label: .09em;
       --lh-tight: 1.2;
       --lh-body: 1.5;
       /* spacing scale */
@@ -64,15 +82,28 @@
       --sp-4: 16px;
       --sp-5: 24px;
       --sp-6: 32px;
+      --sp-7: 40px;
       /* elevation ramp */
-      --shadow-sm: 0 1px 2px rgba(20, 22, 26, .06);
-      --shadow-lg: 0 4px 12px rgba(20, 22, 26, .08), 0 24px 60px -24px rgba(20, 22, 26, .28);
+      --shadow-sm: 0 1px 2px rgba(20, 30, 24, .05);
+      --shadow-lg: 0 4px 14px rgba(20, 30, 24, .07), 0 28px 64px -28px rgba(20, 30, 24, .24);
       /* focus ring */
       --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--brand);
       /* chart tokens — single source of truth for every SVG stroke/fill */
       --chart-up: var(--green);
       --chart-down: var(--red);
       --chart-ref: var(--faint);
+      /* large area charts draw the line in ink and reserve up/down colour for the
+         gradient wash — the direction is already stated in the delta text above */
+      --chart-hero: var(--text);
+      /* categorical data-viz slots — fixed order, never cycled. Validated for CVD
+         separation and contrast against the card surface in both themes; light-mode
+         slots 3/4/5 sit under 3:1, so every chart using them ships direct labels. */
+      --series-1: #2a78d6;
+      --series-2: #eb6834;
+      --series-3: #1baf7a;
+      --series-4: #eda100;
+      --series-5: #e87ba4;
+      --series-6: #008300;
       color-scheme: light;
     }
 
@@ -81,28 +112,36 @@
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         /* MUST match the :root[data-theme="dark"] block below — edit both together */
-        --bg: #0b0c0e;
-        --surface: #131519;
-        --surface-2: #1a1d23;
-        --surface-3: #22262e;
-        --line: #262a33;
-        --line-soft: #1d2027;
-        --text: #edeef2;
-        --dim: #9aa1ad;
-        --faint: #646b78;
+        --bg: #0e1211;
+        --surface: #161b19;
+        --surface-2: #1c2220;
+        --surface-3: #242b28;
+        --line: #2a322e;
+        --line-soft: #1f2624;
+        --text: #e8ede9;
+        --dim: #9aa59e;
+        --faint: #66716b;
         --green: #2ecc7a;
         --green-ink: #4ade95;
         --green-soft: rgba(46, 204, 122, .14);
-        --brand: #6e63f1;
-        --brand-ink: #928af5;
-        --brand-soft: rgba(110, 99, 241, .17);
-        --red: #f16a5e;
-        --red-soft: rgba(241, 106, 94, .13);
+        --brand: #3fc9a4;
+        --brand-ink: #6fdcbd;
+        --brand-soft: rgba(63, 201, 164, .16);
+        --on-brand: #0e1211;
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+        --series-4: #c98500;
+        --series-5: #d55181;
+        --series-6: #008300;
+        --red: #f0705f;
+        --red-soft: rgba(240, 112, 95, .13);
+        --sell: var(--red);
         --amber: #e8a33d;
         --amber-soft: rgba(232, 163, 61, .14);
         --blue: #5b93ff;
         --blue-soft: rgba(91, 147, 255, .16);
-        --shadow: 0 1px 0 rgba(255, 255, 255, .03), 0 12px 32px -16px rgba(0, 0, 0, .75);
+        --shadow: 0 1px 0 rgba(255, 255, 255, .03), 0 12px 32px -16px rgba(0, 0, 0, .7);
         --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
         --shadow-lg: 0 4px 12px rgba(0, 0, 0, .4), 0 24px 60px -24px rgba(0, 0, 0, .8);
         color-scheme: dark;
@@ -111,28 +150,36 @@
 
     :root[data-theme="dark"] {
       /* MUST match the media-query block above — edit both together */
-      --bg: #0b0c0e;
-      --surface: #131519;
-      --surface-2: #1a1d23;
-      --surface-3: #22262e;
-      --line: #262a33;
-      --line-soft: #1d2027;
-      --text: #edeef2;
-      --dim: #9aa1ad;
-      --faint: #646b78;
+      --bg: #0e1211;
+      --surface: #161b19;
+      --surface-2: #1c2220;
+      --surface-3: #242b28;
+      --line: #2a322e;
+      --line-soft: #1f2624;
+      --text: #e8ede9;
+      --dim: #9aa59e;
+      --faint: #66716b;
       --green: #2ecc7a;
       --green-ink: #4ade95;
       --green-soft: rgba(46, 204, 122, .14);
-      --brand: #6e63f1;
-      --brand-ink: #928af5;
-      --brand-soft: rgba(110, 99, 241, .17);
-      --red: #f16a5e;
-      --red-soft: rgba(241, 106, 94, .13);
+      --brand: #3fc9a4;
+      --brand-ink: #6fdcbd;
+      --brand-soft: rgba(63, 201, 164, .16);
+      --on-brand: #0e1211;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --red: #f0705f;
+      --red-soft: rgba(240, 112, 95, .13);
+      --sell: var(--red);
       --amber: #e8a33d;
       --amber-soft: rgba(232, 163, 61, .14);
       --blue: #5b93ff;
       --blue-soft: rgba(91, 147, 255, .16);
-      --shadow: 0 1px 0 rgba(255, 255, 255, .03), 0 12px 32px -16px rgba(0, 0, 0, .75);
+      --shadow: 0 1px 0 rgba(255, 255, 255, .03), 0 12px 32px -16px rgba(0, 0, 0, .7);
       --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
       --shadow-lg: 0 4px 12px rgba(0, 0, 0, .4), 0 24px 60px -24px rgba(0, 0, 0, .8);
       color-scheme: dark;
@@ -238,8 +285,8 @@
       position: sticky;
       top: 0;
       height: 100vh;
-      border-right: 1px solid var(--line);
-      background: var(--bg);
+      border-right: none;
+      background: var(--surface);
       display: flex;
       flex-direction: column;
       padding: 18px 12px;
@@ -265,6 +312,7 @@
     .side-logo {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 9px;
       min-width: 0;
       flex: 1;
@@ -276,53 +324,88 @@
       flex: 0 0 auto;
     }
 
-    /* sharpEdge mark: the "E" pivot (Sharpe·edge). Collapsed rail shows it alone;
-       expanded shows only the wordmark, so it's hidden there. */
-    .side-e {
+    /* Theme-swapped logo art. Two <img> toggled by CSS rather than <picture
+       media>, because the in-app Light/Dark toggle must beat the OS setting —
+       same scoping rule as the colour tokens. */
+    .logo-dark {
       display: none;
-      font-weight: 800;
-      font-size: 20px;
-      line-height: 1;
-      letter-spacing: -.02em;
-      color: var(--brand);
-      flex-shrink: 0;
     }
 
-    #sidebar.collapsed .side-e {
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .logo-light {
+        display: none;
+      }
+
+      :root:not([data-theme="light"]) .logo-dark {
+        display: block;
+      }
+    }
+
+    :root[data-theme="dark"] .logo-light {
+      display: none;
+    }
+
+    :root[data-theme="dark"] .logo-dark {
       display: block;
     }
 
-    .wordmark {
-      font-weight: 800;
-      font-size: 17px;
-      letter-spacing: -.02em;
-      color: inherit;
-      text-decoration: none;
-      cursor: pointer;
-      white-space: nowrap;
-      overflow: hidden;
-      opacity: 1;
-      max-width: 170px;
-      transition: opacity .18s ease, max-width .22s ease;
+    :root[data-theme="light"] .logo-light {
+      display: block;
     }
 
-    /* sharpEdge = "Sharpe" + "edge": sharp→green, the pivot E→normal, dge→red */
-    .wm-sharp {
-      color: var(--green);
+    :root[data-theme="light"] .logo-dark {
+      display: none;
     }
 
-    .wm-edge {
-      color: var(--red);
+    /* Sidebar: the full lockup when expanded, the bare mark on the collapsed
+       rail. The lockup's tagline is cropped out — at this width it renders a
+       few pixels tall and reads as noise. */
+    .side-lockup {
+      width: 132px;
+      height: auto;
+      flex-shrink: 0;
     }
 
-    #sidebar.collapsed .wordmark {
-      opacity: 0;
-      max-width: 0;
-      transition: opacity .12s ease, max-width .22s ease;
+    .side-mark {
+      display: none;
+      width: 28px;
+      height: auto;
+      flex-shrink: 0;
+    }
+
+    #sidebar.collapsed .side-lockup {
+      display: none !important;
+    }
+
+    #sidebar.collapsed .side-mark {
+      display: block;
+    }
+
+    /* Auth screen: the complete lockup, tagline included. */
+    .auth-logo {
+      align-self: center;
+      margin-bottom: 4px;
+    }
+
+    .auth-logo img {
+      width: 210px;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .side-toggle-row {
+      display: flex;
+      justify-content: flex-end;
+      border-top: 1px solid var(--line-soft);
+      margin-top: 6px;
+      padding: 10px 0 2px;
+    }
+
+    #sidebar.collapsed .side-toggle-row {
+      justify-content: center;
     }
 
     #sidebar-collapse {
-      margin-left: auto;
       background: var(--surface-2);
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -340,19 +423,15 @@
 
     #sidebar-collapse:hover {
       border-color: var(--brand);
-      color: var(--text);
-    }
-
-    #sidebar.collapsed #sidebar-collapse {
-      margin-left: 0;
+      color: var(--brand);
     }
 
     #nav button {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 7px 10px;
-      border-radius: var(--radius-xs);
+      padding: 9px 12px;
+      border-radius: var(--radius-sm);
       border: none;
       cursor: pointer;
       font: 500 13px var(--sans);
@@ -372,9 +451,12 @@
       color: var(--text);
     }
 
+    #nav button.active:hover {
+      background: var(--brand-soft);
+    }
+
     #nav button.active {
-      background: var(--surface);
-      box-shadow: var(--shadow-sm);
+      background: var(--brand-soft);
       color: var(--text);
       font-weight: 600;
     }
@@ -417,7 +499,7 @@
     #nav button .badge {
       display: none;
       background: var(--brand);
-      color: #fff;
+      color: var(--on-brand);
       font-size: 10px;
       font-weight: 800;
       border-radius: 999px;
@@ -436,9 +518,7 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      padding: 12px 10px 4px;
-      border-top: 1px solid var(--line-soft);
-      margin-top: 6px;
+      padding: 8px 10px 4px;
       transition: gap .22s ease, padding .22s ease;
     }
 
@@ -502,8 +582,8 @@
       z-index: 20;
       background: var(--header-bg);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--line);
-      padding: 14px 28px;
+      border-bottom: none;
+      padding: 18px 28px;
       display: flex;
       align-items: center;
       gap: 14px;
@@ -582,10 +662,10 @@
 
     #status-label {
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: var(--fs-micro);
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
+      letter-spacing: var(--tracking-label);
       color: var(--dim);
       white-space: nowrap;
     }
@@ -600,15 +680,18 @@
         padding: 20px 8px;
       }
 
-      #sidebar:not(.collapsed) .wordmark,
       #sidebar:not(.collapsed) #nav button .nlabel,
       #sidebar:not(.collapsed) .side-user .who {
         opacity: 0;
         max-width: 0;
       }
 
-      /* mobile rail is always narrow — show the E mark like the collapsed state */
-      #sidebar .side-e {
+      /* the 64px rail can't fit the 132px lockup */
+      #sidebar .side-lockup {
+        display: none !important;
+      }
+
+      #sidebar .side-mark {
         display: block;
       }
 
@@ -977,12 +1060,12 @@
     }
 
     h2 {
-      font-size: 13px;
-      font-weight: 700;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .08em;
+      letter-spacing: var(--tracking-label);
       color: var(--dim);
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .section-head {
@@ -1041,23 +1124,447 @@
 
     .tf-bar button.active {
       background: var(--brand);
-      color: var(--brand-ink);
+      color: var(--on-brand);
     }
 
     /* portfolio hero — flagship card (Stripe balance-card treatment) */
     section#portfolio {
       background: var(--surface);
-      border: 1px solid var(--line);
+      border: none;
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow);
-      padding: 24px;
+      padding: var(--sp-7);
     }
 
+    /* ── dashboard: the portfolio pane is a command center, not a document.
+       Every widget below is fed by an endpoint the app already calls. ── */
+
+    /* greeting strip */
+    .dash-greet {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: -8px;
+    }
+
+    .dash-greet h1 {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -.02em;
+    }
+
+    .dash-greet .sub {
+      font-size: var(--fs-body);
+      color: var(--dim);
+    }
+
+    /* Beginner ⇄ Pro. Not a cosmetic switch: Pro reveals the risk metrics
+       (beta, cost basis, concentration numbers) that Beginner glosses over. */
+    .mode-tabs {
+      margin-left: auto;
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+    }
+
+    .mode-tabs button {
+      border: none;
+      background: none;
+      color: var(--dim);
+      font: 600 12px var(--sans);
+      padding: 5px 12px;
+      border-radius: var(--radius-xs);
+      transition: background .12s ease, color .12s ease;
+    }
+
+    .mode-tabs button.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* mode gating — one class per audience, driven by data-mode on <html> */
+    :root[data-mode="beginner"] .pro-only { display: none !important; }
+    :root:not([data-mode="beginner"]) .beg-only { display: none !important; }
+
+    /* a jargon term the beginner can hover for a plain-English gloss */
+    .term {
+      border-bottom: 1px dotted var(--faint);
+      cursor: help;
+    }
+
+    /* hero: stats on the left, chart on the right */
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+      gap: var(--sp-6);
+      align-items: start;
+      margin-top: var(--sp-5);
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line-soft);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .kpi {
+      background: var(--surface);
+      padding: 12px 14px;
+    }
+
+    .kpi .k {
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .kpi .v {
+      font-size: 19px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+      margin-top: 3px;
+    }
+
+    .kpi .n {
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      margin-top: 1px;
+    }
+
+    .chart-wrap {
+      min-width: 0;
+    }
+
+    .chart-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    /* range tabs are data-driven: a range longer than the series we hold is
+       rendered disabled rather than silently returning a shorter window. */
+    .range-tabs {
+      margin-left: auto;
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+    }
+
+    .range-tabs button {
+      border: none;
+      background: none;
+      color: var(--dim);
+      font: 600 11px var(--mono);
+      letter-spacing: .04em;
+      padding: 4px 10px;
+      border-radius: var(--radius-xs);
+    }
+
+    .range-tabs button.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .range-tabs button:disabled {
+      opacity: .35;
+      cursor: not-allowed;
+    }
+
+    /* widget rows */
+    .dash-row {
+      display: grid;
+      gap: var(--sp-5);
+      align-items: start;
+    }
+
+    .dash-row.split {
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    }
+
+    .dash-row.thirds {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .widget {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: var(--sp-5);
+      min-width: 0;
+    }
+
+    .widget-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: var(--sp-4);
+    }
+
+    .widget-head h3 {
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+    }
+
+    .widget-head .act {
+      margin-left: auto;
+      font-size: var(--fs-meta);
+      color: var(--faint);
+    }
+
+    /* the one-line plain-English read under a widget */
+    .widget-note {
+      font-size: var(--fs-meta);
+      color: var(--dim);
+      line-height: var(--lh-body);
+      margin-top: var(--sp-4);
+      padding-top: var(--sp-3);
+      border-top: 1px solid var(--line-soft);
+    }
+
+    /* positions as tiles */
+    .pos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .pos-card {
+      text-align: left;
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 12px 13px;
+      cursor: pointer;
+      transition: border-color .12s ease, transform .06s ease;
+      min-width: 0;
+    }
+
+    .pos-card:hover {
+      border-color: var(--brand);
+    }
+
+    .pos-card:active {
+      transform: translateY(.5px);
+    }
+
+    .pos-top {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .pos-sym {
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: -.01em;
+    }
+
+    .pos-qty {
+      margin-left: auto;
+      font-size: var(--fs-micro);
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .pos-px {
+      font-size: 19px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+      margin-top: 7px;
+    }
+
+    .pos-dp {
+      font-size: var(--fs-meta);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      margin-top: 1px;
+    }
+
+    .pos-spark {
+      width: 100%;
+      height: 26px;
+      margin-top: 8px;
+      display: block;
+    }
+
+    .pos-foot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 9px;
+      flex-wrap: wrap;
+    }
+
+    /* watchlist rail */
+    .wl-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 4px;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+      min-width: 0;
+    }
+
+    .wl-row:last-child {
+      border-bottom: none;
+    }
+
+    .wl-row:hover .wl-sym {
+      color: var(--brand);
+    }
+
+    .wl-sym {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .wl-px {
+      margin-left: auto;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .wl-dp {
+      font-size: var(--fs-meta);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      min-width: 58px;
+      text-align: right;
+    }
+
+    .wl-x {
+      border: none;
+      background: none;
+      color: var(--faint);
+      cursor: pointer;
+      padding: 2px;
+      display: flex;
+      opacity: 0;
+      transition: opacity .12s ease;
+    }
+
+    .wl-row:hover .wl-x {
+      opacity: 1;
+    }
+
+    .wl-x:hover {
+      color: var(--red);
+    }
+
+    /* allocation: donut + direct-labelled legend. The legend IS the contrast
+       relief the light-mode series slots require — never ship the ring alone. */
+    .donut-wrap {
+      display: flex;
+      align-items: center;
+      gap: var(--sp-5);
+      flex-wrap: wrap;
+    }
+
+    .donut {
+      width: 132px;
+      height: 132px;
+      flex-shrink: 0;
+    }
+
+    .donut-center {
+      font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .alloc-legend {
+      flex: 1;
+      min-width: 140px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .alloc-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: var(--fs-data);
+      min-width: 0;
+    }
+
+    .alloc-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .alloc-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .alloc-pct {
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .alloc-val {
+      font-variant-numeric: tabular-nums;
+      color: var(--faint);
+      white-space: nowrap;
+      min-width: 68px;
+      text-align: right;
+    }
+
+    @media (max-width: 1180px) {
+      .hero-grid,
+      .dash-row.split,
+      .dash-row.thirds {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
+    @media (max-width: 560px) {
+      .kpi-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      section#portfolio {
+        padding: var(--sp-5);
+      }
+    }
+
+    /* the balance reads as a display figure, not a data cell: light weight, tight
+       tracking, proportional sans. Mono stays for the dense table columns. */
     #portfolio-value {
       font-size: var(--fs-hero);
-      font-weight: 800;
-      letter-spacing: -.02em;
-      font-family: var(--mono);
+      font-weight: 300;
+      letter-spacing: -.03em;
+      line-height: var(--lh-tight);
+      font-family: var(--sans);
       font-variant-numeric: tabular-nums;
     }
 
@@ -1132,10 +1639,11 @@
       margin: 6px 0;
     }
 
-    /* cards & rows */
+    /* cards & rows — borderless: white surfaces separate themselves against the
+       sage canvas, so a hairline border only muddies the edge */
     .card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+      border: none;
+      border-radius: var(--radius-lg);
       overflow: hidden;
       background: var(--surface);
       box-shadow: var(--shadow);
@@ -1153,6 +1661,8 @@
     .advice {
       background: var(--surface);
       box-shadow: var(--shadow);
+      border: none;
+      border-radius: var(--radius-lg);
     }
 
     .rowbtn {
@@ -1163,7 +1673,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 10px 14px;
+      padding: 13px 18px;
       border-bottom: 1px solid var(--line-soft);
       transition: background .12s;
     }
@@ -1240,11 +1750,11 @@
     }
 
     .chip {
-      font-size: 11px;
+      font-size: var(--fs-micro);
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .04em;
-      padding: 2px 7px;
+      letter-spacing: var(--tracking-label);
+      padding: 3px 8px;
       border-radius: var(--radius-xs);
       border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
       white-space: nowrap;
@@ -1282,8 +1792,8 @@
 
     /* advice cards */
     .advice {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+      border: none;
+      border-radius: var(--radius-lg);
       margin-bottom: 12px;
       overflow: hidden;
     }
@@ -1304,12 +1814,12 @@
     }
 
     .klabel {
-      font-size: 11px;
-      font-weight: 700;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--faint);
-      margin: 12px 0 3px;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+      margin: 14px 0 4px;
     }
 
     .detail p {
@@ -1326,17 +1836,17 @@
 
     .stat {
       background: var(--surface-2);
-      border: 1px solid var(--line-soft);
+      border: none;
       border-radius: var(--radius-sm);
-      padding: 8px 10px;
+      padding: 10px 12px;
     }
 
     .stat .k {
-      font-size: 10.5px;
+      font-size: var(--fs-label);
       font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
-      color: var(--faint);
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
     }
 
     .stat .v {
@@ -1354,14 +1864,13 @@
       justify-content: center;
       gap: 6px;
       background: var(--brand);
-      color: #fff;
+      color: var(--on-brand);
       border: none;
       font-size: 13px;
       font-weight: 600;
-      min-height: 32px;
-      padding: 6px 14px;
-      border-radius: var(--radius-xs);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+      min-height: 36px;
+      padding: 8px 18px;
+      border-radius: var(--radius-sm);
       transition: background .12s ease, transform .06s ease;
     }
 
@@ -1398,11 +1907,6 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-    }
-
-    #auth-card .wordmark {
-      font-size: 22px;
-      margin-bottom: 4px;
     }
 
     #auth-card p {
@@ -1631,11 +2135,11 @@
     }
 
     #filters-modal .flabel {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: .05em;
+      font-size: var(--fs-label);
+      font-weight: 600;
+      letter-spacing: var(--tracking-label);
       text-transform: uppercase;
-      color: var(--faint);
+      color: var(--dim);
       margin: 14px 0 8px;
     }
 
@@ -1778,10 +2282,11 @@
 
     table.sectors th {
       text-align: right;
-      font-size: 10.5px;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
-      color: var(--faint);
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
       padding: 8px 10px 6px;
       border-bottom: 1px solid var(--line);
     }
@@ -1866,66 +2371,12 @@
       color: var(--text);
     }
 
-    #accent-swatches {
-      display: flex;
-      gap: 8px;
-    }
-
-    .accent-swatch {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      padding: 0;
-      box-shadow: 0 0 0 1px var(--line) inset;
-    }
-
-    .accent-swatch.active {
-      border-color: var(--text);
-    }
-
-    .accent-picker {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    /* custom color: native <input type=color> opens the OS color wheel;
-       the label shows a rainbow (unset) or the chosen hue (via inline bg). */
-    .accent-custom {
-      position: relative;
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      cursor: pointer;
-      overflow: hidden;
-      box-shadow: 0 0 0 1px var(--line) inset;
-      background: conic-gradient(from 90deg, #f43f5e, #f59e0b, #22c55e, #06b6d4, #3b82f6, #a855f7, #f43f5e);
-    }
-
-    .accent-custom.active {
-      border-color: var(--text);
-    }
-
-    .accent-custom input[type="color"] {
-      position: absolute;
-      inset: -4px;
-      width: calc(100% + 8px);
-      height: calc(100% + 8px);
-      padding: 0;
-      border: none;
-      opacity: 0;
-      cursor: pointer;
-    }
-
     .sector-group-head {
-      font-size: 11.5px;
-      font-weight: 700;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
-      color: var(--faint);
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
       padding: 10px 16px 4px;
       display: flex;
       gap: 8px;
@@ -1968,7 +2419,7 @@
     .filter-chip.on {
       background: var(--brand);
       border-color: var(--brand);
-      color: #fff;
+      color: var(--on-brand);
     }
 
     #gen-btn {
@@ -1977,13 +2428,12 @@
       gap: 6px;
       border: none;
       background: var(--brand);
-      border-radius: var(--radius-xs);
+      border-radius: var(--radius-sm);
       font-size: 12px;
       font-weight: 600;
-      min-height: 28px;
-      padding: 3px 12px;
-      color: #fff;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12);
+      min-height: 32px;
+      padding: 5px 14px;
+      color: var(--on-brand);
       transition: background .12s ease;
     }
 
@@ -2026,11 +2476,11 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: .04em;
+      font-size: var(--fs-micro);
+      font-weight: 700;
+      letter-spacing: var(--tracking-label);
       text-transform: uppercase;
-      padding: 3px 10px;
+      padding: 4px 11px;
       border-radius: var(--radius-xs);
     }
 
@@ -2160,10 +2610,11 @@
 
     .stress .case b {
       display: block;
-      font-size: 10.5px;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
-      color: var(--faint);
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
       margin-bottom: 2px;
     }
 
@@ -2335,9 +2786,11 @@
     }
 
     /* a required field the trader left empty */
+    /* !important is load-bearing: the input rules that set border-color are
+       element-qualified, so a bare class would lose specificity to them. */
     .field-err {
-      border-color: #c0392b !important;
-      box-shadow: 0 0 0 2px rgba(192, 57, 43, .25);
+      border-color: var(--red) !important;
+      box-shadow: 0 0 0 2px var(--red-soft);
     }
 
     /* staging tray: pasted screenshots wait here to be dragged into a box */
@@ -2395,7 +2848,7 @@
     }
 
     .img-x:hover {
-      background: var(--sell, #c0392b);
+      background: var(--sell);
     }
 
     .fu-thumb-wrap {
@@ -2500,10 +2953,11 @@
 
     .wf-table th {
       text-align: right;
-      font-size: 10.5px;
+      font-size: var(--fs-label);
+      font-weight: 600;
       text-transform: uppercase;
-      letter-spacing: .05em;
-      color: var(--faint);
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
       padding: 6px 8px;
       border-bottom: 1px solid var(--line);
     }
@@ -2608,7 +3062,7 @@
 
     #chat-send {
       background: var(--brand);
-      color: #fff;
+      color: var(--on-brand);
       border: none;
       border-radius: 999px;
       padding: 0 20px;
@@ -2944,7 +3398,10 @@
 
   <section id="auth-screen" hidden>
     <form id="auth-card">
-      <span class="wordmark"><span class="wm-sharp">sharp</span>E<span class="wm-edge">dge</span></span>
+      <div class="auth-logo">
+        <img class="logo-light" src="/assets/logo-lockup.png" alt="sharpEdge — Make Sharper Decisions">
+        <img class="logo-dark" src="/assets/logo-lockup-dark.png" alt="sharpEdge — Make Sharper Decisions">
+      </div>
       <p id="auth-blurb">Sign in to your account.</p>
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required
@@ -2972,15 +3429,10 @@
     <aside id="sidebar">
       <div class="side-logo-row">
         <a class="side-logo" id="home-link" href="#portfolio" title="Home">
-          <span class="side-e" aria-hidden="true">E</span>
-          <span class="wordmark"><span class="wm-sharp">sharp</span>E<span class="wm-edge">dge</span></span>
+          <img class="side-mark" src="/assets/logo-mark.png" alt="sharpEdge">
+          <img class="side-lockup logo-light" src="/assets/logo-sidebar.png" alt="sharpEdge">
+          <img class="side-lockup logo-dark" src="/assets/logo-sidebar-dark.png" alt="sharpEdge">
         </a>
-        <button id="sidebar-collapse" title="Toggle sidebar" aria-label="Toggle sidebar"><svg class="ic" width="16"
-            height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
-            stroke-linejoin="round" aria-hidden="true">
-            <path d="m11 17-5-5 5-5" />
-            <path d="m18 17-5-5 5-5" />
-          </svg></button>
       </div>
       <nav id="nav">
         <button data-tab="portfolio" class="active"><span class="ndot"></span><span
@@ -2997,6 +3449,14 @@
         <button data-tab="settings"><span class="ndot"></span><span class="nlabel">Settings</span></button>
       </nav>
       <span class="spacer"></span>
+      <div class="side-toggle-row">
+        <button id="sidebar-collapse" title="Toggle sidebar" aria-label="Toggle sidebar"><svg class="ic" width="16"
+            height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
+            stroke-linejoin="round" aria-hidden="true">
+            <path d="m11 17-5-5 5-5" />
+            <path d="m18 17-5-5 5-5" />
+          </svg></button>
+      </div>
       <div class="side-user">
         <span class="av" id="user-av">·</span>
         <div class="who">
@@ -3037,6 +3497,15 @@
           id="breaker-reset">Resume</button></div>
 
       <main>
+        <section class="dash-greet" data-pane="portfolio">
+          <h1 id="greet-line">Welcome back</h1>
+          <span class="sub" id="greet-sub"></span>
+          <div class="mode-tabs" id="mode-tabs" role="group" aria-label="Detail level">
+            <button data-mode-opt="beginner" title="Plain-English labels, the essentials only">Beginner</button>
+            <button data-mode-opt="pro" title="Every risk metric, denser layout">Pro</button>
+          </div>
+        </section>
+
         <section id="portfolio" data-pane="portfolio">
           <div class="section-head">
             <h2>Your portfolio</h2>
@@ -3059,7 +3528,21 @@
           <div id="portfolio-value">$—</div>
           <div id="portfolio-day"></div>
           <div id="portfolio-total"></div>
-          <svg id="portfolio-spark" preserveAspectRatio="none"></svg>
+          <div class="hero-grid">
+            <div class="kpi-grid" id="kpi-grid"></div>
+            <div class="chart-wrap">
+              <div class="chart-head">
+                <span class="klabel" style="margin:0">Balance history</span>
+                <div class="range-tabs" id="range-tabs" role="group" aria-label="Chart range">
+                  <button data-range="30">1M</button>
+                  <button data-range="90">3M</button>
+                  <button data-range="180">6M</button>
+                  <button data-range="0">All</button>
+                </div>
+              </div>
+              <svg id="portfolio-spark" preserveAspectRatio="none"></svg>
+            </div>
+          </div>
           <div id="broker-line"></div>
           <div id="pf-updated"></div>
           <div id="import-panel">
@@ -3090,24 +3573,45 @@
           <div id="advice-list"></div>
         </section>
 
-        <section data-pane="portfolio">
-          <h2>Your stocks</h2>
-          <div class="card" id="holdings"></div>
+        <section class="dash-row split" data-pane="portfolio">
+          <div class="widget">
+            <div class="widget-head">
+              <h3>Your stocks</h3>
+              <span class="act" id="holdings-count"></span>
+            </div>
+            <div class="pos-grid" id="holdings"></div>
+          </div>
+          <div class="widget" id="watchlist-section">
+            <div class="widget-head">
+              <h3>Watchlist</h3>
+              <span class="act">★ on any stock page</span>
+            </div>
+            <div id="watchlist-card"></div>
+          </div>
         </section>
 
         <section data-pane="portfolio" id="options-section" style="display:none">
-          <h2>Your options</h2>
-          <div class="card" id="holdings-options"></div>
+          <div class="widget">
+            <div class="widget-head">
+              <h3>Your options</h3>
+            </div>
+            <div class="pos-grid" id="holdings-options"></div>
+          </div>
         </section>
 
         <section data-pane="portfolio" id="concentration-section" style="display:none">
-          <h2>Concentration</h2>
-          <div class="card" id="concentration" style="padding:14px 16px"></div>
-        </section>
-
-        <section data-pane="portfolio" id="watchlist-section" style="display:none">
-          <h2>Watchlist</h2>
-          <div class="card" id="watchlist-card" style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap"></div>
+          <div class="widget">
+            <div class="widget-head">
+              <h3>Where your money sits</h3>
+              <span class="act" id="alloc-beta"></span>
+            </div>
+            <div class="donut-wrap">
+              <svg class="donut" id="alloc-donut" viewBox="0 0 100 100" role="img"
+                aria-label="Allocation by sector"></svg>
+              <div class="alloc-legend" id="alloc-legend"></div>
+            </div>
+            <div class="widget-note" id="alloc-note"></div>
+          </div>
         </section>
 
         <section id="market-section" data-pane="market">
@@ -3403,17 +3907,7 @@
                 <button data-chart-opt="candles">Candlestick</button>
               </div>
             </div>
-            <div class="settings-row" style="align-items:center">
-              <span style="font-weight:600">Accent</span>
-              <div class="accent-picker">
-                <div id="accent-swatches"></div>
-                <label class="accent-custom" id="accent-custom" title="Custom color — pick any hue">
-                  <input type="color" id="accent-custom-input" aria-label="Custom accent color">
-                </label>
-              </div>
-            </div>
-            <p style="font-size:12px;color:var(--faint)">Chart type applies to the stock page price chart. Accent
-              recolors buttons, toggles, and active states — pick a preset or the rainbow swatch for any custom color.
+            <p style="font-size:12px;color:var(--faint)">Chart type applies to the stock page price chart.
               Market gains/losses always stay green/red. All preferences are saved in this browser.</p>
           </div>
         </section>
@@ -3534,17 +4028,6 @@
     // Escaping can't neutralise a javascript:/data: scheme — an href needs its own gate.
     const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? String(u) : "#");
 
-    /* ── accent palette (declared early: showPane("settings") at boot reads it) ── */
-    const ACCENTS = {
-      "Indigo": { d: ["#6e63f1", "#928af5"], l: ["#4f46e5", "#4338ca"] },
-      "Electric blue": { d: ["#4d84f7", "#7aa5ff"], l: ["#2563eb", "#1d4ed8"] },
-      "Teal": { d: ["#2dd4bf", "#5eead4"], l: ["#0d9488", "#0f766e"] },
-      "Amber": { d: ["#e8a33d", "#f5bd66"], l: ["#b45309", "#92400e"] },
-      "Graphite": { d: ["#8a93a6", "#aab3c5"], l: ["#4b5563", "#374151"] },
-    };
-    // Retired accent names from earlier releases → nearest current equivalent.
-    const ACCENT_REMAP = { "Slate": "Graphite", "Sunset amber": "Amber", "Violet": "Indigo", "Signal green": "Teal" };
-
     /* ── skeleton + toast primitives ── */
     function skelRows(n = 3, h = 36) {
       return `<div class="skel-rows">${Array.from({ length: n }, () => `<div class="skel" style="height:${h}px"></div>`).join("")}</div>`;
@@ -3650,67 +4133,22 @@
     /* ── ⌘K modal: Enter jumps from the quick-preview to the full stock page ── */
     /* keydown/selection handlers for search live with the search logic below */
 
-    /* ── accent: brand token only — market green/red are never overridden ── */
-    function currentIsDark() {
-      const t = document.documentElement.getAttribute("data-theme");
-      return t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches);
+    /* ── detail level: Beginner ⇄ Pro. Stamped on <html> so pure-CSS gating
+       (.pro-only / .beg-only) applies before any render runs — switching modes
+       never needs a re-fetch or a re-render. ── */
+    function applyMode(m) {
+      document.documentElement.setAttribute("data-mode", m === "pro" ? "pro" : "beginner");
+      document.querySelectorAll("#mode-tabs [data-mode-opt]").forEach((b) =>
+        b.classList.toggle("active", b.dataset.modeOpt === (m === "pro" ? "pro" : "beginner")));
     }
-    function rgbaFromHex(hex, a) {
-      const n = parseInt(hex.slice(1), 16);
-      return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-    }
-    // Blend a hex toward white (pct>0) or black (pct<0). Used to derive the
-    // brand-ink shade for a custom color, mirroring how presets pair the two.
-    function shadeHex(hex, pct) {
-      const n = parseInt(hex.slice(1), 16);
-      const t = pct < 0 ? 0 : 255, p = Math.abs(pct);
-      const mix = (c) => Math.round(c + (t - c) * p);
-      const r = mix((n >> 16) & 255), g = mix((n >> 8) & 255), b = mix(n & 255);
-      return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
-    }
-    // WCAG relative luminance + contrast ratio, for the custom-color legibility clamp.
-    function relLum(hex) {
-      const n = parseInt(hex.slice(1), 16);
-      const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-      return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-    }
-    function contrastRatio(a, b) {
-      const la = relLum(a), lb = relLum(b);
-      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-    }
-    // Nudge a custom color's lightness (toward white in dark mode, black in light)
-    // until it clears 4.5:1 against the background — keeps accent text readable.
-    // Blending toward white/black always converges, so the 12-step cap is a floor.
-    function contrastClamp(hex, bgHex, dark) {
-      let c = hex;
-      for (let i = 0; i < 12 && contrastRatio(c, bgHex) < 4.5; i++) c = shadeHex(c, dark ? 0.08 : -0.08);
-      return c;
-    }
-    function applyAccent() {
-      const stored = localStorage.getItem("accent") || "Indigo";
-      const dark = currentIsDark();
-      let g, ink;
-      if (stored === "__custom__") {
-        const bg = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim() || (dark ? "#131519" : "#ffffff");
-        g = contrastClamp(localStorage.getItem("accentCustom") || "#4f46e5", bg, dark);
-        ink = shadeHex(g, dark ? 0.28 : -0.2); // lighter tint in dark, darker shade in light
-      } else {
-        const name = ACCENTS[stored] ? stored : (ACCENT_REMAP[stored] || "Indigo");
-        const a = ACCENTS[name] || ACCENTS["Indigo"];
-        [g, ink] = dark ? a.d : a.l;
-      }
-      const root = document.documentElement.style;
-      root.setProperty("--brand", g);
-      root.setProperty("--brand-ink", ink);
-      root.setProperty("--brand-soft", rgbaFromHex(g, dark ? 0.18 : 0.1));
-    }
+    applyMode(localStorage.getItem("detailMode") || "beginner");
 
     /* ── theme: prefers-color-scheme is the free baseline; a stored choice overrides.
-       Theme control lives only in Settings → Appearance (no header/sidebar toggle, by design). ── */
+       Theme control lives only in Settings → Appearance (no header/sidebar toggle, by design).
+       The brand token is fixed in CSS — there is no runtime accent override. ── */
     function applyTheme(t) {
       if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
       else document.documentElement.removeAttribute("data-theme");
-      applyAccent(); // brand hex pair differs between dark/light — resync on every theme change
     }
     applyTheme(localStorage.getItem("theme"));
 
@@ -3942,19 +4380,22 @@
       const span = max - min || 1;
       const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / span) * (h - 8) - 4}`).join(" ");
       const up = values[values.length - 1] >= values[0];
-      const stroke = up ? "var(--chart-up)" : "var(--chart-down)";
+      const tone = up ? "var(--chart-up)" : "var(--chart-down)";
+      // Big charts: ink line over a tinted wash. Small sparks stay fully tone-coloured,
+      // since a row spark has no delta text next to it to carry the direction.
+      const stroke = big ? "var(--chart-hero)" : tone;
       el.setAttribute("viewBox", `0 0 ${w} ${h}`);
       // big variant gets a soft gradient area fill under the line (unique id per render)
       let fill = "";
       if (big) {
         const gid = `sg${++sparkGradSeq}`;
         fill = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="${stroke}" stop-opacity=".16"/>
-          <stop offset="1" stop-color="${stroke}" stop-opacity="0"/>
+          <stop offset="0" stop-color="${tone}" stop-opacity=".22"/>
+          <stop offset="1" stop-color="${tone}" stop-opacity="0"/>
         </linearGradient></defs>
         <polygon points="0,${h} ${pts} ${w},${h}" fill="url(#${gid})" stroke="none"/>`;
       }
-      el.innerHTML = `${fill}<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${big ? 2 : 1.5}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+      el.innerHTML = `${fill}<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${big ? 1.75 : 1.5}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
     }
 
     // Hand-drawn daily candlesticks (no chart lib): one wick <line> + body <rect>
@@ -3981,6 +4422,28 @@
       }
       el.setAttribute("viewBox", `0 0 ${w} ${h}`);
       el.innerHTML = svg;
+    }
+
+    /* ── donut: part-to-whole by sector. Slices are separated by a 2px surface
+       gap and every slice is direct-labelled in the legend beside it — the light
+       series slots sit under 3:1 on white, so the ring is never identity-alone. ── */
+    const SERIES_SLOTS = 6;
+    function donutSvg(el, parts, centerLabel) {
+      if (!parts.length) { el.innerHTML = ""; return; }
+      const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+      const cx = 50, cy = 50, r = 38, sw = 15;
+      const circ = 2 * Math.PI * r;
+      const gap = 2; // surface-coloured gap, in path units
+      let offset = 0, arcs = "";
+      for (const p of parts) {
+        const len = Math.max(0, (p.value / total) * circ - gap);
+        arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${p.color}"
+          stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}"
+          stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(p.name)} — ${((p.value / total) * 100).toFixed(1)}%</title></circle>`;
+        offset += (p.value / total) * circ;
+      }
+      el.innerHTML = `${arcs}<text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle"
+        class="donut-center" fill="var(--text)">${esc(centerLabel)}</text>`;
     }
 
     /* ── data stores ── */
@@ -4107,25 +4570,66 @@
         .filter((x) => x.s?.length > 1);
       if (sparks.length) {
         const len = Math.min(...sparks.map((x) => x.s.length));
-        const series = Array.from({ length: len }, (_, i) =>
+        balanceSeries = Array.from({ length: len }, (_, i) =>
           sparks.reduce((sum, x) => sum + x.h.shares * x.s[x.s.length - len + i], 0)
         );
-        sparkSvg($("#portfolio-spark"), series, true);
       }
+      drawBalanceChart();
+      renderKpis({ value, day, dayPct, cost, tot });
+    }
+
+    /* ── balance chart + range tabs ────────────────────────────────────────
+       Ranges slice the series we actually hold. A range longer than the data
+       is disabled rather than quietly returning a shorter window — a control
+       that lies about its window is worse than one that admits the limit. */
+    let balanceSeries = [];
+    let chartRange = Number(localStorage.getItem("pfRange") ?? 0);
+
+    function drawBalanceChart() {
+      const n = balanceSeries.length;
+      document.querySelectorAll("#range-tabs [data-range]").forEach((b) => {
+        const r = Number(b.dataset.range);
+        b.disabled = r > 0 && r > n;
+        b.classList.toggle("active", r === chartRange);
+      });
+      if (!n) return;
+      const slice = chartRange > 0 ? balanceSeries.slice(-chartRange) : balanceSeries;
+      sparkSvg($("#portfolio-spark"), slice, true);
+    }
+
+    /* KPI strip. Beginner sees the four that answer "how am I doing"; Pro also
+       gets cost basis and beta, which is where the risk actually lives. */
+    function renderKpis({ value, day, dayPct, cost, tot }) {
+      // Spendable cash (buying power), not account equity — equity would
+      // double-count the positions already in the value above.
+      const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
+      const positions = portfolio.holdings.filter((h) => h.asset_class !== "crypto").length;
+      const tile = (k, v, note, cls = "", tip = "") => `
+        <div class="kpi ${cls}">
+          <div class="k">${tip ? `<span class="term" title="${esc(tip)}">${k}</span>` : k}</div>
+          <div class="v ${note?.cls ?? ""}">${v}</div>
+          ${note?.text ? `<div class="n">${note.text}</div>` : ""}
+        </div>`;
+      $("#kpi-grid").innerHTML = [
+        tile("Today", `${signed(dayPct)}%`, { text: `${day >= 0 ? "+" : "−"}${money(Math.abs(day))}`, cls: day >= 0 ? "up" : "down" }),
+        tile("Total return", signed(tot / Math.max(cost, 1) * 100, 1) + "%", { text: money(tot), cls: tot >= 0 ? "up" : "down" }),
+        tile("Positions", String(positions), { text: positions === 1 ? "holding" : "holdings" }),
+        cash != null
+          ? tile("Cash", money(cash), { text: "available to invest" })
+          : tile("Invested", money(cost), { text: "cost basis" }),
+        tile("Invested", money(cost), { text: "what you put in" }, "pro-only", "Your total cost basis — the sum of what you paid for every position."),
+        tile("Market value", money(value), { text: "what it's worth now" }, "pro-only"),
+      ].join("");
     }
 
     function renderBrokerLine() {
       const el = $("#broker-line");
       const src = brokerInfo?.source ?? "manual";
       const srcLabel = src === "robinhood" ? "Linked: Robinhood" : src === "import" ? "Imported positions" : "From portfolio.yaml";
-      // Portfolio value above is active positions; here we show spendable cash
-      // (buying power), not account equity — equity double-counts the positions.
-      const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
       const orders = brokerInfo?.openOrders?.length ?? 0;
       el.innerHTML = `
     <span class="chip ${src === "robinhood" ? "buy" : src === "import" ? "info" : "calm"} sm">${srcLabel}</span>
-    ${cash != null ? `<span>Cash: ${money(cash)}</span>` : ""}
-    ${orders ? `<span>· ${orders} open order${orders === 1 ? "" : "s"}</span>` : ""}`;
+    ${orders ? `<span>${orders} open order${orders === 1 ? "" : "s"}</span>` : ""}`;
     }
 
     // "Updated 3:42:07 PM" under the portfolio — stamped whenever state/quotes reload.
@@ -4133,6 +4637,30 @@
       const el = $("#pf-updated");
       if (el) el.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
     }
+
+    // Dashboard controls: mode, chart range, greeting. Wired once at boot.
+    $("#mode-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-mode-opt]");
+      if (!b) return;
+      localStorage.setItem("detailMode", b.dataset.modeOpt);
+      applyMode(b.dataset.modeOpt);
+    });
+    $("#range-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-range]");
+      if (!b || b.disabled) return;
+      chartRange = Number(b.dataset.range);
+      localStorage.setItem("pfRange", String(chartRange));
+      drawBalanceChart();
+    });
+
+    function renderGreeting() {
+      const h = new Date().getHours();
+      const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+      const who = ($("#user-name")?.textContent || "").split(/[\s@]/)[0];
+      $("#greet-line").textContent = who && who !== "—" ? `${part}, ${who}` : part;
+      $("#greet-sub").textContent = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+    }
+    renderGreeting();
 
     // Header buttons live outside the re-rendered broker line, so wire them once.
     $("#import-toggle").addEventListener("click", () => {
@@ -4229,11 +4757,15 @@
     }
 
     /* ── your stocks & options (crypto is not shown — equity/options tool) ── */
-    function holdingRow(h) {
+    /* A position is a tile, not a table row: symbol + price + today's move read
+       at a glance, with the spark and status chip underneath. Same click target
+       (the full stock page) and same data as the old row. */
+    function holdingCard(h) {
       const q = quotes[h.ticker];
       const isOpt = h.asset_class === "option";
       const [chipLabel, chipTone] = statusChip(isOpt && h.option ? h.option.underlying : h.ticker);
-      const wrap = document.createElement("div");
+      const wrap = document.createElement("button");
+      wrap.className = "pos-card";
       const unit = isOpt ? "contract" : "share";
       const mult = isOpt ? 100 : 1;
       // Options carry their own market value; equities are quote-priced.
@@ -4241,36 +4773,37 @@
       const priceCell = h.market_value != null ? money(h.market_value) : q ? money(q.c) : "—";
       const o = h.option;
       const sym = isOpt && o ? o.underlying : h.ticker;
-      const sub = isOpt && o
-        ? `${Math.abs(h.shares)} ${h.shares < 0 ? "short " : ""}$${o.strike} ${o.type}${Math.abs(h.shares) === 1 ? "" : "s"} · exp ${o.expiry}`
+      const qty = isOpt && o
+        ? `${Math.abs(h.shares)} ${h.shares < 0 ? "short " : ""}$${o.strike} ${o.type}${Math.abs(h.shares) === 1 ? "" : "s"}`
         : `${h.shares} ${unit}${Math.abs(h.shares) === 1 ? "" : "s"}`;
       // Time-critical chips: days-to-expiry on options; earnings within a week on stocks.
       let timeChip = "";
       if (isOpt && o) {
         const dte = Math.ceil((new Date(o.expiry + "T16:00:00-05:00") - Date.now()) / 86400e3);
         const tone = dte <= 3 ? "sell" : dte <= 10 ? "warn" : "calm";
-        timeChip = `<span class="chip ${tone}" title="expires ${esc(o.expiry)}">${dte <= 0 ? "expires today" : dte + "d left"}</span>`;
+        timeChip = `<span class="chip ${tone} sm" title="expires ${esc(o.expiry)}">${dte <= 0 ? "expires today" : dte + "d left"}</span>`;
       } else if (earnings[sym]) {
         const days = Math.ceil((new Date(earnings[sym] + "T16:00:00-05:00") - Date.now()) / 86400e3);
         if (days >= 0 && days <= 7) {
           const label = days === 0 ? "today" : days === 1 ? "tomorrow" : new Date(earnings[sym]).toLocaleDateString([], { weekday: "short" });
-          timeChip = `<span class="chip warn" title="earnings ${esc(earnings[sym])}">earnings ${label}</span>`;
+          timeChip = `<span class="chip warn sm" title="earnings ${esc(earnings[sym])}">earnings ${label}</span>`;
         }
       }
       wrap.innerHTML = `
-      <button class="rowbtn">
-        <div class="tick-name"><div class="sym">${esc(sym)}</div><div class="sub">${esc(sub)}</div></div>
-        <svg class="mini-spark" preserveAspectRatio="none"></svg>
-        ${timeChip}
-        <span class="chip ${chipTone}">${chipLabel}</span>
-        <div class="row-price">
-          <div class="px">${priceCell}</div>
-          <div class="dp ${q && q.dp >= 0 ? "up" : "down"}">${q ? signed(q.dp) + "%" : ""} ${q ? "today" : ""}</div>
+        <div class="pos-top">
+          <span class="pos-sym">${esc(sym)}</span>
+          <span class="pos-qty">${esc(qty)}</span>
         </div>
-      </button>`;
-      // Full stock page (options resolve to their underlying via `sym`).
-      wrap.querySelector(".rowbtn").addEventListener("click", () => showPane("stock", sym));
-      sparkSvg(wrap.querySelector(".mini-spark"), screener[sym]?.indicators?.spark);
+        <div class="pos-px">${priceCell}</div>
+        <div class="pos-dp ${q && q.dp >= 0 ? "up" : "down"}">${q ? signed(q.dp) + "% today" : "&nbsp;"}</div>
+        <svg class="pos-spark" preserveAspectRatio="none"></svg>
+        <div class="pos-dp pro-only ${gain >= 0 ? "up" : "down"}" title="Unrealised gain or loss on this position">${gain >= 0 ? "+" : "−"}${money(Math.abs(gain))} total</div>
+        <div class="pos-foot">
+          ${timeChip}
+          <span class="chip ${chipTone} sm">${chipLabel}</span>
+        </div>`;
+      wrap.addEventListener("click", () => showPane("stock", sym));
+      sparkSvg(wrap.querySelector(".pos-spark"), screener[sym]?.indicators?.spark);
       return wrap;
     }
     function renderHoldings() {
@@ -4278,31 +4811,46 @@
       const options = portfolio.holdings.filter((h) => h.asset_class === "option");
       const card = $("#holdings");
       card.innerHTML = "";
-      for (const h of stocks) card.appendChild(holdingRow(h));
+      for (const h of stocks) card.appendChild(holdingCard(h));
       if (!stocks.length) card.innerHTML = `<div class="empty">No stock positions.</div>`;
+      $("#holdings-count").textContent = stocks.length ? `${stocks.length} position${stocks.length === 1 ? "" : "s"}` : "";
       $("#options-section").style.display = options.length ? "" : "none";
       const oCard = $("#holdings-options");
       oCard.innerHTML = "";
-      for (const h of options) oCard.appendChild(holdingRow(h));
+      for (const h of options) oCard.appendChild(holdingCard(h));
     }
 
     /* ── watchlist (starred in the UI; merged with broker/YAML lists) ── */
     function renderWatchlist() {
       const list = portfolio.watchlist || [];
-      $("#watchlist-section").style.display = list.length ? "" : "none";
-      $("#watchlist-card").innerHTML = list.map((t) => `
-        <span class="filter-chip on" style="display:inline-flex;gap:6px;align-items:center">
-          <a href="#stock/${esc(t)}" style="color:inherit;text-decoration:none;font-weight:700">${esc(t)}</a>
-          ${quotes[t]?.c ? `<span style="font-weight:400">${money(quotes[t].c)}</span>` : ""}
-          <button data-watch-remove="${esc(t)}" title="Remove from watchlist" style="border:none;background:none;cursor:pointer;color:inherit;padding:0">${icon("close", 12)}</button>
-        </span>`).join("");
+      // The widget holds its grid column even when empty — hiding it would leave
+      // the positions card stranded beside a gap.
+      if (!list.length) {
+        $("#watchlist-card").innerHTML = `<div class="empty">Nothing watched yet. Open any stock and hit ★ Watch.</div>`;
+        return;
+      }
+      $("#watchlist-card").innerHTML = list.map((t) => {
+        const q = quotes[t];
+        return `
+        <div class="wl-row" data-watch-open="${esc(t)}">
+          <span class="wl-sym">${esc(t)}</span>
+          <span class="wl-px">${q?.c != null ? money(q.c) : "—"}</span>
+          <span class="wl-dp ${q && q.dp >= 0 ? "up" : "down"}">${q?.dp != null ? signed(q.dp) + "%" : ""}</span>
+          <button class="wl-x" data-watch-remove="${esc(t)}" title="Remove from watchlist" aria-label="Remove ${esc(t)}">${icon("close", 13)}</button>
+        </div>`;
+      }).join("");
     }
     document.addEventListener("click", async (e) => {
       const rm = e.target.closest("[data-watch-remove]");
-      if (!rm) return;
-      rm.disabled = true;
-      await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker: rm.dataset.watchRemove, action: "remove" }) });
-      loadState();
+      if (rm) {
+        rm.disabled = true;
+        await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker: rm.dataset.watchRemove, action: "remove" }) });
+        loadState();
+        return;
+      }
+      // Row click opens the stock page — checked after remove so the ✕ wins.
+      const open = e.target.closest("[data-watch-open]");
+      if (open) showPane("stock", open.dataset.watchOpen);
     });
 
     /* ── market overview ── */
@@ -4786,28 +5334,54 @@
 
     /* ── F3: portfolio concentration — deterministic risk read ($0 AI) ── */
     async function loadConcentration() {
-      const sec = $("#concentration-section"), box = $("#concentration");
+      const sec = $("#concentration-section");
       try {
         const d = await (await fetch("/api/concentration")).json();
         if (!d.ok || !d.totalValue) { sec.style.display = "none"; return; }
         sec.style.display = "";
         const money0 = (v) => "$" + Math.round(v).toLocaleString();
-        const betaLine = d.portfolioBeta == null
-          ? `<span style="color:var(--faint)">Portfolio beta unknown — no scored holdings</span>`
-          : `Portfolio beta <b>${d.portfolioBeta.toFixed(2)}</b> <span style="color:var(--faint)">· covers ${d.betaCoveragePct.toFixed(0)}% of value${d.excludedNoBeta ? ` · ${d.excludedNoBeta} holding${d.excludedNoBeta === 1 ? "" : "s"} without a beta` : ""}</span>`;
-        const bars = d.sectors.map((s) => `<div style="margin:7px 0">
-            <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px">
-              <span>${esc(s.sector)}</span>
-              <span style="color:var(--faint);font-variant-numeric:tabular-nums">${s.pct.toFixed(0)}% · ${money0(s.value)}</span>
-            </div>
-            <div style="height:8px;border-radius:4px;background:var(--surface-2);overflow:hidden">
-              <div style="height:100%;width:${s.pct.toFixed(1)}%;background:var(--brand)"></div>
-            </div>
+
+        // Top 5 sectors keep their own slot; the tail folds into "Other" rather
+        // than generating a 7th hue — the palette is a fixed order, never cycled.
+        const sorted = [...d.sectors].sort((a, b) => b.value - a.value);
+        const head = sorted.slice(0, SERIES_SLOTS - 1);
+        const tail = sorted.slice(SERIES_SLOTS - 1);
+        // Slot assignment is keyed to the sector NAME, not its rank — otherwise a
+        // sector overtaking another would repaint both on the next refresh.
+        // Display order stays value-ranked; only the colour is stable.
+        const slotOf = new Map([...head].sort((a, b) => a.sector.localeCompare(b.sector))
+          .map((x, i) => [x.sector, i + 1]));
+        const parts = head.map((x) => ({ name: x.sector, value: x.value, pct: x.pct, color: `var(--series-${slotOf.get(x.sector)})` }));
+        if (tail.length) {
+          parts.push({
+            name: `Other (${tail.length})`, color: `var(--series-${SERIES_SLOTS})`,
+            value: tail.reduce((a, x) => a + x.value, 0),
+            pct: tail.reduce((a, x) => a + x.pct, 0),
+          });
+        }
+
+        donutSvg($("#alloc-donut"), parts, money0(d.totalValue));
+        $("#alloc-legend").innerHTML = parts.map((x) => `
+          <div class="alloc-item">
+            <span class="alloc-dot" style="background:${x.color}"></span>
+            <span class="alloc-name">${esc(x.name)}</span>
+            <span class="alloc-pct">${x.pct.toFixed(0)}%</span>
+            <span class="alloc-val pro-only">${money0(x.value)}</span>
           </div>`).join("");
-        box.innerHTML = `
-          <div style="font-size:13.5px;margin-bottom:12px">${betaLine}</div>
-          ${bars}
-          <p style="font-size:11px;color:var(--faint);margin:10px 0 0">Exposure by sector across ${money0(d.totalValue)} of stock positions (options excluded). Deterministic, no AI.</p>`;
+
+        // Beta is the one number the donut can't show — it rides in the header.
+        $("#alloc-beta").innerHTML = d.portfolioBeta == null
+          ? `<span class="term" title="Beta needs scored holdings; none of yours have a beta yet.">beta unknown</span>`
+          : `<span class="term" title="Beta compares your portfolio's swings to the market's. 1.00 moves with the market; above 1 swings harder, below 1 swings less.">beta</span> <b style="color:var(--text)">${d.portfolioBeta.toFixed(2)}</b><span class="pro-only"> · covers ${d.betaCoveragePct.toFixed(0)}% of value${d.excludedNoBeta ? ` · ${d.excludedNoBeta} without a beta` : ""}</span>`;
+
+        const top = parts[0];
+        const betaRead = d.portfolioBeta == null ? ""
+          : ` ${d.portfolioBeta > 1.15 ? "It swings harder than the market — bigger gains, bigger drops." : d.portfolioBeta < 0.85 ? "It moves less than the market — steadier, slower." : "It moves roughly in step with the market."}`;
+        $("#alloc-note").innerHTML = (top.pct >= 40
+          ? `Most of your money — <b>${top.pct.toFixed(0)}%</b> — sits in ${esc(top.name)}. When one sector moves, most of your portfolio moves with it.`
+          : `Your largest slice is ${esc(top.name)} at <b>${top.pct.toFixed(0)}%</b>, so no single sector dominates the portfolio.`)
+          + betaRead
+          + ` <span style="color:var(--faint)">Across ${money0(d.totalValue)} of stock positions (options excluded). Deterministic, no AI.</span>`;
       } catch { sec.style.display = "none"; }
     }
 
@@ -4935,6 +5509,7 @@
           $("#user-name").textContent = profile.full_name || profile.email;
           const initials = (profile.full_name || profile.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join("");
           $("#user-av").textContent = initials || "·";
+          renderGreeting(); // the name lands after boot — restamp the greeting
         }
       } catch { }
     }
@@ -4956,14 +5531,6 @@
       document.querySelectorAll("#theme-tabs [data-theme-opt]").forEach((b) => b.classList.toggle("active", b.dataset.themeOpt === theme));
       const chart = localStorage.getItem("chartType") || "line";
       document.querySelectorAll("#chart-tabs [data-chart-opt]").forEach((b) => b.classList.toggle("active", b.dataset.chartOpt === chart));
-      const storedAccent = localStorage.getItem("accent") || "Indigo";
-      const isCustom = storedAccent === "__custom__";
-      const accent = isCustom ? null : (ACCENTS[storedAccent] ? storedAccent : (ACCENT_REMAP[storedAccent] || "Indigo"));
-      document.querySelectorAll("#accent-swatches [data-accent-opt]").forEach((b) => b.classList.toggle("active", b.dataset.accentOpt === accent));
-      const customEl = $("#accent-custom"), customHex = localStorage.getItem("accentCustom") || "#4f46e5";
-      customEl.classList.toggle("active", isCustom);
-      customEl.style.background = isCustom ? customHex : "";  // show chosen hue when active, rainbow otherwise
-      $("#accent-custom-input").value = customHex;
     }
     $("#theme-tabs").addEventListener("click", (e) => {
       const b = e.target.closest("[data-theme-opt]");
@@ -4978,26 +5545,6 @@
       const b = e.target.closest("[data-chart-opt]");
       if (!b) return;
       localStorage.setItem("chartType", b.dataset.chartOpt);
-      syncAppearanceTabs();
-    });
-
-    /* ── accent swatches: rendered once from ACCENTS, using each entry's dark hex as the swatch color ── */
-    $("#accent-swatches").innerHTML = Object.entries(ACCENTS)
-      .map(([name, a]) => `<button class="accent-swatch" data-accent-opt="${name}" title="${name}" aria-label="${name}" style="background:${a.d[0]}"></button>`)
-      .join("");
-    $("#accent-swatches").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-accent-opt]");
-      if (!b) return;
-      localStorage.setItem("accent", b.dataset.accentOpt);
-      applyAccent();
-      syncAppearanceTabs();
-    });
-    // Custom color wheel: `input` fires live as the user drags, so the accent
-    // updates in real time (no Apply button needed).
-    $("#accent-custom-input").addEventListener("input", (e) => {
-      localStorage.setItem("accent", "__custom__");
-      localStorage.setItem("accentCustom", e.target.value);
-      applyAccent();
       syncAppearanceTabs();
     });
 
@@ -5972,6 +6519,7 @@
       quotes = await (await fetch(fresh ? "/api/quotes?fresh=1" : "/api/quotes")).json();
       renderPortfolio();
       renderHoldings();
+      renderWatchlist(); // rail prints live prices — loadState ran before quotes existed
       stampUpdated();
     }
     async function loadScreener() {

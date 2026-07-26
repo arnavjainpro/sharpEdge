@@ -71,6 +71,21 @@ export function startServer() {
         return new Response(Bun.file(join(import.meta.dir, "public/index.html")));
       }
 
+      // Static brand assets (logo, favicon). Whitelisted by basename rather than
+      // joined from user input — no path segment from the URL reaches the disk,
+      // so "/assets/../../.env" can't escape the directory.
+      if (url.pathname.startsWith("/assets/")) {
+        const name = url.pathname.slice("/assets/".length);
+        const ALLOWED = new Set([
+          "logo-mark.png", "logo-sidebar.png", "logo-sidebar-dark.png",
+          "logo-lockup.png", "logo-lockup-dark.png", "favicon.png",
+        ]);
+        if (!ALLOWED.has(name)) return new Response("not found", { status: 404 });
+        return new Response(Bun.file(join(import.meta.dir, "public/assets", name)), {
+          headers: { "Cache-Control": "public, max-age=86400" },
+        });
+      }
+
       if (url.pathname === "/api/auth/signup" && req.method === "POST") {
         try {
           const body = (await req.json()) as { email?: string; password?: string };
