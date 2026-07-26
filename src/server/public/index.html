@@ -1386,6 +1386,24 @@
       flex-wrap: wrap;
     }
 
+    .widget-more {
+      width: 100%;
+      margin-top: 10px;
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: none;
+      color: var(--dim);
+      font: 600 var(--fs-data) var(--sans);
+      transition: background .12s ease, color .12s ease, border-color .12s ease;
+    }
+
+    .widget-more:hover {
+      background: var(--surface-2);
+      border-color: var(--brand);
+      color: var(--text);
+    }
+
     /* watchlist rail */
     .wl-row {
       display: flex;
@@ -3693,6 +3711,7 @@
               <span class="act" id="holdings-count"></span>
             </div>
             <div class="pos-grid" id="holdings"></div>
+            <button class="widget-more" id="holdings-toggle" hidden></button>
           </div>
           <div class="widget" id="watchlist-section">
             <div class="widget-head">
@@ -5083,25 +5102,37 @@
       return q ? Math.abs(h.shares * q.c) : -1;
     }
 
-    const TOP_STOCKS = 3;
+    const TOP_STOCKS = 4;
+    // Module-level so the choice survives the 60-second quote re-render.
+    let holdingsExpanded = false;
     function renderHoldings() {
       const stocks = portfolio.holdings.filter((h) => (h.asset_class ?? "equity") === "equity");
       const options = portfolio.holdings.filter((h) => h.asset_class === "option");
       const card = $("#holdings");
       card.innerHTML = "";
-      // Dashboard shows the biggest few; the rest stay one click away on their
-      // own pages rather than turning this widget into a table again.
-      const top = [...stocks].sort((a, b) => positionValue(b) - positionValue(a)).slice(0, TOP_STOCKS);
-      for (const h of top) card.appendChild(holdingCard(h));
+      // Collapsed shows the biggest few; the rest are one click away, here or on
+      // their own pages, rather than turning this widget back into a table.
+      const ranked = [...stocks].sort((a, b) => positionValue(b) - positionValue(a));
+      const shown = holdingsExpanded ? ranked : ranked.slice(0, TOP_STOCKS);
+      for (const h of shown) card.appendChild(holdingCard(h));
       if (!stocks.length) card.innerHTML = `<div class="empty">No stock positions.</div>`;
+      const hidden = stocks.length - shown.length;
       $("#holdings-count").textContent = !stocks.length ? ""
-        : stocks.length > TOP_STOCKS ? `top ${TOP_STOCKS} of ${stocks.length}`
+        : hidden > 0 ? `top ${shown.length} of ${stocks.length}`
           : `${stocks.length} position${stocks.length === 1 ? "" : "s"}`;
+      const more = $("#holdings-toggle");
+      more.hidden = stocks.length <= TOP_STOCKS;
+      more.textContent = holdingsExpanded ? "Show fewer" : `View all ${stocks.length} stocks`;
       $("#options-section").style.display = options.length ? "" : "none";
       const oCard = $("#holdings-options");
       oCard.innerHTML = "";
       for (const h of options) oCard.appendChild(holdingCard(h));
     }
+
+    $("#holdings-toggle").addEventListener("click", () => {
+      holdingsExpanded = !holdingsExpanded;
+      renderHoldings();
+    });
 
     /* ── watchlist (starred in the UI; merged with broker/YAML lists) ── */
     function renderWatchlist() {
