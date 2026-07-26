@@ -13,7 +13,8 @@ import { fetchDailyCandles, fetchIntradayBars } from "../ingest/yahoo";
 import { getScreenerRows, sectorBoards } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";
-import { getMarketSnapshot } from "../engine/market";
+import { getMarketSnapshot, sectorHeatmap } from "../engine/market";
+import { canaryStatus, runCanaries } from "../engine/canary";
 import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist } from "../broker";
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
@@ -184,6 +185,8 @@ export function startServer() {
           health: {
             ws: { ...wsStatus, staleSec: wsStatus.lastMessageAt ? Math.round((Date.now() - wsStatus.lastMessageAt) / 1000) : null },
             breakers: [opusBreaker.status(), haikuBreaker.status()],
+            // Empty until the first probe runs a minute after boot.
+            canaries: canaryStatus(),
           },
         });
       }
@@ -309,11 +312,13 @@ export function startServer() {
         }
       }
 
-      // Market regime + sector rotation + per-sector setup boards
+      // Market regime + sector rotation + per-sector setup boards + the
+      // trailing-weeks rotation heatmap (empty until sector_history fills in).
       if (url.pathname === "/api/market") {
         return Response.json({
           snapshot: await getMarketSnapshot(),
           boards: await sectorBoards(currentPortfolio(userId)),
+          heatmap: await sectorHeatmap(12),
         });
       }
 
@@ -819,6 +824,12 @@ export function startServer() {
         opusBreaker.reset();
         haikuBreaker.reset();
         return Response.json({ ok: true });
+      }
+
+      // Re-probe the data feeds on demand — the timer is 30 minutes, which is
+      // too long to sit through when you're watching a feed come back.
+      if (url.pathname === "/api/canary/check" && req.method === "POST") {
+        return Response.json({ ok: true, canaries: await runCanaries() });
       }
 
       if (url.pathname === "/api/quotes") {

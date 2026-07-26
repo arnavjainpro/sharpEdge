@@ -5,6 +5,7 @@ import { evaluateActiveAlerts } from "./engine/alerts";
 import { refreshUniverse, scanUniverse } from "./ingest/universe";
 import { seedFutures } from "./ingest/futures";
 import { refreshMarketContext } from "./engine/market";
+import { runCanaries } from "./engine/canary";
 import { sweepIndex, activeDynamicTickers } from "./engine/sweep";
 import { loadCikMap } from "./ingest/edgar";
 import { refreshDailyStats, startTradeStream } from "./ingest/finnhub";
@@ -243,6 +244,18 @@ function scheduleMarketContext() {
   }, 90 * 60_000);
 }
 
+// Data-feed canaries (SHARP-9): every 30 minutes, plus one probe a minute after
+// boot so a feed that broke overnight is visible before the first scan leans on
+// it. Deliberately not tied to market hours — a shape change on a Sunday is
+// still worth knowing about before Monday's open.
+function scheduleCanaries() {
+  const tick = async () => {
+    try { await runCanaries(); } catch (err) { console.error("[canary]", err); }
+  };
+  setTimeout(tick, 60_000);
+  setInterval(tick, 30 * 60_000);
+}
+
 // Universe: rebuild daily (constituents/market caps drift slowly).
 function scheduleUniverse() {
   setInterval(async () => {
@@ -350,5 +363,6 @@ scheduleMarketContext();
 scheduleUniverse();
 scheduleBroker();
 scheduleInsights();
+scheduleCanaries();
 startCacheHeartbeat(currentPortfolio(PRIMARY_USER_ID));
 console.log(`[sharpEdge] running — market is currently ${marketPhase()}`);

@@ -2338,6 +2338,73 @@
       border-color: var(--brand);
     }
 
+    /* rotation heatmap (F6b): sectors × trailing weeks. Colour carries the
+       state, the printed number carries the value — never colour alone. */
+    .heat-wrap {
+      overflow-x: auto;
+    }
+
+    table.heat {
+      border-collapse: separate;
+      border-spacing: 3px;
+      font-size: var(--fs-micro);
+    }
+
+    table.heat th {
+      font-weight: 600;
+      color: var(--faint);
+      font-size: var(--fs-micro);
+      text-align: center;
+      white-space: nowrap;
+      padding: 0 2px 2px;
+    }
+
+    /* First column pins so sector names stay readable while the weeks scroll. */
+    table.heat .heat-sector {
+      position: sticky;
+      left: 0;
+      background: var(--surface);
+      text-align: left;
+      white-space: nowrap;
+      padding-right: 10px;
+      font-weight: 600;
+      color: var(--fg);
+      font-size: var(--fs-meta);
+    }
+
+    .heat-cell {
+      width: 48px;
+      height: 28px;
+      border-radius: var(--radius-xs);
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg);
+    }
+
+    .heat-cell.empty-week {
+      background: var(--surface-2);
+      color: var(--faint);
+    }
+
+    .heat-legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 12px;
+      font-size: var(--fs-meta);
+      color: var(--dim);
+    }
+
+    .heat-legend i {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      margin-right: 5px;
+      vertical-align: -2px;
+    }
+
     /* sector table */
     table.sectors {
       width: 100%;
@@ -3792,6 +3859,21 @@
           </div>
         </section>
 
+        <section id="heatmap-section" data-pane="market">
+          <div class="section-head">
+            <h2>Sectors — rotation history</h2>
+            <span id="heatmap-meta" style="font-size:12px;color:var(--faint)"></span>
+          </div>
+          <div class="card">
+            <div id="rotation-heatmap">
+              <div class="skel-rows">
+                <div class="skel" style="height:30px"></div>
+                <div class="skel" style="height:30px"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section id="stock-section" data-pane="stock" hidden>
           <div id="stock-page">
             <div class="skel-rows">
@@ -5207,6 +5289,52 @@
     </div>
     <div id="regime-desc">${esc(r.description)}</div>
     <div class="bench-grid">${bench}</div>`;
+    }
+
+    /* ── F6b: rotation heatmap — sectors × trailing weeks ── */
+    const HEAT_COLOR = { leading: "var(--green)", improving: "var(--blue)", weakening: "var(--amber)", lagging: "var(--red)" };
+    const weekLabel = (ts) => new Date(ts * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
+
+    // Colour says which state, saturation says how strongly. |rel1m| is clamped
+    // at 8pp — past that the differences stop being visually legible anyway.
+    function heatFill(state, rel1m) {
+      const base = HEAT_COLOR[state] ?? "var(--faint)";
+      const pct = 18 + Math.min(Math.abs(rel1m ?? 0), 8) / 8 * 62;
+      return `color-mix(in srgb, ${base} ${pct.toFixed(0)}%, transparent)`;
+    }
+
+    function renderHeatmap() {
+      const box = $("#rotation-heatmap");
+      const hm = market?.heatmap;
+      const meta = $("#heatmap-meta");
+      if (!hm?.weeks?.length) {
+        meta.textContent = "";
+        box.innerHTML = `<div class="empty">No rotation history yet. A row is written for each sector as the market context refreshes; the first column appears once a week of readings exists, and the grid grows one column per week from there.</div>`;
+        return;
+      }
+      // Honest about a young grid — this fills in weekly and the first month
+      // genuinely doesn't have much to show.
+      meta.textContent = hm.weeks.length < 4
+        ? `${hm.weeks.length} week${hm.weeks.length === 1 ? "" : "s"} so far — one new column per week`
+        : `last ${hm.weeks.length} weeks · week-ending state`;
+
+      const head = hm.weeks.map((w) => `<th>${esc(weekLabel(w))}</th>`).join("");
+      const rows = hm.rows.map((r) => `<tr>
+        <td class="heat-sector">${esc(r.sector)}</td>
+        ${r.cells.map((c, i) => c
+          ? `<td class="heat-cell" style="background:${heatFill(c.state, c.rel1m)}" title="${esc(r.sector)} · week of ${esc(weekLabel(hm.weeks[i]))} · ${esc(c.state)}${c.rel1m != null ? ` · ${signed(c.rel1m, 1)}pp vs SPY` : ""}">${c.rel1m != null ? signed(c.rel1m, 0) : ""}</td>`
+          : `<td class="heat-cell empty-week" title="no reading that week">·</td>`).join("")}
+      </tr>`).join("");
+
+      box.innerHTML = `<div class="heat-wrap"><table class="heat">
+        <tr><th class="heat-sector">Sector</th>${head}</tr>
+        ${rows}
+      </table></div>
+      <div class="heat-legend">
+        ${Object.entries(HEAT_COLOR).map(([state, c]) =>
+          `<span><i style="background:color-mix(in srgb, ${c} 70%, transparent)"></i>${state}</span>`).join("")}
+        <span style="color:var(--faint)">Number is that week's 1-month return vs SPY, in percentage points.</span>
+      </div>`;
     }
 
     function renderSectors() {
@@ -7250,13 +7378,21 @@
       const h = state.health;
       const wsOk = h.ws.connected && (h.ws.staleSec == null || h.ws.staleSec < 120);
       const tripped = h.breakers.some((b) => b.tripped);
-      const healthy = wsOk && !tripped;
+      // A broken feed is the quietest failure in the app — prices simply stop
+      // being true while everything still looks normal. It gets the pill.
+      const broken = (h.canaries ?? []).filter((c) => c.status === "broken");
+      const healthy = wsOk && !tripped && !broken.length;
       $("#status-dot").classList.toggle("pulse-live", healthy && state.marketPhase === "open");
       $("#status-dot").classList.toggle("market-open", state.marketPhase === "open");
       $("#status-dot").classList.toggle("market-closed", state.marketPhase !== "open");
       $("#status-label").textContent = tripped ? "AI paused"
+        : broken.length ? (broken.length === 1 ? "feed issue" : `${broken.length} feed issues`)
         : wsOk ? (state.marketPhase === "open" ? "market open" : "market closed") + marketClockSuffix(state.marketClock)
           : "reconnecting…";
+      // The pill is small; the detail lives in its tooltip.
+      $("#mkt-pill").title = broken.length
+        ? `Data feeds degraded — numbers may be stale or wrong:\n${broken.map((c) => `• ${c.label}: ${c.detail}`).join("\n")}`
+        : "system status";
       $("#banner").style.display = tripped ? "block" : "none";
     }
 
@@ -7296,6 +7432,7 @@
       market = await (await fetch("/api/market")).json();
       renderMarket();
       renderSectors();
+      renderHeatmap();
       renderIdeas();
     }
 
