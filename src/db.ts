@@ -148,8 +148,8 @@ export async function deleteArtifact(userId: number, id: number): Promise<boolea
 // history feed. Without this they could only be dismissed from the DOM and came
 // straight back on reload — which is what "I can't delete it" meant.
 //
-// outcomes.idea_id and tracked_trades.idea_id reference this row with no ON
-// DELETE rule, so they're detached first, inside one transaction. The journal
+// trade_outcomes.idea_id and tracked_trades.idea_id reference this row with no
+// ON DELETE rule, so they're detached first, inside one transaction. The journal
 // entry and the tracked trade survive on their own; only the link goes.
 export async function deleteIdea(userId: number, id: number): Promise<boolean> {
   return await db.transaction(async () => {
@@ -158,7 +158,7 @@ export async function deleteIdea(userId: number, id: number): Promise<boolean> {
     // its journal links cleared on the way to a DELETE that matches nothing.
     const own = await db.query(`SELECT id FROM ideas WHERE id = ? AND user_id = ?`).get(id, userId);
     if (!own) return false;
-    await db.query(`UPDATE outcomes SET idea_id = NULL WHERE idea_id = ?`).run(id);
+    await db.query(`UPDATE trade_outcomes SET idea_id = NULL WHERE idea_id = ?`).run(id);
     await db.query(`UPDATE tracked_trades SET idea_id = NULL WHERE idea_id = ?`).run(id);
     await db.query(`DELETE FROM ideas WHERE id = ?`).run(id);
     return true;

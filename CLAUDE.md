@@ -20,6 +20,7 @@ bunx tsc --noEmit                    # typecheck (also `bun run typecheck`)
 bun run link:robinhood                # bun run scripts/link-robinhood.ts — one-time Robinhood device auth
 bun run test:email you@example.com    # send one real email to check RESEND_API_KEY/EMAIL_FROM
 bun run scripts/rh-account.ts         # inspect a linked Robinhood account
+bun run scripts/reset-accounts.ts     # dry run: what a full account wipe would delete (add --yes to do it)
 bun run scripts/migrate-to-supabase.ts  # one-time: migrate an old local SQLite db into Supabase Postgres
 ```
 
@@ -29,7 +30,7 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, `RESEND_API_KEY`, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/auth/emailChange.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/auth/emailChange.test.ts`, `src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
 
 ## Architecture
 
