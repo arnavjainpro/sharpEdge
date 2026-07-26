@@ -494,8 +494,29 @@ export async function pickCandidates(portfolio: Portfolio, count: number, filter
   return out;
 }
 
-export async function recentIdeas(userId: number, limit = 20): Promise<(IdeaReport & { ts: number; source: string })[]> {
-  // Intraday plans live in the same table but have a different shape — excluded here.
-  const rows = await db.query(`SELECT ts, source, report FROM ideas WHERE user_id = ? AND source != 'intraday' ORDER BY ts DESC LIMIT ?`).all(userId, limit) as any[];
-  return rows.map((r) => ({ ...(JSON.parse(r.report) as IdeaReport), ts: r.ts, source: r.source }));
+// Intraday plans live in the same table with a different report shape
+// (setup_quality, no `rating`), so callers that assume the IdeaReport shape keep
+// the default. History passes includeIntraday and renders per-source.
+//
+// The summary fields come from COLUMNS, not the report JSON: intraday plans have
+// no `rating` inside the blob, but the column holds the mapped value already
+// (intraday.ts writes setup_quality, no_trade -> reject). Spreading the JSON
+// alone rendered an "undefined" rating badge for every intraday row.
+export async function recentIdeas(
+  userId: number, limit = 20, opts: { includeIntraday?: boolean } = {}
+): Promise<(IdeaReport & { ts: number; source: string })[]> {
+  const rows = await db
+    .query(
+      `SELECT ts, source, ticker, direction, rating, report FROM ideas
+       WHERE user_id = ? ${opts.includeIntraday ? "" : "AND source != 'intraday'"}
+       ORDER BY ts DESC LIMIT ?`
+    )
+    .all(userId, limit) as any[];
+  return rows.flatMap((r) => {
+    // One poison row must not 500 the whole History tab (insights.ts guards the
+    // same parse); skip it and keep the rest of the feed.
+    let report: IdeaReport;
+    try { report = JSON.parse(r.report) as IdeaReport; } catch { return []; }
+    return [{ ...report, ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
+  });
 }

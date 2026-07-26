@@ -212,6 +212,33 @@ CREATE TABLE IF NOT EXISTS alerts (
   UNIQUE(user_id, ticker, kind, threshold)   -- double-click "create alert" = one row, not two
 );
 
+-- Non-idea AI artifacts that used to vanish on refresh (portfolio scores,
+-- backtests). One table with a `kind` discriminator mirrors the existing
+-- ideas.source pattern rather than a table per kind.
+--
+-- `score` is nullable on purpose: scorePortfolio() returns markdown, so the
+-- 0-100 is extracted from prose at write time and may legitimately be absent.
+-- `summary` is likewise not NOT NULL — never constrain on a value parsed out
+-- of model output.
+CREATE TABLE IF NOT EXISTS artifacts (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL REFERENCES users(id),
+  ts integer NOT NULL,
+  kind text NOT NULL,                -- portfolio_score | backtest
+  ticker text,                       -- null for portfolio_score
+  score integer,                     -- 0-100 for portfolio_score, null otherwise
+  summary text,                      -- one-line for the history feed
+  payload text NOT NULL              -- full JSON
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_user_ts ON artifacts(user_id, ts DESC);
+CREATE INDEX IF NOT EXISTS idx_artifacts_user_kind ON artifacts(user_id, kind, ts DESC);
+
+-- NOTE: db.ts applies this file on every boot, and every statement here is
+-- CREATE ... IF NOT EXISTS. That provisions NEW tables on an existing database
+-- but silently no-ops for new COLUMNS on existing tables. Adding a column later
+-- requires its own explicit line:
+--   ALTER TABLE <t> ADD COLUMN IF NOT EXISTS <col> <type>;
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);

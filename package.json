@@ -6,6 +6,7 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "link:robinhood": "bun run scripts/link-robinhood.ts",
+    "test": "bun test",
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {

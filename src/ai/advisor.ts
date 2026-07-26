@@ -242,3 +242,23 @@ Score honestly: 80+ means genuinely well-constructed, 50-79 solid with real issu
   );
   return response.content.find((b) => b.type === "text")?.text ?? "(no analysis)";
 }
+
+// The 0-100 lives only inside the model's markdown ("## Portfolio score: N/100"),
+// so pull it out once at write time for the history list and the trend sparkline.
+// Returns null when the model phrased it differently — callers must treat the
+// score as optional rather than constraining on it.
+export function extractPortfolioScore(markdown: string): number | null {
+  const m = markdown.match(/portfolio score:\s*(\d{1,3})/i);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
+
+// First non-empty line after the score heading — the model's one-sentence verdict.
+export function extractPortfolioVerdict(markdown: string): string | null {
+  const lines = markdown.split("\n").map((l) => l.trim());
+  const i = lines.findIndex((l) => /portfolio score:/i.test(l));
+  if (i < 0) return null;
+  const verdict = lines.slice(i + 1).find((l) => l && !l.startsWith("#"));
+  return verdict ? verdict.replace(/^[*_>\s-]+/, "").slice(0, 200) : null;
+}

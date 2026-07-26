@@ -2,7 +2,7 @@ import { db, aiLive, setAiLive } from "../db";
 import { config, marketPhase, nextMarketTransition } from "../config";
 import { cachedQuote, wsStatus, fetchCompanyNews } from "../ingest/finnhub";
 import { opusBreaker, haikuBreaker } from "../ai/breaker";
-import { askAdvisor, summarizeTickerNews, scorePortfolio, type ChatTurn } from "../ai/advisor";
+import { askAdvisor, summarizeTickerNews, scorePortfolio, extractPortfolioScore, extractPortfolioVerdict, type ChatTurn } from "../ai/advisor";
 import { validateIdea, pickCandidates, recentIdeas, type IdeaReport, type IdeaFilters } from "../ai/validator";
 import { universeMeta } from "../ingest/universe";
 import { isFuture } from "../ingest/futures";
@@ -19,7 +19,9 @@ import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
 import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } from "../db";
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
-import { getBrokerLink } from "../db";
+import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
+import { clearAuth } from "../broker/robinhood";
+import { getBrokerLink, insertArtifact, deleteArtifact, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
 import { allTickers } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
 import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, createSession, destroySession } from "../auth";
@@ -55,6 +57,8 @@ export function setBriefingHandler(fn: () => Promise<string>) {
 }
 let briefingInFlight = false;
 let generateInFlight = false;
+// Per-user, unlike generateInFlight: portfolio scoring is a per-account action.
+const scoreInFlight = new Set<number>();
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 export function startServer() {
@@ -299,7 +303,7 @@ export function startServer() {
 
       // Recent validated ideas (structured reports)
       if (url.pathname === "/api/ideas") {
-        return Response.json({ ideas: await recentIdeas(userId, 20) });
+        return Response.json({ ideas: await recentIdeas(userId, 20, { includeIntraday: true }) });
       }
 
       // Validate one idea — long, short, or auto (user-initiated, always allowed)
@@ -394,6 +398,22 @@ export function startServer() {
             if (years < 5) walkForwardError = `Walk-forward needs ~5y of history; ${ticker} has ${years.toFixed(1)}y. Showing the single-pass backtest only.`;
             else walkForwardResult = walkForward(spec, candles);
           }
+          // Persist the spec + headline metrics, not the full result blob: a
+          // backtest is deterministic from spec + candles and re-runs for free
+          // (parseStrategy is skipped when spec is supplied), so the payload
+          // only needs enough to re-run and to render the row if the re-run
+          // fails. walkForward is NOT part of spec, so store it separately or
+          // it silently vanishes on reopen.
+          const m: any = result?.metrics ?? {};
+          await insertArtifact({
+            userId, kind: "backtest", ticker,
+            summary: [
+              m.totalReturnPct != null ? `${m.totalReturnPct >= 0 ? "+" : ""}${Number(m.totalReturnPct).toFixed(1)}%` : null,
+              m.sharpe != null ? `${Number(m.sharpe).toFixed(2)} Sharpe` : null,
+              m.trades != null ? `${m.trades} trades` : null,
+            ].filter(Boolean).join(" · ") || null,
+            payload: JSON.stringify({ spec, metrics: m, walkForward: !!body.walkForward, years: Math.round(years * 10) / 10 }),
+          });
           return Response.json({ ok: true, spec, result, stress, walkForward: walkForwardResult, walkForwardError, years: Math.round(years * 10) / 10 });
         } catch (err) {
           console.error("[server] backtest failed:", err);
@@ -438,6 +458,40 @@ export function startServer() {
       }
       if (url.pathname === "/api/broker/import/clear" && req.method === "POST") {
         await clearImport(userId);
+        const snap = await refreshBroker(userId);
+        return Response.json({ ok: true, source: snap.source });
+      }
+
+      // Robinhood link, driven from Settings → Brokerage. Login runs in the
+      // background (device approval can take minutes) and the UI polls /status,
+      // POSTing /code when Robinhood asks for a verification code.
+      if (url.pathname === "/api/broker/link" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { username?: string; password?: string };
+        const username = String(body.username ?? "").trim();
+        const password = String(body.password ?? "");
+        if (!username || !password) return Response.json({ ok: false, error: "username and password required" }, { status: 400 });
+        startLink(userId, username, password);
+        return Response.json({ ok: true, ...linkState(userId) });
+      }
+      if (url.pathname === "/api/broker/link/status") {
+        const st = linkState(userId);
+        // A finished link is reported exactly once: pull the fresh positions,
+        // then drop the pending state. Leaving it set would re-refresh (a live
+        // Robinhood pull) and re-toast on every later visit to Settings.
+        if (st?.state === "linked") {
+          try { await refreshBroker(userId); } catch { /* still report linked; the next refresh retries */ }
+          clearLinkState(userId);
+        }
+        return Response.json({ ok: true, status: st, linked: (await getBrokerLink(userId))?.provider === "robinhood" });
+      }
+      if (url.pathname === "/api/broker/link/code" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { code?: string };
+        const accepted = submitLinkCode(userId, String(body.code ?? "").trim());
+        return Response.json({ ok: accepted, error: accepted ? undefined : "no code was being asked for" }, { status: accepted ? 200 : 409 });
+      }
+      if (url.pathname === "/api/broker/unlink" && req.method === "POST") {
+        await clearAuth(userId);
+        clearLinkState(userId);
         const snap = await refreshBroker(userId);
         return Response.json({ ok: true, source: snap.source });
       }
@@ -600,13 +654,81 @@ export function startServer() {
       }
 
       // Portfolio health check: deep-model pros/cons rundown with a 0-100 score.
+      // Guarded per-user like /api/ideas/generate: this is a slow deep-model call,
+      // so a double-click used to mean two Opus charges and two duplicate rows.
       if (url.pathname === "/api/portfolio/score" && req.method === "POST") {
+        if (scoreInFlight.has(userId)) return Response.json({ ok: false, error: "already scoring" }, { status: 429 });
+        scoreInFlight.add(userId);
         try {
-          return Response.json({ ok: true, analysis: await scorePortfolio(userId, currentPortfolio(userId)) });
+          const analysis = await scorePortfolio(userId, currentPortfolio(userId));
+          const score = extractPortfolioScore(analysis);
+          await insertArtifact({
+            userId, kind: "portfolio_score", score,
+            summary: extractPortfolioVerdict(analysis),
+            payload: JSON.stringify({ analysis }),
+          });
+          return Response.json({ ok: true, analysis, score });
         } catch (err) {
           console.error("[server] portfolio score failed:", err);
           return Response.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+        } finally {
+          scoreInFlight.delete(userId);
         }
+      }
+
+      // Portfolio score trend for the sparkline in the portfolio hero.
+      if (url.pathname === "/api/portfolio/score-history") {
+        return Response.json({ scores: await scoreHistory(userId, 30) });
+      }
+
+      // Merged history feed: ideas + intraday analyses + saved artifacts.
+      if (url.pathname === "/api/history") {
+        try {
+          // Clamp/allowlist everything: an unvalidated Number("abc") -> NaN
+          // reaches LIMIT $n and 500s the query.
+          const rawLimit = Number(url.searchParams.get("limit") ?? 30);
+          const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 100) : 30;
+          const ALLOWED = new Set(["idea", "intraday", ...ARTIFACT_KINDS]);
+          const kindsRaw = (url.searchParams.get("kind") ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+          const bad = kindsRaw.find((k) => !ALLOWED.has(k));
+          if (bad) return Response.json({ ok: false, error: `unknown kind "${bad}"` }, { status: 400 });
+          const kinds = kindsRaw.length ? kindsRaw : null;
+
+          // Opaque cursor "ts.src.id" — a row-wise key, not a bare timestamp,
+          // so same-second rows page correctly (generate writes several at once).
+          let cursor: HistoryCursor | null = null;
+          const before = url.searchParams.get("before");
+          if (before) {
+            const [ts, src, id] = before.split(".");
+            if (!Number.isFinite(Number(ts)) || (src !== "i" && src !== "a") || !Number.isFinite(Number(id))) {
+              return Response.json({ ok: false, error: "bad cursor" }, { status: 400 });
+            }
+            cursor = { ts: Number(ts), src, id: Number(id) };
+          }
+
+          const rows = await historyFeed(userId, limit, cursor, kinds);
+          const items = rows.map((r) => {
+            let payload: any = null;
+            try { payload = JSON.parse(r.payload); } catch {} // poison row -> render the summary, not a 500
+            return {
+              cursor: `${r.ts}.${r.src}.${r.id}`,
+              id: r.id, ts: r.ts, kind: r.kind, ticker: r.ticker,
+              direction: r.direction, rating: r.rating, score: r.score, summary: r.summary,
+              deletable: r.src === "a",
+              payload,
+            };
+          });
+          return Response.json({ ok: true, items, more: items.length === limit });
+        } catch (err) {
+          console.error("[server] history failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      if (url.pathname.startsWith("/api/history/") && req.method === "DELETE") {
+        const id = Number(url.pathname.split("/").pop());
+        if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
+        return Response.json({ ok: await deleteArtifact(userId, id) });
       }
 
       // Conversational advisor
@@ -694,14 +816,20 @@ export function startServer() {
         if (!meta && !row && !quote?.c && !spark) {
           return Response.json({ ok: false, error: `No data found for "${ticker}" — check the symbol.` }, { status: 404 });
         }
+        // Intraday plans included: History links here, and excluding them meant
+        // the analysis you clicked through to wasn't on the page.
         const ideaRows = await db
-          .query(`SELECT ts, source, report FROM ideas WHERE user_id = ? AND ticker = ? AND source != 'intraday' ORDER BY ts DESC LIMIT 5`)
+          .query(`SELECT ts, source, ticker, direction, rating, report FROM ideas WHERE user_id = ? AND ticker = ? ORDER BY ts DESC LIMIT 5`)
           .all(userId, ticker) as any[];
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;
         return Response.json({
           ok: true, ticker, meta, quote, spark, ohlc, news, held,
           screener: row ? { ...row, indicators: JSON.parse(row.indicators) } : null,
-          ideas: ideaRows.map((r) => ({ ...(JSON.parse(r.report)), ts: r.ts, source: r.source })),
+          ideas: ideaRows.flatMap((r) => {
+            try {
+              return [{ ...JSON.parse(r.report), ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
+            } catch { return []; }
+          }),
         });
       }
 

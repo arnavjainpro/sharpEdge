@@ -1,8 +1,9 @@
 // Robinhood read-only brokerage adapter (UNOFFICIAL private API — Robinhood
 // publishes no public API). Pulls equities and options positions plus
 // account equity into the common BrokerSnapshot. READ-ONLY: it never places or
-// cancels orders. Tokens are obtained once via `bun run link:robinhood` and
-// cached in the settings table; the running server only refreshes them.
+// cancels orders. Tokens are obtained once via linkRobinhood() below (Settings →
+// Brokerage in the dashboard, or `bun run link:robinhood`) and cached in the
+// settings table; the running server only refreshes them.
 //
 // ponytail: the auth/challenge flow follows robin_stocks and cannot be tested
 //   here (no live credentials). The data-fetch paths are deterministic against
@@ -104,7 +105,7 @@ async function pfGet(url: string): Promise<any> {
 // `ask` prompts for an SMS/email code when required; app-approval ("prompt")
 // polls until the user taps Approve in the Robinhood app. Throws on failure so
 // the linker can report it and fall back to manual import.
-export async function validateSheriff(deviceToken: string, workflowId: string, ask: (q: string) => string): Promise<void> {
+export async function validateSheriff(deviceToken: string, workflowId: string, ask: (q: string) => string | Promise<string>): Promise<void> {
   const machine = await pfPost(`${API}/pathfinder/user_machine/`, { device_id: deviceToken, flow: "suv", input: { workflow_id: workflowId } }, true);
   const machineId = machine?.id;
   if (!machineId) throw new Error(`no machine id from pathfinder (${JSON.stringify(machine).slice(0, 200)})`);
@@ -131,7 +132,7 @@ export async function validateSheriff(deviceToken: string, workflowId: string, a
     } else if (status === "validated") {
       satisfied = true;
     } else if ((type === "sms" || type === "email") && status === "issued") {
-      const code = ask(`Enter the ${type} verification code Robinhood sent: `);
+      const code = await ask(`Enter the ${type} verification code Robinhood sent`);
       const r = await pfPost(`${API}/challenge/${challengeId}/respond/`, { response: code }, false);
       if (r?.status === "validated") satisfied = true;
     } else {
@@ -150,6 +151,47 @@ export async function validateSheriff(deviceToken: string, workflowId: string, a
     if (resp?.verification_workflow?.workflow_status === "workflow_status_approved") return;
     await Bun.sleep(5_000);
   }
+}
+
+// Full login: password grant → optional MFA code → optional device approval →
+// tokens saved. Shared by the CLI linker and the dashboard's Settings panel;
+// they differ only in where `ask` gets the verification code from. Throws with a
+// user-facing message on failure so both can fall back to the manual import.
+export type Ask = (q: string) => string | Promise<string>;
+
+export async function linkRobinhood(userId: number, username: string, password: string, ask: Ask): Promise<void> {
+  const deviceToken = (await loadAuth(userId))?.device_token ?? newDeviceToken();
+  const base = {
+    client_id: CLIENT_ID,
+    grant_type: "password",
+    scope: "internal",
+    username,
+    password,
+    device_token: deviceToken,
+    expires_in: 86400,
+    try_passkeys: false,
+    token_request_path: "/login",
+    create_read_only_secondary_token: true,
+  };
+
+  let { status, json } = await requestToken(base);
+
+  // Legacy MFA code path (SMS/TOTP) — some accounts still use this.
+  if (json?.mfa_required) {
+    const code = await ask(`Enter the ${json.mfa_type ?? "MFA"} code`);
+    ({ status, json } = await requestToken({ ...base, mfa_code: code }));
+  }
+
+  // Modern device-approval workflow (Sheriff): complete the challenge, then retry.
+  if (json?.verification_workflow?.id) {
+    await validateSheriff(deviceToken, json.verification_workflow.id, ask);
+    ({ status, json } = await requestToken(base)); // token is issued once the device is approved
+  }
+
+  if (!json?.access_token) {
+    throw new Error(`login failed (status ${status}): ${JSON.stringify(json).slice(0, 200)}`);
+  }
+  await saveAuth(userId, toAuth(json, deviceToken));
 }
 
 export function toAuth(json: any, deviceToken: string): RhAuth {
@@ -268,10 +310,19 @@ async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
     const portfolios = await rhList(`${API}/portfolios/`, authHeader);
     const acc = (await rhList(`${API}/accounts/`, authHeader))[0] ?? {};
     const pf = portfolios[0] ?? {};
+    // `|| null` would turn a legitimate $0 (fully invested) into "unknown" and
+    // silently drop the row from the UI and the AI prompt — coerce explicitly.
+    const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+    // The top-level `buying_power` is the START-OF-DAY figure — it's literally
+    // equal to margin_balances.start_of_day_overnight_buying_power and goes
+    // stale the moment you trade, so it reads high all day. The live number is
+    // margin_balances.overnight_buying_power. Cash accounts return no
+    // margin_balances at all, hence the fallback.
+    const mb = acc.margin_balances ?? {};
     account = {
-      equity: Number(pf.extended_hours_equity ?? pf.equity) || null,
-      cash: Number(acc.portfolio_cash ?? acc.cash) || null,
-      buying_power: Number(acc.buying_power) || null,
+      equity: num(pf.extended_hours_equity ?? pf.equity),
+      cash: num(acc.portfolio_cash ?? acc.cash),
+      buying_power: num(mb.overnight_buying_power ?? acc.buying_power),
     };
   } catch {}
 
