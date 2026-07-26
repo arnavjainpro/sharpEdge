@@ -1159,38 +1159,7 @@
       color: var(--dim);
     }
 
-    /* Beginner ⇄ Pro. Not a cosmetic switch: Pro reveals the risk metrics
-       (beta, cost basis, concentration numbers) that Beginner glosses over. */
-    .mode-tabs {
-      margin-left: auto;
-      display: inline-flex;
-      gap: 2px;
-      padding: 3px;
-      background: var(--surface-2);
-      border-radius: var(--radius-sm);
-    }
-
-    .mode-tabs button {
-      border: none;
-      background: none;
-      color: var(--dim);
-      font: 600 12px var(--sans);
-      padding: 5px 12px;
-      border-radius: var(--radius-xs);
-      transition: background .12s ease, color .12s ease;
-    }
-
-    .mode-tabs button.active {
-      background: var(--surface);
-      color: var(--text);
-      box-shadow: var(--shadow-sm);
-    }
-
-    /* mode gating — one class per audience, driven by data-mode on <html> */
-    :root[data-mode="beginner"] .pro-only { display: none !important; }
-    :root:not([data-mode="beginner"]) .beg-only { display: none !important; }
-
-    /* a jargon term the beginner can hover for a plain-English gloss */
+    /* a jargon term you can hover for a plain-English gloss */
     .term {
       border-bottom: 1px dotted var(--faint);
       cursor: help;
@@ -3648,10 +3617,6 @@
         <section class="dash-greet" data-pane="portfolio">
           <h1 id="greet-line">Welcome back</h1>
           <span class="sub" id="greet-sub"></span>
-          <div class="mode-tabs" id="mode-tabs" role="group" aria-label="Detail level">
-            <button data-mode-opt="beginner" title="Plain-English labels, the essentials only">Beginner</button>
-            <button data-mode-opt="pro" title="Every risk metric, denser layout">Pro</button>
-          </div>
         </section>
 
         <section id="portfolio" data-pane="portfolio">
@@ -4324,16 +4289,6 @@
     /* ── ⌘K modal: Enter jumps from the quick-preview to the full stock page ── */
     /* keydown/selection handlers for search live with the search logic below */
 
-    /* ── detail level: Beginner ⇄ Pro. Stamped on <html> so pure-CSS gating
-       (.pro-only / .beg-only) applies before any render runs — switching modes
-       never needs a re-fetch or a re-render. ── */
-    function applyMode(m) {
-      document.documentElement.setAttribute("data-mode", m === "pro" ? "pro" : "beginner");
-      document.querySelectorAll("#mode-tabs [data-mode-opt]").forEach((b) =>
-        b.classList.toggle("active", b.dataset.modeOpt === (m === "pro" ? "pro" : "beginner")));
-    }
-    applyMode(localStorage.getItem("detailMode") || "beginner");
-
     /* ── theme: prefers-color-scheme is the free baseline; a stored choice overrides.
        Theme control lives only in Settings → Appearance (no header/sidebar toggle, by design).
        The brand token is fixed in CSS — there is no runtime accent override. ── */
@@ -4933,7 +4888,11 @@
         tile("Today", `${signed(dayPct)}%`, { text: `${day >= 0 ? "+" : "−"}${money(Math.abs(day))}`, cls: day >= 0 ? "up" : "down" }),
         tile("Market value", money(value), { text: "what it's worth now" }),
         tile("Positions", String(positions), { text: positions === 1 ? "holding" : "holdings" }),
-        ...(cash != null ? [tile("Cash", money(cash), { text: "available to invest" }, "", "Buying power — what's actually spendable, not settled cash and not equity (equity would double-count the positions).")] : []),
+        // portfolio.yaml carries no cash figure — say so rather than leaving a
+        // hole in the two-column grid.
+        cash != null
+          ? tile("Cash", money(cash), { text: "available to invest" }, "", "Buying power — what's actually spendable, not settled cash and not equity (equity would double-count the positions).")
+          : tile("Cash", "—", { text: "link a broker to track" }),
       ].join("");
     }
 
@@ -4954,12 +4913,6 @@
     }
 
     // Dashboard controls: mode, chart range, greeting. Wired once at boot.
-    $("#mode-tabs").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-mode-opt]");
-      if (!b) return;
-      localStorage.setItem("detailMode", b.dataset.modeOpt);
-      applyMode(b.dataset.modeOpt);
-    });
     $("#range-tabs").addEventListener("click", (e) => {
       const b = e.target.closest("[data-range]");
       if (!b || b.disabled) return;
@@ -5113,7 +5066,7 @@
         <div class="pos-px">${priceCell}</div>
         <div class="pos-dp ${q && q.dp >= 0 ? "up" : "down"}">${q ? signed(q.dp) + "% today" : "&nbsp;"}</div>
         <svg class="pos-spark" preserveAspectRatio="none"></svg>
-        <div class="pos-dp pro-only ${gain >= 0 ? "up" : "down"}" title="Unrealised gain or loss on this position">${gain >= 0 ? "+" : "−"}${money(Math.abs(gain))} total</div>
+        <div class="pos-dp ${gain >= 0 ? "up" : "down"}" title="Unrealised gain or loss on this position">${gain >= 0 ? "+" : "−"}${money(Math.abs(gain))} total</div>
         <div class="pos-foot">
           ${timeChip}
           <span class="chip ${chipTone} sm">${chipLabel}</span>
@@ -5122,14 +5075,28 @@
       sparkSvg(wrap.querySelector(".pos-spark"), screener[sym]?.indicators?.spark);
       return wrap;
     }
+    // Current market value of a position, for ranking. Broker-priced rows carry
+    // their own value; equities are quote-priced. Unpriced sorts last, not first.
+    function positionValue(h) {
+      if (h.market_value != null) return Math.abs(h.market_value);
+      const q = quotes[h.ticker];
+      return q ? Math.abs(h.shares * q.c) : -1;
+    }
+
+    const TOP_STOCKS = 3;
     function renderHoldings() {
       const stocks = portfolio.holdings.filter((h) => (h.asset_class ?? "equity") === "equity");
       const options = portfolio.holdings.filter((h) => h.asset_class === "option");
       const card = $("#holdings");
       card.innerHTML = "";
-      for (const h of stocks) card.appendChild(holdingCard(h));
+      // Dashboard shows the biggest few; the rest stay one click away on their
+      // own pages rather than turning this widget into a table again.
+      const top = [...stocks].sort((a, b) => positionValue(b) - positionValue(a)).slice(0, TOP_STOCKS);
+      for (const h of top) card.appendChild(holdingCard(h));
       if (!stocks.length) card.innerHTML = `<div class="empty">No stock positions.</div>`;
-      $("#holdings-count").textContent = stocks.length ? `${stocks.length} position${stocks.length === 1 ? "" : "s"}` : "";
+      $("#holdings-count").textContent = !stocks.length ? ""
+        : stocks.length > TOP_STOCKS ? `top ${TOP_STOCKS} of ${stocks.length}`
+          : `${stocks.length} position${stocks.length === 1 ? "" : "s"}`;
       $("#options-section").style.display = options.length ? "" : "none";
       const oCard = $("#holdings-options");
       oCard.innerHTML = "";
@@ -5702,13 +5669,13 @@
             <span class="alloc-dot" style="background:${x.color}"></span>
             <span class="alloc-name">${esc(x.name)}</span>
             <span class="alloc-pct">${x.pct.toFixed(0)}%</span>
-            <span class="alloc-val pro-only">${money0(x.value)}</span>
+            <span class="alloc-val">${money0(x.value)}</span>
           </div>`).join("");
 
         // Beta is the one number the donut can't show — it rides in the header.
         $("#alloc-beta").innerHTML = d.portfolioBeta == null
           ? `<span class="term" title="Beta needs scored holdings; none of yours have a beta yet.">beta unknown</span>`
-          : `<span class="term" title="Beta compares your portfolio's swings to the market's. 1.00 moves with the market; above 1 swings harder, below 1 swings less.">beta</span> <b style="color:var(--text)">${d.portfolioBeta.toFixed(2)}</b><span class="pro-only"> · covers ${d.betaCoveragePct.toFixed(0)}% of value${d.excludedNoBeta ? ` · ${d.excludedNoBeta} without a beta` : ""}</span>`;
+          : `<span class="term" title="Beta compares your portfolio's swings to the market's. 1.00 moves with the market; above 1 swings harder, below 1 swings less.">beta</span> <b style="color:var(--text)">${d.portfolioBeta.toFixed(2)}</b><span> · covers ${d.betaCoveragePct.toFixed(0)}% of value${d.excludedNoBeta ? ` · ${d.excludedNoBeta} without a beta` : ""}</span>`;
 
         const top = parts[0];
         const betaRead = d.portfolioBeta == null ? ""
