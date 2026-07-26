@@ -254,6 +254,7 @@ ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFA
 -- What IS per-user is the interpretation: triage weighs the event against your
 -- holdings, so the same event is "critical" to a holder and "info" to everyone
 -- else. That lives here, one row per (event, user).
+--
 -- ...with one exception. Most events are public (a price move, a filing, a
 -- headline), but a couple are inherently about ONE account: "you closed NVDA,
 -- journal it?" and "your calls expire tomorrow". Those set user_id and are shown
@@ -286,30 +287,6 @@ CREATE INDEX IF NOT EXISTS idx_briefings_user ON briefings(user_id, ts DESC);
 -- first boot this matches nothing.
 UPDATE signals SET user_id = 1 WHERE user_id IS NULL;
 UPDATE briefings SET user_id = 1 WHERE user_id IS NULL;
-
--- Signups awaiting email confirmation. Deliberately NOT a flag on `users`: a row
--- in users is a real, verified account, and everything downstream depends on
--- that. An unverified row there would join monitoredUserIds() and start costing
--- AI tokens immediately, and it would hold the UNIQUE email slot — letting
--- anyone squat an address they don't control. Nothing here is an account yet.
-CREATE TABLE IF NOT EXISTS pending_signups (
-  email text PRIMARY KEY,
-  password_hash text NOT NULL,       -- already bcrypt-hashed, never plaintext
-  code text NOT NULL,
-  expires_at integer NOT NULL,
-  attempts integer NOT NULL DEFAULT 0,
-  created_at integer NOT NULL
-);
-
--- An in-flight email change (SHARP-17). The new address lives here, NOT in
--- users.email, until a code mailed to it comes back — so an unverified or
--- mistyped address can never become the thing you sign in with. At most one
--- pending change per user, which is why these are columns and not a table.
--- attempts caps guessing of the 6-digit code; expires bounds the window.
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email text;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_code text;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_expires integer;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_attempts integer NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);

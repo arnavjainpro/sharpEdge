@@ -18,7 +18,6 @@ bun test src/ai/queue.test.ts        # run a single test file
 bun test -t "pattern"                # run tests whose name matches a pattern
 bunx tsc --noEmit                    # typecheck (also `bun run typecheck`)
 bun run link:robinhood                # bun run scripts/link-robinhood.ts — one-time Robinhood device auth
-bun run test:email you@example.com    # send one real email to check RESEND_API_KEY/EMAIL_FROM
 bun run scripts/rh-account.ts         # inspect a linked Robinhood account
 bun run scripts/reset-accounts.ts     # dry run: what a full account wipe would delete (add --yes to do it)
 bun run scripts/migrate-to-supabase.ts  # one-time: migrate an old local SQLite db into Supabase Postgres
@@ -28,9 +27,9 @@ There is no lint script and no bundler/framework — the backend is plain Bun (`
 
 Several modules carry an inline self-check instead of a `*.test.ts` file, run via `if (import.meta.main)` — e.g. `bun run src/config.ts` exercises ticker normalization and ET/DST market-hours math directly. Check for one of these before assuming a module is untested.
 
-Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, `RESEND_API_KEY`, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
+Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/auth/emailChange.test.ts`, `src/auth/signup.test.ts`, `src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
 
 ## Architecture
 
@@ -55,8 +54,8 @@ If you add a background feature, decide which half it belongs to first. Adding a
   - **`claudeQueue()` in `queue.ts` is a mandatory chokepoint** — every `client.messages.create()` call in this codebase is wrapped in it. It throttles to ~3 calls/sec and is the only place token usage gets recorded (`recordSpend` → `ai_spend` table). A new AI call site that bypasses it breaks both rate-limiting and spend tracking.
   - Model selection is centralized in `config.ts` (`modelDeep`/`modelFast`, overridable via `SHARPEDGE_MODEL_DEEP`/`SHARPEDGE_MODEL_FAST`), not hardcoded per call site.
 - **`src/broker/`** — position/equity source of truth, priority order **Robinhood link > JSON import > `config/portfolio.yaml`**. `robinhood.ts` talks to undocumented private endpoints (no official API — can break without notice); `index.ts`'s `currentPortfolio(userId)` is what every other layer reads, so it always reflects the freshest source regardless of which one is active.
-- **`src/auth/`** — email/password, server-side sessions stored in Postgres (no JWT). Gates the whole app; each user gets their own portfolio/broker link/journal/alerts. Signup verification (when `RESEND_API_KEY` is set) stages the account in `pending_signups` and only calls `createUser()` once the mailed code returns — **a row in `users` always means a real, verified account**, which is what lets `monitoredUserIds()` bill and monitor every row without checking a flag. With no mail key both the signup code and the Settings email change degrade to their unverified behaviour rather than blocking.
-- **`src/notify/`** — macOS native + Telegram for alerts; `email.ts` (Resend HTTP API, no dep) is separate and is **not** an alert channel — it exists solely to verify a new sign-in address. Alert notifications fire **only** for actionable buy/sell signals (`action: buy|sell|add|trim`), never for informational severity — don't wire a new notification path without that filter.
+- **`src/auth/`** — email/password, server-side sessions stored in Postgres (no JWT). Gates the whole app; each user gets their own portfolio/broker link/journal/alerts.
+- **`src/notify/`** — macOS native + Telegram. Notifications fire **only** for actionable buy/sell signals (`action: buy|sell|add|trim`), never for informational severity — don't wire a new notification path without that filter.
 - **`src/server/server.ts`** — one large `fetch()` handler matching on `url.pathname` (no router library, no middleware chain beyond `auth/middleware.ts`'s manual cookie/session check per route). Adding an endpoint means adding another `if (url.pathname === ...)` branch.
 
 ### Data layer — `src/db.ts` + `src/schema.sql`

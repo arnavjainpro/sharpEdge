@@ -37,15 +37,6 @@ A personal trading research and decision-support engine. It scans a **~1,500-sto
 
 **Telegram (required for alerts to reach you):** set `TELEGRAM_BOT_TOKEN` (bot via @BotFather) and `TELEGRAM_CHAT_ID` (from @userinfobot) in `.env`. Without it, price/score alerts still evaluate and fire correctly but have nowhere to land — the only other channel is a native macOS notification, which off macOS just fails and writes a `[notify:mac] failed:` line to the log on every delivery. Signals (buy/sell advice) use the same channel.
 
-**Email verification (optional):** set `RESEND_API_KEY` (free key at https://resend.com, 3k/month, no card) to turn on both:
-
-- **Signup confirmation** — a new account isn't created until a 6-digit code mailed to the address comes back. Until then nothing exists in `users`, so an unconfirmed address is never monitored, never billed, and never claims the address.
-- **Changing your sign-in address** in Settings — asks for your current password, then mails a code to the new address; the change lands only when that code returns, so a typo can't lock you out.
-
-Without the key both degrade rather than break: signup works with no confirmation step, and Settings shows the email as read-only. Email is not an alert channel — this is the only thing the app sends mail for.
-
-The default sender `onboarding@resend.dev` needs no DNS setup but **only delivers to the address you signed up to Resend with**. To reach any other address, add a domain in Resend and point `EMAIL_FROM` at it. Check delivery before relying on it: `bun run test:email you@example.com` prints the provider's actual complaint.
-
 Optional: Robinhood link (read-only, stores tokens locally). Do it in the dashboard under **Settings → Brokerage**: enter your Robinhood email and password, then approve the login in the Robinhood app or type the SMS/email code when it asks. The terminal equivalent is `bun run link:robinhood`, which additionally asks which sharpEdge account email to link to. Robinhood has no official public API; this uses the same private endpoints robin_stocks does (including the device-approval workflow) and can break without notice — the app degrades to import/YAML if so.
 
 ## Config files
