@@ -1702,6 +1702,78 @@
       margin: 12px 0 4px;
     }
 
+    /* Axis + hover overlay for the full-width charts. Every chart SVG is
+       preserveAspectRatio="none", which stretches a 100-unit viewBox to ~600x200 —
+       an SVG <text> would come out 6x wide and 2x tall. So the labels are HTML,
+       positioned in percent, which that same stretch maps 1:1 onto the data. */
+    .chart-plot {
+      position: relative;
+    }
+
+    .chart-plot>svg {
+      display: block;
+    }
+
+    .chart-y,
+    .chart-x,
+    .chart-tip {
+      font-family: var(--mono);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      pointer-events: none;
+    }
+
+    .chart-y {
+      position: absolute;
+      right: 2px;
+      transform: translateY(-50%);
+      padding: 0 3px;
+      border-radius: var(--radius-xs);
+      font-weight: 500;
+      color: var(--faint);
+      background: color-mix(in srgb, var(--surface) 72%, transparent);
+    }
+
+    .chart-x {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 3px;
+      color: var(--faint);
+    }
+
+    .chart-note {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--fs-data);
+      color: var(--faint);
+      pointer-events: none;
+    }
+
+    .chart-cross {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--faint);
+      opacity: .5;
+      pointer-events: none;
+    }
+
+    .chart-tip {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xs);
+      color: var(--text);
+      background: color-mix(in srgb, var(--surface) 88%, transparent);
+      white-space: nowrap;
+    }
+
     .advise-btn.ghost {
       background: none;
       color: var(--text);
@@ -4065,9 +4137,94 @@
     // market_snapshot benchmarks map (^ stripped). VIX stays — it's a regime signal.
     const INDEX_DISPLAY = [["DJI", "Dow", "DJI"], ["GSPC", "S&P 500", "SPX"], ["IXIC", "Nasdaq", "IXIC"], ["RUT", "Russell 2000", "RUT"], ["VIX", "VIX", "VIX"]];
 
+    // Axis ticks stay terse; the hover readout takes `long` for the fuller form.
+    // Intraday windows want a clock, multi-year windows want the year.
+    function chartDate(ts, span, long = false) {
+      const d = new Date(ts * 1000);
+      if (span < 5 * 86400) {
+        const t = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+        return long ? `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${t}` : t;
+      }
+      if (span > 400 * 86400 && !long) return d.toLocaleDateString([], { month: "short", year: "2-digit" });
+      const opts = { month: "short", day: "numeric" };
+      if (span > 400 * 86400) opts.year = "numeric";
+      return d.toLocaleDateString([], opts);
+    }
+    // Axis prices drop the cents once they'd just be noise, but sub-$10 names need them.
+    const chartPrice = (v) => "$" + (Math.abs(v) < 10 ? v.toFixed(2) : Math.round(v).toLocaleString());
+
+    // Wrap a chart SVG in the overlay scaffold, once. The frame outlives every
+    // re-render (timeframe switch, SSE portfolio push), so the pointer handlers are
+    // bound here and read plot._cfg at event time — re-binding per render would
+    // stack duplicate listeners.
+    function chartFrame(el) {
+      if (el.parentElement?.classList.contains("chart-plot")) return el.parentElement;
+      const wrap = document.createElement("div");
+      wrap.className = "chart-wrap";
+      const plot = document.createElement("div");
+      plot.className = "chart-plot";
+      // The layout margin moves to the wrapper so .chart-plot is exactly the plot
+      // box — otherwise every percent below is off by the margin.
+      const cs = getComputedStyle(el);
+      wrap.style.margin = `${cs.marginTop} ${cs.marginRight} ${cs.marginBottom} ${cs.marginLeft}`;
+      el.style.margin = "0";
+      el.replaceWith(wrap);
+      plot.append(el);
+      plot.insertAdjacentHTML("beforeend", `<div class="chart-cross" hidden></div><div class="chart-tip" hidden></div>`);
+      wrap.append(plot, Object.assign(document.createElement("div"), { className: "chart-x" }));
+
+      const cross = plot.querySelector(".chart-cross"), tip = plot.querySelector(".chart-tip");
+      const move = (e) => {
+        const cfg = plot._cfg;
+        const r = plot.getBoundingClientRect();
+        if (!cfg || !r.width) return;
+        const cx = (e.touches ? e.touches[0]?.clientX : e.clientX) ?? 0;
+        const hit = cfg.at(Math.min(1, Math.max(0, (cx - r.left) / r.width)));
+        cross.style.left = `${hit.x}%`;
+        tip.textContent = hit.label;
+        cross.hidden = tip.hidden = false;
+      };
+      const hide = () => { cross.hidden = tip.hidden = true; };
+      plot.addEventListener("mousemove", move);
+      plot.addEventListener("touchmove", move, { passive: true }); // passive: never block scroll
+      plot.addEventListener("mouseleave", hide);
+      plot.addEventListener("touchend", hide);
+      return plot;
+    }
+
+    // cfg: { min, max, dates: [left, mid, right] | null, at(frac) -> { x, label } }.
+    // A null cfg clears the overlay (and never builds a frame just to empty it).
+    function chartAxes(el, cfg) {
+      const wrapped = el.parentElement?.classList.contains("chart-plot");
+      if (!cfg && !wrapped) return;
+      const plot = wrapped ? el.parentElement : chartFrame(el);
+      plot._cfg = cfg;
+      plot.querySelectorAll(".chart-y, .chart-note").forEach((n) => n.remove());
+      plot.querySelector(".chart-cross").hidden = plot.querySelector(".chart-tip").hidden = true;
+      const xrow = plot.parentElement.querySelector(".chart-x");
+      if (!cfg) { xrow.textContent = ""; return; }
+      // sparkSvg/candleSvg both inset the drawing 4 units into a 100-unit box,
+      // so the high sits at 4% and the low at 96%.
+      for (const [v, top] of [[cfg.max, 4], [(cfg.min + cfg.max) / 2, 50], [cfg.min, 96]])
+        plot.insertAdjacentHTML("beforeend", `<b class="chart-y" style="top:${top}%">${esc(chartPrice(v))}</b>`);
+      xrow.innerHTML = (cfg.dates ?? []).map((d) => `<span>${esc(d)}</span>`).join("");
+    }
+
+    // No-data state. This used to be an SVG <text>, which the same non-uniform
+    // stretch smeared to ~6x width — it's an HTML overlay for the same reason the
+    // axis labels are. chartAxes clears both the stale axes and any earlier note.
+    function chartMessage(el, text) {
+      el.innerHTML = "";
+      chartAxes(el, null);
+      const plot = chartFrame(el);
+      plot.insertAdjacentHTML("beforeend", `<div class="chart-note">${esc(text)}</div>`);
+    }
+
     let sparkGradSeq = 0;
-    function sparkSvg(el, values, big = false) {
-      if (!values || values.length < 2) { el.innerHTML = ""; return; }
+    // opts: { axes: true, timestamps } opts in to the axis/hover overlay — the
+    // mini row sparklines and the search-panel preview are too small for it.
+    function sparkSvg(el, values, big = false, opts = null) {
+      if (!values || values.length < 2) { el.innerHTML = ""; chartAxes(el, null); return; }
       const w = 100, h = 100;
       const min = Math.min(...values), max = Math.max(...values);
       const span = max - min || 1;
@@ -4086,15 +4243,30 @@
         <polygon points="0,${h} ${pts} ${w},${h}" fill="url(#${gid})" stroke="none"/>`;
       }
       el.innerHTML = `${fill}<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${big ? 2 : 1.5}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
+      if (!opts?.axes) return chartAxes(el, null);
+      // Timestamps are optional — the portfolio curve is a synthetic series with no
+      // dates behind it, so it gets the price axis and hover but no date row.
+      const ts = opts.timestamps?.length === values.length ? opts.timestamps : null;
+      const tspan = ts ? ts[ts.length - 1] - ts[0] : 0;
+      const last = values.length - 1;
+      chartAxes(el, {
+        min, max,
+        dates: ts ? [0, Math.floor(last / 2), last].map((i) => chartDate(ts[i], tspan)) : null,
+        at: (f) => {
+          const i = Math.round(f * last);
+          return { x: (i / last) * 100, label: `${ts ? chartDate(ts[i], tspan, true) + " · " : ""}${money(values[i])}` };
+        },
+      });
     }
 
     // Hand-drawn daily candlesticks (no chart lib): one wick <line> + body <rect>
     // per bar, same palette as sparkSvg. Used when the chart-type setting is "candles".
     function candleSvg(el, ohlc, maxBars = 90) {
       const n0 = ohlc?.closes?.length ?? 0;
-      if (n0 < 2) { el.innerHTML = ""; return; }
+      if (n0 < 2) { el.innerHTML = ""; chartAxes(el, null); return; }
       const start = Math.max(0, n0 - maxBars);
       const opens = ohlc.opens.slice(start), highs = ohlc.highs.slice(start), lows = ohlc.lows.slice(start), closes = ohlc.closes.slice(start);
+      const times = ohlc.timestamps?.slice(start) ?? null;
       const n = closes.length;
       const w = n * 4, h = 100;
       const min = Math.min(...lows), max = Math.max(...highs);
@@ -4112,6 +4284,19 @@
       }
       el.setAttribute("viewBox", `0 0 ${w} ${h}`);
       el.innerHTML = svg;
+      const tspan = times ? times[times.length - 1] - times[0] : 0;
+      const f2 = (v) => v.toFixed(2);
+      chartAxes(el, {
+        min, max,
+        dates: times ? [0, Math.floor((n - 1) / 2), n - 1].map((i) => chartDate(times[i], tspan)) : null,
+        at: (frac) => {
+          const i = Math.min(n - 1, Math.floor(frac * n)); // frac === 1 would land one bar past the end
+          return {
+            x: ((i * 4 + 2) / w) * 100,
+            label: `${times ? chartDate(times[i], tspan, true) + " · " : ""}O ${f2(opens[i])}  H ${f2(highs[i])}  L ${f2(lows[i])}  C ${f2(closes[i])}`,
+          };
+        },
+      });
     }
 
     /* ── data stores ── */
@@ -4239,7 +4424,7 @@
         const series = Array.from({ length: len }, (_, i) =>
           sparks.reduce((sum, x) => sum + x.h.shares * x.s[x.s.length - len + i], 0)
         );
-        sparkSvg($("#portfolio-spark"), series, true);
+        sparkSvg($("#portfolio-spark"), series, true, { axes: true });
       }
     }
 
@@ -5496,13 +5681,13 @@
     /* ── stock detail page (#stock/TICKER) ── */
     // Render the stock chart honoring the chart-type setting. ohlc may be null
     // (candles fall back to a line); closes is the plain series for line mode.
-    function drawStockChart(ohlc, closes) {
+    function drawStockChart(ohlc, closes, timestamps) {
       const el = $("#stock-spark");
       if (!el) return;
       const chartType = localStorage.getItem("chartType") || "line";
       if (chartType === "candles" && ohlc?.closes?.length > 1) candleSvg(el, ohlc, ohlc.closes.length);
-      else if (closes?.length > 1) sparkSvg(el, closes, true);
-      else el.innerHTML = `<text x="4" y="16" style="fill:var(--faint);font-size:12px">No chart data</text>`;
+      else if (closes?.length > 1) sparkSvg(el, closes, true, { axes: true, timestamps });
+      else chartMessage(el, "No chart data");
     }
 
     async function switchTimeframe(ticker, tf, btns) {
@@ -5511,10 +5696,10 @@
       el.style.opacity = ".4";
       try {
         const res = await (await fetch(`/api/candles/${encodeURIComponent(ticker)}?tf=${tf}`)).json();
-        if (res.ok) drawStockChart(res.ohlc, res.ohlc.closes);
-        else el.innerHTML = `<text x="4" y="16" style="fill:var(--faint);font-size:12px">No data for ${esc(tf)}</text>`;
+        if (res.ok) drawStockChart(res.ohlc, res.ohlc.closes, res.ohlc.timestamps);
+        else chartMessage(el, `No data for ${tf}`);
       } catch {
-        el.innerHTML = `<text x="4" y="16" style="fill:var(--faint);font-size:12px">Could not load ${esc(tf)}</text>`;
+        chartMessage(el, `Could not load ${tf}`);
       } finally { el.style.opacity = ""; }
     }
 
@@ -5577,7 +5762,7 @@
     ${data.ideas?.length ? `<h2 style="margin-top:18px">Past analyses</h2><div id="stock-past"></div>` : ""}`;
       // Initial chart uses the ~6mo of data already in the bundle; the tf-bar
       // re-fetches other windows on demand from /api/candles.
-      drawStockChart(data.ohlc, data.spark?.closes);
+      drawStockChart(data.ohlc, data.spark?.closes, data.spark?.timestamps);
       const tfBtns = [...page.querySelectorAll("#tf-bar button")];
       tfBtns.forEach((b) => b.addEventListener("click", () => switchTimeframe(ticker, b.dataset.tf, tfBtns)));
       // Refresh re-runs the whole page fetch (quote + chart + news); the loading
