@@ -228,13 +228,15 @@ Grade this portfolio like a conservative risk manager. Respond in markdown, exac
 ## Portfolio score: N/100
 One-sentence verdict.
 
-**Pros** — 3-5 bullets (what's working: diversification, alignment with regime/rotation, quality of setups held, cash buffer...)
+**Pros** — up to 3 bullets (what's working: diversification, alignment with regime/rotation, quality of setups held, cash buffer...)
 
-**Cons** — 3-5 bullets (concentration, correlated bets, positions fighting the market regime, weak-scoring holdings, missing hedges, oversized options exposure...)
+**Cons** — up to 3 bullets (concentration, correlated bets, positions fighting the market regime, weak-scoring holdings, missing hedges, oversized options exposure...)
 
 **Biggest risk** — one bullet, the single thing most likely to hurt.
 
 **Suggested next steps** — 2-3 concrete, optional actions.
+
+Be terse — this is read between trades, not studied. Every bullet is ONE line: the point plus the number behind it, no preamble and no restating the position list. Say only what's worth acting on; three sharp bullets beat five padded ones, and fewer is fine when there's less to say.
 
 Score honestly: 80+ means genuinely well-constructed, 50-79 solid with real issues, below 50 needs restructuring. Ground every claim in the data above; if data is missing (no equity figure, unquoted options), say so instead of guessing.`,
       }],
