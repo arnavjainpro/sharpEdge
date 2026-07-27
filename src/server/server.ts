@@ -18,6 +18,8 @@ import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, upd
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
 import { createDrill, gradeDrill, practiceStats, type Plan as PracticePlan } from "../engine/practice";
+import { lessonViews, markComplete } from "../engine/learn";
+import { LEVELS, CRITERION_LESSON } from "../content/lessons";
 import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } from "../db";
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
 import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
@@ -279,6 +281,28 @@ export function startServer() {
       if (url.pathname === "/api/calibration") {
         try {
           return Response.json({ ok: true, ...(await calibration(userId)) });
+        } catch (err) {
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      // ── Learn: 12 lessons, each wired to a number the app already computes
+      // or a criterion the Practice drill grades. Deterministic, no AI.
+      if (url.pathname === "/api/lessons") {
+        try {
+          return Response.json({ ok: true, levels: LEVELS, criterionLesson: CRITERION_LESSON, lessons: await lessonViews(userId) });
+        } catch (err) {
+          console.error("[learn] load failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      if (url.pathname === "/api/lessons/complete" && req.method === "POST") {
+        try {
+          const body = (await req.json()) as { id?: string; done?: boolean };
+          const id = String(body.id ?? "");
+          if (!id) return Response.json({ ok: false, error: "missing lesson id" }, { status: 400 });
+          return Response.json({ ok: true, done: await markComplete(userId, id, body.done !== false) });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
         }

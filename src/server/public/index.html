@@ -1404,6 +1404,202 @@
       color: var(--text);
     }
 
+    /* ── learn ── */
+    .lv-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: var(--sp-5) 0 var(--sp-3);
+    }
+
+    .lv-head h3 {
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+    }
+
+    .lv-head .prog {
+      margin-left: auto;
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .lesson-row {
+      width: 100%;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: var(--surface);
+      border: none;
+      border-bottom: 1px solid var(--line-soft);
+      cursor: pointer;
+      transition: background .12s ease;
+    }
+
+    .lesson-row:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0 }
+    .lesson-row:last-child { border-bottom: none; border-radius: 0 0 var(--radius-lg) var(--radius-lg) }
+    .lesson-row:only-child { border-radius: var(--radius-lg) }
+
+    .lesson-row:hover {
+      background: var(--surface-2);
+    }
+
+    /* Filled when complete, hollow when not — the row's whole progress story. */
+    .lesson-tick {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 1.5px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--on-brand);
+    }
+
+    .lesson-tick.done {
+      background: var(--brand);
+      border-color: var(--brand);
+    }
+
+    .lesson-row .t {
+      font-weight: 600;
+      font-size: var(--fs-body);
+    }
+
+    .lesson-row .s {
+      font-size: var(--fs-meta);
+      color: var(--dim);
+      margin-top: 2px;
+    }
+
+    .lesson-row .m {
+      margin-left: auto;
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .reader {
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow);
+      padding: var(--sp-7);
+      max-width: 720px;
+    }
+
+    .reader .md {
+      font-size: 15.5px;
+      line-height: 1.7;
+    }
+
+    .reader .md h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: var(--sp-5) 0 var(--sp-2);
+      letter-spacing: -.01em;
+    }
+
+    .reader .md p { margin-bottom: var(--sp-4) }
+    .reader .md ul { margin: 0 0 var(--sp-4) 20px }
+    .reader .md li { margin-bottom: 6px }
+
+    .reader .md pre {
+      background: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      overflow-x: auto;
+      font: 500 13px var(--mono);
+      margin-bottom: var(--sp-4);
+    }
+
+    /* The reader's own numbers, visually separated from the general teaching so
+       it is always obvious which part is about them. */
+    .live-note {
+      background: var(--brand-soft);
+      border-left: 3px solid var(--brand);
+      border-radius: var(--radius-sm);
+      padding: 14px 16px;
+      font-size: var(--fs-body);
+      line-height: var(--lh-body);
+      margin: var(--sp-5) 0;
+    }
+
+    .live-note .k {
+      display: block;
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--brand);
+      margin-bottom: 5px;
+    }
+
+    .check {
+      border-top: 1px solid var(--line-soft);
+      margin-top: var(--sp-6);
+      padding-top: var(--sp-5);
+    }
+
+    .check .q {
+      font-weight: 600;
+      font-size: var(--fs-body);
+      margin-bottom: var(--sp-4);
+    }
+
+    .check-opt {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      margin-bottom: 8px;
+      background: var(--surface-2);
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font: 400 var(--fs-body) var(--sans);
+      color: var(--text);
+      transition: border-color .12s ease, background .12s ease;
+    }
+
+    .check-opt:hover:not(:disabled) { border-color: var(--brand) }
+    .check-opt.right { border-color: var(--green); background: var(--green-soft) }
+    .check-opt.wrong { border-color: var(--red); background: var(--red-soft) }
+
+    .check-why {
+      font-size: var(--fs-meta);
+      color: var(--dim);
+      line-height: var(--lh-body);
+      margin: 6px 0 12px 14px;
+    }
+
+    .reader-foot {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      border-top: 1px solid var(--line-soft);
+      margin-top: var(--sp-6);
+      padding-top: var(--sp-5);
+    }
+
+    /* practice -> lesson nudge on a zero-scored criterion */
+    .crit-lesson {
+      background: none;
+      border: none;
+      padding: 0;
+      margin-top: 4px;
+      font: 600 var(--fs-meta) var(--sans);
+      color: var(--brand);
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
     /* ── practice drill ── */
     /* Marks where the chart stopped when the plan was committed. Everything to
        the right of it is the part the user could not see. */
@@ -3739,6 +3935,7 @@
         <button data-tab="analyze"><span class="ndot"></span><span class="nlabel">Analyze</span><span
             class="badge"></span></button>
         <button data-tab="backtest"><span class="ndot"></span><span class="nlabel">Backtest</span></button>
+        <button data-tab="learn"><span class="ndot"></span><span class="nlabel">Learn</span></button>
         <button data-tab="practice"><span class="ndot"></span><span class="nlabel">Practice</span></button>
         <button data-tab="chat"><span class="ndot"></span><span class="nlabel">Chat</span></button>
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
@@ -4127,6 +4324,12 @@
             model-priced (Black-Scholes), not real historical option quotes.</p>
         </section>
 
+        <section data-pane="learn">
+          <h2>Learn</h2>
+          <div id="learn-index"></div>
+          <div id="learn-reader" style="display:none"></div>
+        </section>
+
         <section data-pane="practice">
           <h2>Practice</h2>
           <div class="widget" id="practice-card">
@@ -4363,6 +4566,7 @@
       "ideas": '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
       "analyze": '<circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>',
       "backtest": '<path d="M10 2v6.3L4.7 18a2 2 0 0 0 1.8 3h11a2 2 0 0 0 1.8-3L14 8.3V2"/><line x1="8" y1="2" x2="16" y2="2"/><line x1="7" y1="15" x2="17" y2="15"/>',
+      "learn": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
       "practice": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
       "chat": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
       "activity": '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
@@ -4429,15 +4633,16 @@
        Flat tabs use #name; the stock detail page is a synthetic pane at
        #stock/TICKER (reached via search, not a tab). Stock navigations use
        pushState so the browser back button walks out of them naturally. */
-    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "practice", "chat", "activity", "history", "settings"];
+    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "chat", "activity", "history", "settings"];
     const TAB_TITLES = {
       portfolio: "Portfolio", market: "Market", ideas: "Trade Ideas", analyze: "Analyzer",
-      backtest: "Backtest", practice: "Practice", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
+      backtest: "Backtest", learn: "Learn", practice: "Practice", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
     };
     const TAB_SUBS = {
       portfolio: "Live positions & advice", market: "Regime, indices & sector rotation",
       ideas: "AI-validated long & short setups", analyze: "Chart + live data → a plan",
       backtest: "Plain-English strategy → out-of-sample results",
+      learn: "Twelve lessons, wired to your own numbers",
       practice: "Blind chart drills — graded on process, not P&L",
       chat: "Portfolio-aware financial advisor",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
@@ -4469,7 +4674,11 @@
       if (name === "settings") { loadProfile(); loadLinkStatus(); syncAppearanceTabs(); }
       if (name === "history") { loadJournal(); loadPastIdeas(); loadCalibration(); loadScoreboard(); }
       if (name === "analyze") loadRiskPrefs();
-      if (name === "practice") loadPracticeStats();
+      if (name === "learn") loadLessons();
+      // Practice needs the lesson list too: a zero-scored criterion links to the
+      // lesson explaining it, and that link is silently absent if Learn was
+      // never opened first.
+      if (name === "practice") { loadPracticeStats(); if (!lessons.length) loadLessons(); }
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
     }
     function bumpBadge(name) {
@@ -5320,6 +5529,135 @@
       renderHoldings();
     });
 
+    /* ── learn ────────────────────────────────────────────────────────────
+       Twelve lessons. Each one is served with its live callout already resolved
+       against this reader's portfolio, so nothing here computes anything — it
+       renders what the server sent and tracks which ones are done. */
+    let lessons = [];
+    let lessonLevels = [];
+    let criterionLesson = {};
+
+    async function loadLessons() {
+      try {
+        const d = await (await fetch("/api/lessons")).json();
+        if (!d.ok) return;
+        lessons = d.lessons; lessonLevels = d.levels; criterionLesson = d.criterionLesson || {};
+        renderLessonIndex();
+      } catch { /* pane just stays empty */ }
+    }
+
+    function renderLessonIndex() {
+      if (!$("#learn-index")) return;
+      $("#learn-reader").style.display = "none";
+      $("#learn-index").style.display = "";
+      const done = lessons.filter((l) => l.done).length;
+      $("#learn-index").innerHTML = `
+        <div class="widget-note" style="border:none;margin:0 0 var(--sp-4);padding:0">
+          ${done === lessons.length ? "All twelve done. The drills are where it sticks." :
+            `${done} of ${lessons.length} complete. Every lesson explains a number sharpEdge already computes for you, or a criterion the drill scores you on.`}
+        </div>
+        ${lessonLevels.map((lv) => {
+          const rows = lessons.filter((l) => l.level === lv);
+          const d = rows.filter((r) => r.done).length;
+          return `
+            <div class="lv-head"><h3>${esc(lv)}</h3><span class="prog">${d}/${rows.length}</span></div>
+            <div class="widget" style="padding:0;overflow:hidden">
+              ${rows.map((l) => `
+                <button class="lesson-row" data-lesson="${esc(l.id)}">
+                  <span class="lesson-tick ${l.done ? "done" : ""}">${l.done ? icon("check", 12) : ""}</span>
+                  <span style="min-width:0"><span class="t">${esc(l.title)}</span><div class="s">${esc(l.summary)}</div></span>
+                  <span class="m">${l.minutes} min</span>
+                </button>`).join("")}
+            </div>`;
+        }).join("")}`;
+    }
+
+    function openLesson(id) {
+      const i = lessons.findIndex((l) => l.id === id);
+      if (i < 0) return;
+      const l = lessons[i];
+      const next = lessons[i + 1];
+      $("#learn-index").style.display = "none";
+      const r = $("#learn-reader");
+      r.style.display = "";
+      r.innerHTML = `
+        <button class="advise-btn ghost" id="lesson-back" style="margin:0 0 var(--sp-4)">← All lessons</button>
+        <div class="reader">
+          <div class="klabel" style="margin:0">${esc(l.level)} · ${l.minutes} min</div>
+          <h2 style="font-size:24px;font-weight:600;letter-spacing:-.02em;text-transform:none;color:var(--text);margin:6px 0 var(--sp-5)">${esc(l.title)}</h2>
+          <div class="md" id="lesson-body"></div>
+          ${l.liveNote ? `<div class="live-note"><span class="k">In your account</span><span id="lesson-live"></span></div>` : ""}
+          ${l.check ? `<div class="check" id="lesson-check">
+            <div class="q">${esc(l.check.q)}</div>
+            ${l.check.options.map((o, n) => `<button class="check-opt" data-opt="${n}">${esc(o.text)}</button>`).join("")}
+          </div>` : ""}
+          <div class="reader-foot">
+            <button class="advise-btn" id="lesson-done" style="margin:0">${l.done ? "Completed ✓" : "Mark complete"}</button>
+            ${l.criterion ? `<button class="advise-btn ghost" id="lesson-drill" style="margin:0">Practice this</button>` : ""}
+            ${next ? `<button class="advise-btn ghost" id="lesson-next" style="margin:0">Next: ${esc(next.title)}</button>` : ""}
+          </div>
+        </div>`;
+
+      renderMd($("#lesson-body"), l.body);
+      if (l.liveNote) renderMd($("#lesson-live"), l.liveNote);
+
+      $("#lesson-back").addEventListener("click", renderLessonIndex);
+      if (next) $("#lesson-next").addEventListener("click", () => { openLesson(next.id); window.scrollTo(0, 0); });
+      if (l.criterion) $("#lesson-drill").addEventListener("click", () => {
+        showPane("practice");
+        if (!drill) $("#drill-new").click();
+      });
+
+      $("#lesson-done").addEventListener("click", async () => {
+        const now = !l.done;
+        l.done = now;
+        $("#lesson-done").textContent = now ? "Completed ✓" : "Mark complete";
+        try {
+          await fetch("/api/lessons/complete", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: l.id, done: now }),
+          });
+        } catch { /* the local state already moved; a refresh re-syncs */ }
+      });
+
+      // Knowledge check: reveal every explanation at once, not just the chosen
+      // one. Knowing why the plausible wrong answer is wrong is the lesson.
+      if (l.check) $("#lesson-check").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-opt]");
+        if (!b || b.disabled) return;
+        const picked = Number(b.dataset.opt);
+        document.querySelectorAll("#lesson-check .check-opt").forEach((el, n) => {
+          const o = l.check.options[n];
+          el.disabled = true;
+          if (o.correct) el.classList.add("right");
+          else if (n === picked) el.classList.add("wrong");
+          el.insertAdjacentHTML("afterend", `<div class="check-why">${esc(o.why)}</div>`);
+        });
+        if (l.check.options[picked]?.correct && !l.done) $("#lesson-done").click();
+      });
+    }
+
+    $("#learn-index").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-lesson]");
+      if (b) { openLesson(b.dataset.lesson); window.scrollTo(0, 0); }
+    });
+
+    // Drill -> lesson: a criterion you scored zero on links to the lesson that
+    // explains it. This is the whole point of teaching next to the simulator.
+    function lessonLinkFor(criterion) {
+      const id = criterionLesson[criterion];
+      if (!id) return "";
+      const l = lessons.find((x) => x.id === id);
+      return l ? `<button class="crit-lesson" data-goto-lesson="${esc(id)}">Learn: ${esc(l.title)}</button>` : "";
+    }
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-goto-lesson]");
+      if (!b) return;
+      showPane("learn");
+      openLesson(b.dataset.gotoLesson);
+      window.scrollTo(0, 0);
+    });
+
     /* ── practice drills ──────────────────────────────────────────────────
        A real past chart with the future hidden. The server holds the ticker and
        the as-of bar, so nothing here can look ahead — this module only ever
@@ -5432,6 +5770,7 @@
           <div class="crit-head"><span>${esc(d.criterion)}</span><span class="pts">${d.got}/${d.max}</span></div>
           <div class="crit-track"><div class="crit-fill ${d.got ? "" : "zero"}" style="width:${(d.got / d.max) * 100}%"></div></div>
           <div class="crit-note">${esc(d.note)}</div>
+          ${d.got === 0 ? lessonLinkFor(d.criterion) : ""}
         </div>`).join("");
 
       $("#drill-meta").textContent = `${g.ticker} · ${new Date(g.asOfTs * 1000).toLocaleDateString()}`;
