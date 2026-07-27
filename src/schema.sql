@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS artifacts (
   id serial PRIMARY KEY,
   user_id integer NOT NULL REFERENCES users(id),
   ts integer NOT NULL,
-  kind text NOT NULL,                -- portfolio_score | backtest
+  kind text NOT NULL,                -- portfolio_score | backtest | practice
   ticker text,                       -- null for portfolio_score
   score integer,                     -- 0-100 for portfolio_score, null otherwise
   summary text,                      -- one-line for the history feed
@@ -232,6 +232,30 @@ CREATE TABLE IF NOT EXISTS artifacts (
 );
 CREATE INDEX IF NOT EXISTS idx_artifacts_user_ts ON artifacts(user_id, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_artifacts_user_kind ON artifacts(user_id, kind, ts DESC);
+
+-- Practice drills: a past chart with the future hidden, the user's committed
+-- plan, and the grade. `ticker` and `as_of_ts` live here rather than in the
+-- client so the answer can't be read out of the network tab or replayed with a
+-- different as-of point.
+CREATE TABLE IF NOT EXISTS practice_attempts (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL REFERENCES users(id),
+  ts integer NOT NULL,               -- drill created
+  ticker text NOT NULL,              -- withheld from the client until graded
+  as_of_ts integer NOT NULL,         -- last bar the user was allowed to see
+  horizon integer NOT NULL,          -- bars revealed on grade
+  status text NOT NULL,              -- open | graded
+  direction text,                    -- long | short | no_trade
+  entry double precision,
+  stop double precision,
+  target double precision,
+  outcome text,                      -- win | loss | open | pass_correct | pass_missed
+  r_multiple double precision,       -- planned R; null for an unresolved or passed drill
+  process_score integer,             -- 0-100, computed from the plan alone
+  process_detail text,               -- JSON: per-criterion breakdown
+  graded_at integer
+);
+CREATE INDEX IF NOT EXISTS idx_practice_user_ts ON practice_attempts(user_id, ts DESC);
 
 -- NOTE: db.ts applies this file on every boot, and every statement here is
 -- CREATE ... IF NOT EXISTS. That provisions NEW tables on an existing database

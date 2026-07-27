@@ -116,7 +116,7 @@ export async function clearBrokerLink(userId: number) {
 }
 
 // ── artifacts: non-idea AI output that survives a refresh ────────────────────
-export const ARTIFACT_KINDS = ["portfolio_score", "backtest"] as const;
+export const ARTIFACT_KINDS = ["portfolio_score", "backtest", "practice"] as const;
 export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 export interface ArtifactRow {

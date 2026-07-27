@@ -17,6 +17,7 @@ import { getMarketSnapshot } from "../engine/market";
 import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist } from "../broker";
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
+import { createDrill, gradeDrill, practiceStats, type Plan as PracticePlan } from "../engine/practice";
 import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } from "../db";
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
 import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
@@ -278,6 +279,64 @@ export function startServer() {
       if (url.pathname === "/api/calibration") {
         try {
           return Response.json({ ok: true, ...(await calibration(userId)) });
+        } catch (err) {
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      // ── Practice: blind replay drills. Deterministic ($0, no AI) — the grade
+      // is arithmetic over real bars, so it is instant and reproducible.
+      //
+      // The anti-cheat lives here, not in the client: /new returns bars only up
+      // to the as-of point, with no ticker and no timestamps. The ticker and the
+      // future are first revealed by /submit, after the plan is committed.
+      if (url.pathname === "/api/practice/new" && req.method === "POST") {
+        try {
+          const drill = await createDrill(userId);
+          if ("error" in drill) return Response.json({ ok: false, error: drill.error }, { status: 503 });
+          return Response.json({ ok: true, ...drill });
+        } catch (err) {
+          console.error("[practice] new failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      if (url.pathname === "/api/practice/submit" && req.method === "POST") {
+        try {
+          const body = (await req.json()) as { id?: number; direction?: string; entry?: number; stop?: number; target?: number };
+          const id = Number(body.id);
+          if (!Number.isFinite(id)) return Response.json({ ok: false, error: "missing drill id" }, { status: 400 });
+          const dir = String(body.direction ?? "");
+          if (dir !== "long" && dir !== "short" && dir !== "no_trade") {
+            return Response.json({ ok: false, error: "direction must be long, short, or no_trade" }, { status: 400 });
+          }
+          const plan: PracticePlan = { direction: dir, entry: body.entry, stop: body.stop, target: body.target };
+          const prefs = await getRiskPrefs(userId);
+          const grade = await gradeDrill(userId, id, plan, prefs?.target_rr_ratio ?? 2);
+          if ("error" in grade) return Response.json({ ok: false, error: grade.error }, { status: 422 });
+
+          // Mirror into the history feed. Best-effort: a drill is already graded
+          // and stored in its own table by this point, so a feed write that
+          // fails must not turn a successful attempt into an error.
+          const rTxt = grade.rMultiple != null ? `${grade.rMultiple >= 0 ? "+" : ""}${grade.rMultiple.toFixed(1)}R · ` : "";
+          try {
+            await insertArtifact({
+              userId, kind: "practice", ticker: grade.ticker, score: grade.process.score,
+              summary: `${grade.ticker} ${grade.plan.direction.replace("_", " ")} · ${rTxt}process ${grade.process.score}`,
+              payload: JSON.stringify({ outcome: grade.outcome, rMultiple: grade.rMultiple, process: grade.process, plan: grade.plan }),
+            });
+          } catch (err) { console.error("[practice] artifact write failed:", err); }
+
+          return Response.json({ ok: true, ...grade });
+        } catch (err) {
+          console.error("[practice] submit failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      if (url.pathname === "/api/practice/stats") {
+        try {
+          return Response.json({ ok: true, ...(await practiceStats(userId)) });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
         }

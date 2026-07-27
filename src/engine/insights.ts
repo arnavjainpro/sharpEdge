@@ -123,7 +123,7 @@ export interface IdeaReplay {
 // this one cache, so the paced Yahoo fetches run once per hour, not twice.
 const replayCache = new Map<number, { at: number; ideas: IdeaReplay[]; skipped: number; total: number }>();
 
-function rMultiple(long: boolean, lv: { entry: number; stop: number; target: number }, outcome: IdeaReplay["outcome"]): number | null {
+export function rMultiple(long: boolean, lv: { entry: number; stop: number; target: number }, outcome: IdeaReplay["outcome"]): number | null {
   if (outcome === "open") return null;
   if (outcome === "loss") return -1;
   const reward = long ? lv.target - lv.entry : lv.entry - lv.target;

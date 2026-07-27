@@ -1404,6 +1404,168 @@
       color: var(--text);
     }
 
+    /* ── practice drill ── */
+    /* Marks where the chart stopped when the plan was committed. Everything to
+       the right of it is the part the user could not see. */
+    .drill-split {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 1px;
+      background: var(--brand);
+      opacity: .55;
+      pointer-events: none;
+    }
+
+    .drill-future {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      background: var(--text);
+      opacity: .045;
+      pointer-events: none;
+    }
+
+    .drill-chart {
+      width: 100%;
+      height: 260px;
+      display: block;
+    }
+
+    .drill-form {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: flex-end;
+      margin-top: var(--sp-4);
+      padding-top: var(--sp-4);
+      border-top: 1px solid var(--line-soft);
+    }
+
+    .drill-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 96px;
+    }
+
+    .drill-field label {
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+    }
+
+    .drill-field input {
+      width: 110px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--text);
+      font: 500 14px var(--mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .drill-field input:focus {
+      outline: none;
+      border-color: var(--brand);
+    }
+
+    /* Criterion rows: the label carries the meaning, the bar carries the score.
+       Never colour these by outcome — process is judged on its own. */
+    .crit {
+      margin-bottom: 12px;
+    }
+
+    .crit:last-child {
+      margin-bottom: 0;
+    }
+
+    .crit-head {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      font-size: var(--fs-data);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .crit-head .pts {
+      margin-left: auto;
+      font-variant-numeric: tabular-nums;
+      color: var(--dim);
+    }
+
+    .crit-note {
+      font-size: var(--fs-meta);
+      color: var(--dim);
+      line-height: var(--lh-body);
+      margin-top: 4px;
+    }
+
+    .crit-track {
+      height: 6px;
+      background: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .crit-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--brand);
+    }
+
+    .crit-fill.zero {
+      background: var(--line);
+    }
+
+    .score-pair {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line-soft);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      margin-bottom: var(--sp-4);
+    }
+
+    .score-pair > div {
+      background: var(--surface);
+      padding: 14px 16px;
+    }
+
+    .score-pair .k {
+      font-size: var(--fs-label);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: var(--tracking-label);
+      color: var(--dim);
+    }
+
+    .score-pair .v {
+      font-size: 26px;
+      font-weight: 300;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      margin-top: 2px;
+    }
+
+    .score-pair .n {
+      font-size: var(--fs-meta);
+      color: var(--faint);
+      margin-top: 2px;
+    }
+
+    @media (max-width: 560px) {
+      .score-pair {
+        grid-template-columns: minmax(0, 1fr);
+      }
+    }
+
     /* watchlist rail */
     .wl-row {
       display: flex;
@@ -3577,6 +3739,7 @@
         <button data-tab="analyze"><span class="ndot"></span><span class="nlabel">Analyze</span><span
             class="badge"></span></button>
         <button data-tab="backtest"><span class="ndot"></span><span class="nlabel">Backtest</span></button>
+        <button data-tab="practice"><span class="ndot"></span><span class="nlabel">Practice</span></button>
         <button data-tab="chat"><span class="ndot"></span><span class="nlabel">Chat</span></button>
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
             class="badge"></span></button>
@@ -3964,6 +4127,30 @@
             model-priced (Black-Scholes), not real historical option quotes.</p>
         </section>
 
+        <section data-pane="practice">
+          <h2>Practice</h2>
+          <div class="widget" id="practice-card">
+            <div class="widget-head">
+              <h3>Blind drill</h3>
+              <span class="act" id="drill-meta"></span>
+            </div>
+            <div id="drill-body">
+              <div class="empty" id="drill-intro">A real chart from the past with the future hidden. Read it, commit
+                to a plan, then see what actually happened. You are scored on the quality of the plan and on the
+                outcome — separately, because a good plan can still lose.</div>
+            </div>
+            <button class="advise-btn" id="drill-new">Start a drill</button>
+          </div>
+
+          <div class="widget" id="practice-stats-card" style="display:none">
+            <div class="widget-head">
+              <h3>Your record</h3>
+              <span class="act" id="stats-note"></span>
+            </div>
+            <div class="kpi-grid" id="practice-kpis"></div>
+          </div>
+        </section>
+
         <section data-pane="chat">
           <h2>Ask sharpEdge</h2>
           <div id="chat-card">
@@ -4176,6 +4363,7 @@
       "ideas": '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
       "analyze": '<circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>',
       "backtest": '<path d="M10 2v6.3L4.7 18a2 2 0 0 0 1.8 3h11a2 2 0 0 0 1.8-3L14 8.3V2"/><line x1="8" y1="2" x2="16" y2="2"/><line x1="7" y1="15" x2="17" y2="15"/>',
+      "practice": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
       "chat": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
       "activity": '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
       "history": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -4241,15 +4429,17 @@
        Flat tabs use #name; the stock detail page is a synthetic pane at
        #stock/TICKER (reached via search, not a tab). Stock navigations use
        pushState so the browser back button walks out of them naturally. */
-    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "chat", "activity", "history", "settings"];
+    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "practice", "chat", "activity", "history", "settings"];
     const TAB_TITLES = {
       portfolio: "Portfolio", market: "Market", ideas: "Trade Ideas", analyze: "Analyzer",
-      backtest: "Backtest", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
+      backtest: "Backtest", practice: "Practice", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
     };
     const TAB_SUBS = {
       portfolio: "Live positions & advice", market: "Regime, indices & sector rotation",
       ideas: "AI-validated long & short setups", analyze: "Chart + live data → a plan",
-      backtest: "Plain-English strategy → out-of-sample results", chat: "Portfolio-aware financial advisor",
+      backtest: "Plain-English strategy → out-of-sample results",
+      practice: "Blind chart drills — graded on process, not P&L",
+      chat: "Portfolio-aware financial advisor",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
     };
     function parseHash() {
@@ -4279,6 +4469,7 @@
       if (name === "settings") { loadProfile(); loadLinkStatus(); syncAppearanceTabs(); }
       if (name === "history") { loadJournal(); loadPastIdeas(); loadCalibration(); loadScoreboard(); }
       if (name === "analyze") loadRiskPrefs();
+      if (name === "practice") loadPracticeStats();
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
     }
     function bumpBadge(name) {
@@ -5128,6 +5319,169 @@
       holdingsExpanded = !holdingsExpanded;
       renderHoldings();
     });
+
+    /* ── practice drills ──────────────────────────────────────────────────
+       A real past chart with the future hidden. The server holds the ticker and
+       the as-of bar, so nothing here can look ahead — this module only ever
+       renders what /new sent, and the reveal only ever comes from /submit. */
+    let drill = null;   // { id, atr, bars } while a drill is open
+
+    function drillChart(el, ohlc, dates, splitFrac = null) {
+      candleSvg(el, ohlc, ohlc.closes.length);
+      const lows = ohlc.lows, highs = ohlc.highs;
+      chartAxes(el, {
+        min: Math.min(...lows), max: Math.max(...highs),
+        dates,   // null on the drill: a visible date is a lookup
+        at: (f) => {
+          const i = Math.min(ohlc.closes.length - 1, Math.floor(f * ohlc.closes.length));
+          return { x: ((i + 0.5) / ohlc.closes.length) * 100, label: `O ${money(ohlc.opens[i])}  H ${money(highs[i])}  L ${money(lows[i])}  C ${money(ohlc.closes[i])}` };
+        },
+      });
+      // chartAxes clears .chart-y/.chart-note but not these, so drop stale ones
+      // before re-adding — a second drill would otherwise stack dividers.
+      const plot = el.parentElement;
+      plot.querySelectorAll(".drill-split, .drill-future").forEach((n) => n.remove());
+      if (splitFrac != null) {
+        const pct = (splitFrac * 100).toFixed(3);
+        plot.insertAdjacentHTML("beforeend",
+          `<div class="drill-future" style="left:${pct}%"></div><div class="drill-split" style="left:${pct}%"></div>`);
+      }
+    }
+
+    async function startDrill() {
+      const btn = $("#drill-new");
+      btn.disabled = true; btn.textContent = "Loading a chart…";
+      try {
+        const d = await (await fetch("/api/practice/new", { method: "POST" })).json();
+        if (!d.ok) { toast(d.error || "Could not start a drill.", "bad"); return; }
+        drill = d;
+        $("#drill-meta").textContent = d.sector ? `${d.sector} · symbol hidden` : "symbol hidden";
+        $("#drill-body").innerHTML = `
+          <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none"></svg>
+          <div class="drill-form">
+            <div class="drill-field">
+              <label>Direction</label>
+              <div class="tabbar" id="drill-dir">
+                <button data-dir="long" class="active">Long</button>
+                <button data-dir="short">Short</button>
+              </div>
+            </div>
+            <div class="drill-field"><label>Entry</label><input id="drill-entry" type="number" step="any" inputmode="decimal"></div>
+            <div class="drill-field"><label>Stop</label><input id="drill-stop" type="number" step="any" inputmode="decimal"></div>
+            <div class="drill-field"><label>Target</label><input id="drill-target" type="number" step="any" inputmode="decimal"></div>
+            <button class="advise-btn" id="drill-submit" style="margin-top:0">Commit plan</button>
+            <button class="advise-btn ghost" id="drill-pass" style="margin-top:0">No trade</button>
+          </div>
+          <div class="widget-note">Last close ${money(d.bars.closes[d.bars.closes.length - 1])} · ATR ${money(d.atr)}. Passing is a real answer — it is scored on whether the setup was worth taking.</div>`;
+        drillChart($("#drill-svg"), d.bars, null);
+        let dir = "long";
+        $("#drill-dir").addEventListener("click", (e) => {
+          const b = e.target.closest("[data-dir]"); if (!b) return;
+          dir = b.dataset.dir;
+          document.querySelectorAll("#drill-dir [data-dir]").forEach((x) => x.classList.toggle("active", x === b));
+        });
+        $("#drill-submit").addEventListener("click", () => submitDrill({
+          direction: dir,
+          entry: parseFloat($("#drill-entry").value),
+          stop: parseFloat($("#drill-stop").value),
+          target: parseFloat($("#drill-target").value),
+        }));
+        $("#drill-pass").addEventListener("click", () => submitDrill({ direction: "no_trade" }));
+        btn.style.display = "none";
+      } catch (err) {
+        toast("Could not reach the server.", "bad");
+      } finally {
+        btn.disabled = false; btn.textContent = "Start a drill";
+      }
+    }
+
+    const OUTCOME_LABEL = {
+      win: ["Target hit", "buy"], loss: ["Stopped out", "sell"], open: ["Still open", "calm"],
+      pass_correct: ["Correct pass", "buy"], pass_missed: ["Missed the move", "warn"],
+    };
+
+    async function submitDrill(plan) {
+      if (!drill) return;
+      if (plan.direction !== "no_trade" && ![plan.entry, plan.stop, plan.target].every(Number.isFinite)) {
+        toast("Fill in entry, stop, and target — or pick No trade.", "bad"); return;
+      }
+      const btns = document.querySelectorAll("#drill-submit, #drill-pass");
+      btns.forEach((b) => b.disabled = true);
+      try {
+        const g = await (await fetch("/api/practice/submit", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: drill.id, ...plan }),
+        })).json();
+        if (!g.ok) { toast(g.error || "Could not grade this drill.", "bad"); btns.forEach((b) => b.disabled = false); return; }
+        renderGrade(g);
+        loadPracticeStats();
+      } catch {
+        toast("Could not reach the server.", "bad");
+        btns.forEach((b) => b.disabled = false);
+      }
+    }
+
+    function renderGrade(g) {
+      const [label, tone] = OUTCOME_LABEL[g.outcome] || ["Graded", "calm"];
+      const rTxt = g.rMultiple != null ? `${g.rMultiple >= 0 ? "+" : ""}${g.rMultiple.toFixed(2)}R` : "—";
+      const outcomeNote = g.outcome === "open" ? "Neither stop nor target was reached in the window."
+        : g.netAtr != null ? `Price moved ${g.netAtr.toFixed(2)}x ATR over the window.`
+          : g.outcome === "win" ? "Target reached before the stop." : "Stop reached before the target.";
+      const crits = g.process.detail.map((d) => `
+        <div class="crit">
+          <div class="crit-head"><span>${esc(d.criterion)}</span><span class="pts">${d.got}/${d.max}</span></div>
+          <div class="crit-track"><div class="crit-fill ${d.got ? "" : "zero"}" style="width:${(d.got / d.max) * 100}%"></div></div>
+          <div class="crit-note">${esc(d.note)}</div>
+        </div>`).join("");
+
+      $("#drill-meta").textContent = `${g.ticker} · ${new Date(g.asOfTs * 1000).toLocaleDateString()}`;
+      $("#drill-body").innerHTML = `
+        <div class="score-pair">
+          <div><div class="k">Process</div><div class="v">${g.process.score}<span style="font-size:15px;color:var(--faint)">/100</span></div>
+            <div class="n">How good the plan was, before anyone knew the outcome</div></div>
+          <div><div class="k">Outcome</div><div class="v ${g.outcome === "win" || g.outcome === "pass_correct" ? "up" : g.outcome === "loss" ? "down" : ""}">${rTxt === "—" ? label : rTxt}</div>
+            <div class="n">${esc(outcomeNote)}</div></div>
+        </div>
+        <div style="margin-bottom:var(--sp-4)"><span class="chip ${tone}">${esc(label)}</span></div>
+        <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none"></svg>
+        <div class="widget-note" style="margin-bottom:var(--sp-4)">Everything left of the line is what you saw. The shaded part is what happened after you committed.</div>
+        ${crits}`;
+
+      // Draw history + future together. The y-axis rescales here, which is fine
+      // — the plan is already committed, and pre-scaling to include the future
+      // would have leaked the range before the answer.
+      const h = g.history, f = g.forward;
+      const join = (k) => [...h[k], ...f[k]];
+      const full = { opens: join("opens"), highs: join("highs"), lows: join("lows"), closes: join("closes") };
+      const ts = join("timestamps");
+      const span = ts.length ? ts[ts.length - 1] - ts[0] : 0;
+      const last = full.closes.length - 1;
+      drillChart($("#drill-svg"), full, [0, Math.floor(last / 2), last].map((i) => chartDate(ts[i], span)),
+        h.closes.length / full.closes.length);
+
+      drill = null;
+      const btn = $("#drill-new");
+      btn.style.display = ""; btn.textContent = "Next drill";
+    }
+
+    async function loadPracticeStats() {
+      try {
+        const s = await (await fetch("/api/practice/stats")).json();
+        if (!s.ok || !s.attempts) { $("#practice-stats-card").style.display = "none"; return; }
+        $("#practice-stats-card").style.display = "";
+        const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
+        const tile = (k, v, n) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
+        $("#stats-note").textContent = s.enough ? `${s.attempts} drills` : `${s.attempts} of ${5} drills — stats unlock at 5`;
+        $("#practice-kpis").innerHTML = [
+          tile("Avg process", s.avgProcess == null ? "—" : Math.round(s.avgProcess), "out of 100"),
+          tile("Hit rate", pct(s.hitRate), `${s.taken} taken`),
+          tile("Avg R", s.avgR == null ? "—" : `${s.avgR >= 0 ? "+" : ""}${s.avgR.toFixed(2)}`, "per resolved trade"),
+          tile("Pass accuracy", pct(s.passAccuracy), `${s.passed} passed`),
+        ].join("");
+      } catch { $("#practice-stats-card").style.display = "none"; }
+    }
+
+    $("#drill-new").addEventListener("click", startDrill);
 
     /* ── watchlist (starred in the UI; merged with broker/YAML lists) ── */
     function renderWatchlist() {
