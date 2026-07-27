@@ -23,12 +23,13 @@
        site and the dashboard read as one product. Deliberately a partial copy — the
        full 150-line block would be a sync burden for no benefit here. */
     :root {
-      --bg: #e8ede7;
+      --bg: #ffffff;
       --surface: #ffffff;
-      --surface-2: #f2f5f0;
+      --surface-2: #f0f2f5;
+      --tile: #f5f6f7;
       --line: #dde3da;
       --text: #14181a;
-      --dim: #5a6560;
+      --dim: #4a5551;
       --brand: #14684c;
       --brand-ink: #0f5039;
       --on-brand: #ffffff;
@@ -42,7 +43,8 @@
         /* MUST match the [data-theme="dark"] block below — edit both together */
         --bg: #0e1211;
         --surface: #161b19;
-        --surface-2: #1c2220;
+        --surface-2: #141a18;
+        --tile: #1c2220;
         --line: #2a322e;
         --text: #e8ede9;
         --dim: #9aa59e;
@@ -57,7 +59,8 @@
     :root[data-theme="dark"] {
       --bg: #0e1211;
       --surface: #161b19;
-      --surface-2: #1c2220;
+      --surface-2: #141a18;
+      --tile: #1c2220;
       --line: #2a322e;
       --text: #e8ede9;
       --dim: #9aa59e;
@@ -76,7 +79,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font: 400 16px/1.5 var(--sans);
+      font: 400 17px/1.5 var(--sans);
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
     }
@@ -91,12 +94,11 @@
       text-decoration: none;
     }
 
-    /* 1280px content column with 24px gutters — the modern equivalent of the
-       reference's ~90% content width. */
+    /* Meta runs a near-full-width column: ~1440px of content inside ~36px gutters. */
     .wrap {
-      max-width: 1280px;
+      max-width: 1512px;
       margin: 0 auto;
-      padding: 0 24px;
+      padding: 0 36px;
     }
 
     /* ── pill buttons ─────────────────────────────────────────────────────── */
@@ -104,11 +106,11 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      height: 40px;
-      padding: 0 22px;
+      height: 44px;
+      padding: 0 26px;
       border-radius: 999px;
       border: 0;
-      font: 600 15px/1 var(--sans);
+      font: 600 16px/1 var(--sans);
       white-space: nowrap;
       cursor: pointer;
       transition: transform .15s ease, opacity .15s ease, background .15s ease;
@@ -124,12 +126,11 @@
       color: var(--on-brand);
     }
 
-    /* Secondary sits on photography, so it needs its own opaque surface rather
-       than a translucent fill that would inherit whatever is behind it. */
+    /* Secondary sits on imagery, so it needs its own opaque surface rather than a
+       translucent fill that would inherit whatever is behind it. */
     .btn-ghost {
-      background: rgba(255, 255, 255, .92);
+      background: #eceef0;
       color: #14181a;
-      backdrop-filter: blur(6px);
     }
 
     .btn-line {
@@ -139,80 +140,85 @@
     }
 
     /* ── header ───────────────────────────────────────────────────────────── */
+    /* Fixed, and transparent while it sits over the hero — Meta's header overlays
+       the video and only takes a surface once you scroll past it. */
     header {
-      position: sticky;
+      position: fixed;
       top: 0;
+      left: 0;
+      right: 0;
       z-index: 50;
-      background: color-mix(in srgb, var(--bg) 88%, transparent);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid transparent;
+      transition: background .25s ease, color .25s ease;
+      color: #fff;
     }
 
-    header.scrolled {
-      border-bottom-color: var(--line);
+    header.solid {
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px);
+      color: var(--text);
     }
 
     .nav {
       display: flex;
       align-items: center;
-      gap: 28px;
-      height: 60px;
+      gap: 36px;
+      height: 76px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font: 800 17px/1 var(--sans);
+      gap: 9px;
+      font: 800 19px/1 var(--sans);
       letter-spacing: -.02em;
       flex: none;
+      margin-right: 15px;
     }
 
     .brand img {
-      height: 26px;
+      height: 28px;
       width: auto;
     }
 
     .nav-links {
       display: flex;
-      gap: 22px;
-      font-size: 14px;
+      gap: 36px;
+      font-size: 16px;
       font-weight: 500;
-    }
-
-    .nav-links a:hover {
-      color: var(--brand);
     }
 
     .nav-right {
       margin-left: auto;
       display: flex;
       align-items: center;
-      gap: 18px;
-      font-size: 14px;
+      gap: 28px;
+      font-size: 16px;
       font-weight: 500;
     }
 
+    .nav-links a:hover,
+    .nav-right a.plain:hover {
+      opacity: .7;
+    }
+
     .nav-right .btn {
-      height: 34px;
-      padding: 0 16px;
-      font-size: 14px;
+      height: 38px;
+      padding: 0 20px;
+      font-size: 15px;
     }
 
     /* ── hero ─────────────────────────────────────────────────────────────── */
+    /* Edge to edge and a full viewport tall, like the reference — no gutters. */
     .hero {
       position: relative;
-      margin: 0 24px;
-      /* falls back to the brand wash if the screenshot is missing, so the white
-         overlay type stays readable either way */
+      height: 100vh;
+      min-height: 620px;
       background: linear-gradient(135deg, #0f2c22 0%, #14684c 55%, #1c3b30 100%);
-      aspect-ratio: 1348 / 737;
-      min-height: 460px;
       overflow: hidden;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: clamp(28px, 4vw, 56px);
+      padding: 130px 42px 48px;
       isolation: isolate;
     }
 
@@ -222,26 +228,32 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      object-position: top center;
+      /* Anchor right so the crop drops the app's own sidebar and logo rather than
+         slicing through them — the landing page has its own wordmark already. */
+      object-position: top right;
       z-index: -2;
     }
 
+    /* The reference needs no scrim: its footage is dark where the type sits. A UI
+       screenshot has its own text everywhere, so two layers here — one pushing the
+       left column dark for the headline and copy, one for the nav and bottom edge. */
     .hero::after {
       content: "";
       position: absolute;
       inset: 0;
       z-index: -1;
       background:
-        linear-gradient(180deg, rgba(6, 14, 11, .62) 0%, rgba(6, 14, 11, .18) 34%, rgba(6, 14, 11, .78) 100%);
+        linear-gradient(100deg, rgba(6, 14, 11, .93) 0%, rgba(6, 14, 11, .78) 32%, rgba(6, 14, 11, .34) 62%, rgba(6, 14, 11, .3) 100%),
+        linear-gradient(180deg, rgba(6, 14, 11, .72) 0%, rgba(6, 14, 11, .25) 16%, rgba(6, 14, 11, .25) 62%, rgba(6, 14, 11, .8) 100%);
     }
 
     .hero h1 {
       color: #fff;
-      font-size: clamp(38px, 6.4vw, 88px);
+      font-size: clamp(44px, 7.4vw, 110px);
       font-weight: 700;
-      line-height: 1.02;
-      letter-spacing: -.03em;
-      max-width: 14ch;
+      line-height: .97;
+      letter-spacing: -.035em;
+      max-width: 15ch;
       text-wrap: balance;
     }
 
@@ -254,12 +266,11 @@
 
     .hero-copy p {
       color: #fff;
-      font-size: clamp(15px, 1.4vw, 19px);
-      font-weight: 500;
-      line-height: 1.35;
-      max-width: 34ch;
-      margin-bottom: 20px;
-      text-shadow: 0 1px 12px rgba(0, 0, 0, .35);
+      font-size: clamp(17px, 1.6vw, 23px);
+      font-weight: 700;
+      line-height: 1.28;
+      max-width: 26ch;
+      margin-bottom: 24px;
     }
 
     .hero-cta {
@@ -270,50 +281,59 @@
 
     .hero-mark {
       color: #fff;
-      font-size: clamp(30px, 5.2vw, 74px);
+      font-size: clamp(34px, 6.3vw, 94px);
       font-weight: 700;
-      letter-spacing: -.03em;
-      line-height: 1;
+      letter-spacing: -.035em;
+      line-height: .9;
       flex: none;
     }
 
     /* ── section rhythm ───────────────────────────────────────────────────── */
-    section {
-      padding: clamp(48px, 7vw, 96px) 0;
+    .sec-tiles {
+      padding: 72px 0 34px;
     }
 
+    .sec-band {
+      padding: clamp(64px, 8vw, 112px) 0;
+    }
+
+    /* "Explore the Meta Store" is a modest 27px label, not a display heading. */
     .eyebrow-h {
       text-align: center;
-      font-size: 19px;
+      font-size: clamp(21px, 2vw, 27px);
       font-weight: 600;
-      letter-spacing: -.01em;
-      margin-bottom: 28px;
+      letter-spacing: -.015em;
+      margin-bottom: 34px;
     }
 
+    /* "Why buy from Meta" / "The latest from Meta" are the big display headings. */
     .band-h {
       text-align: center;
-      font-size: clamp(26px, 3vw, 38px);
+      font-size: clamp(32px, 4.4vw, 57px);
       font-weight: 700;
-      letter-spacing: -.025em;
-      margin-bottom: 40px;
+      letter-spacing: -.03em;
+      line-height: 1.05;
+      margin-bottom: 44px;
     }
 
     /* ── explore tiles ────────────────────────────────────────────────────── */
     .tiles {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 24px;
+      gap: 34px;
     }
 
     .tile {
-      background: var(--surface-2);
-      border-radius: 20px;
-      padding: 26px 20px;
+      background: var(--tile);
+      border-radius: 16px;
+      min-height: 125px;
+      padding: 24px 20px;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 12px;
+      justify-content: center;
+      gap: 14px;
       transition: transform .18s ease;
     }
 
@@ -322,13 +342,13 @@
     }
 
     .tile svg {
-      width: 34px;
-      height: 34px;
+      width: 38px;
+      height: 38px;
       color: var(--brand);
     }
 
     .tile span {
-      font-size: 14px;
+      font-size: 17px;
       font-weight: 500;
     }
 
@@ -336,38 +356,32 @@
     .cards {
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 32px;
     }
 
     .pair {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      gap: 32px;
     }
 
     .card {
       position: relative;
-      border-radius: 28px;
+      border-radius: 20px;
       overflow: hidden;
       isolation: isolate;
       background: linear-gradient(145deg, #17392c 0%, #14684c 100%);
-      aspect-ratio: 1232 / 590;
+      aspect-ratio: 1441 / 623;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
       align-items: center;
       text-align: center;
-      padding: clamp(24px, 3.4vw, 44px);
+      padding: 0 32px 42px;
     }
 
     .pair .card {
-      aspect-ratio: 604 / 590;
-    }
-
-    /* The pair cards crop a landscape screenshot to near-square, so anchor left —
-       centring slices the app's sidebar in half. */
-    .pair .card img {
-      object-position: top left;
+      aspect-ratio: 704 / 700;
     }
 
     .card img {
@@ -380,39 +394,50 @@
       z-index: -2;
     }
 
-    /* Screenshots are light and busy; the scrim is heavier than a photo would
-       need so the overlay type keeps its contrast. */
+    /* The pair cards crop a landscape screenshot to near-square, so anchor left —
+       centring slices the app's sidebar in half. */
+    .pair .card img {
+      object-position: top left;
+    }
+
+    /* Screenshots are busier than the reference's photography, so the overlay type
+       needs a scrim the original doesn't. */
     .card::after {
       content: "";
       position: absolute;
       inset: 0;
       z-index: -1;
-      background: linear-gradient(180deg, rgba(6, 14, 11, .12) 0%, rgba(6, 14, 11, .55) 55%, rgba(6, 14, 11, .88) 100%);
+      background: linear-gradient(180deg, rgba(6, 14, 11, .1) 0%, rgba(6, 14, 11, .5) 58%, rgba(6, 14, 11, .86) 100%);
     }
 
     .card .eyebrow {
       color: #fff;
-      font-size: clamp(13px, 1.1vw, 16px);
+      font-size: clamp(14px, 1.2vw, 17px);
       font-weight: 500;
-      opacity: .92;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
     }
 
     .card h3 {
       color: #fff;
-      font-size: clamp(24px, 3.2vw, 42px);
+      font-size: clamp(26px, 3.6vw, 52px);
       font-weight: 700;
-      letter-spacing: -.025em;
-      line-height: 1.08;
-      margin-bottom: 20px;
+      letter-spacing: -.03em;
+      line-height: 1.05;
+      margin-bottom: 22px;
       text-wrap: balance;
     }
 
     .card-cta {
       display: flex;
-      gap: 10px;
+      gap: 12px;
       flex-wrap: wrap;
       justify-content: center;
+    }
+
+    .card-cta .btn {
+      height: 38px;
+      padding: 0 22px;
+      font-size: 15px;
     }
 
     /* ── why band ─────────────────────────────────────────────────────────── */
@@ -423,33 +448,34 @@
     .why-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 20px;
+      gap: 34px;
     }
 
     .why-card {
       background: var(--surface);
       border-radius: 16px;
-      padding: 26px 22px;
-      box-shadow: var(--shadow-sm);
+      padding: 38px 34px;
+      min-height: 314px;
     }
 
     .why-card svg {
-      width: 26px;
-      height: 26px;
+      width: 33px;
+      height: 33px;
       color: var(--brand);
-      margin-bottom: 22px;
+      margin-bottom: 42px;
     }
 
+    /* Regular weight at display size — the reference's feature titles are not bold. */
     .why-card h4 {
-      font-size: 21px;
-      font-weight: 700;
+      font-size: clamp(23px, 2.3vw, 31px);
+      font-weight: 400;
       letter-spacing: -.02em;
       line-height: 1.15;
-      margin-bottom: 12px;
+      margin-bottom: 24px;
     }
 
     .why-card p {
-      font-size: 14px;
+      font-size: 17px;
       line-height: 1.5;
       color: var(--dim);
     }
@@ -458,15 +484,15 @@
     .latest-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 24px;
+      gap: 34px;
     }
 
     .latest-item figure {
-      background: var(--surface-2);
-      border-radius: 14px;
+      background: var(--tile);
+      border-radius: 16px;
       overflow: hidden;
-      aspect-ratio: 16 / 10;
-      margin-bottom: 16px;
+      aspect-ratio: 16 / 9;
+      margin-bottom: 22px;
     }
 
     .latest-item figure img {
@@ -477,42 +503,43 @@
     }
 
     .latest-item p {
-      font-size: 17px;
-      font-weight: 500;
-      line-height: 1.35;
-      letter-spacing: -.01em;
-      max-width: 46ch;
+      font-size: clamp(19px, 1.9vw, 26px);
+      font-weight: 400;
+      line-height: 1.28;
+      letter-spacing: -.015em;
+      max-width: 44ch;
     }
 
     /* ── signup strip ─────────────────────────────────────────────────────── */
     .signup {
       display: grid;
-      grid-template-columns: 260px 1fr;
-      gap: 40px;
+      grid-template-columns: 300px 1fr;
+      gap: 48px;
       align-items: start;
     }
 
     .signup-label {
-      font-size: 15px;
+      font-size: 17px;
       font-weight: 500;
       line-height: 1.35;
     }
 
     .signup form {
       display: flex;
-      gap: 12px;
-      margin-bottom: 14px;
+      gap: 14px;
+      margin-bottom: 16px;
+      max-width: 720px;
     }
 
     .signup input {
       flex: 1;
-      height: 44px;
-      padding: 0 18px;
+      height: 50px;
+      padding: 0 20px;
       border-radius: 10px;
       border: 1px solid var(--line);
       background: var(--surface);
       color: var(--text);
-      font: 400 15px var(--sans);
+      font: 400 16px var(--sans);
     }
 
     .signup input:focus {
@@ -522,14 +549,14 @@
     }
 
     .signup .btn {
-      height: 44px;
+      height: 50px;
     }
 
     .fine {
-      font-size: 11.5px;
+      font-size: 12.5px;
       line-height: 1.6;
       color: var(--dim);
-      max-width: 78ch;
+      max-width: 82ch;
     }
 
     .fine a {
@@ -539,19 +566,19 @@
     /* ── footer ───────────────────────────────────────────────────────────── */
     footer {
       border-top: 1px solid var(--line);
-      padding: 48px 0 64px;
+      padding: 56px 0 72px;
     }
 
     .foot-grid {
       display: grid;
-      grid-template-columns: 260px repeat(4, 1fr);
-      gap: 32px;
+      grid-template-columns: 300px repeat(4, 1fr);
+      gap: 34px;
     }
 
     .foot-col h5 {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
 
     .foot-col ul {
@@ -559,11 +586,11 @@
       padding: 0;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 9px;
     }
 
     .foot-col a {
-      font-size: 13px;
+      font-size: 14px;
       color: var(--dim);
     }
 
@@ -572,17 +599,17 @@
       text-decoration: underline;
     }
 
-    .foot-col+.foot-col h5.spaced {
-      margin-top: 26px;
+    .foot-col h5.spaced {
+      margin-top: 28px;
     }
 
     .foot-legal {
-      margin-top: 56px;
-      padding-top: 24px;
+      margin-top: 64px;
+      padding-top: 28px;
       border-top: 1px solid var(--line);
       display: grid;
-      grid-template-columns: 260px 1fr;
-      gap: 32px;
+      grid-template-columns: 300px 1fr;
+      gap: 34px;
     }
 
     .foot-legal .fine strong {
@@ -590,21 +617,39 @@
       color: var(--text);
     }
 
+    .foot-legal .fine p+p {
+      margin-top: 10px;
+    }
+
     /* ── responsive ───────────────────────────────────────────────────────── */
     @media (max-width: 900px) {
+      body {
+        font-size: 16px;
+      }
+
+      .wrap {
+        padding: 0 20px;
+      }
+
+      .nav {
+        height: 64px;
+        gap: 20px;
+      }
+
       .nav-links {
         display: none;
       }
 
       .hero {
-        margin: 0 12px;
-        aspect-ratio: auto;
-        min-height: 78vh;
+        padding: 104px 20px 36px;
+        height: auto;
+        min-height: 86vh;
       }
 
       .hero-foot {
         flex-direction: column;
         align-items: flex-start;
+        gap: 32px;
       }
 
       .hero-mark {
@@ -613,26 +658,43 @@
 
       .tiles {
         grid-template-columns: 1fr;
+        gap: 16px;
       }
 
       .pair,
       .latest-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .cards {
+        gap: 16px;
       }
 
       .card,
       .pair .card {
         aspect-ratio: 4 / 5;
+        padding: 0 20px 32px;
       }
 
       .why-grid {
         grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .why-card {
+        min-height: 0;
+        padding: 28px 24px;
+      }
+
+      .why-card svg {
+        margin-bottom: 24px;
       }
 
       .signup,
       .foot-legal {
         grid-template-columns: 1fr;
-        gap: 16px;
+        gap: 18px;
       }
 
       .foot-grid {
@@ -647,6 +709,10 @@
 
       .signup form {
         flex-direction: column;
+      }
+
+      .nav-right {
+        gap: 16px;
       }
 
       .nav-right .plain {
@@ -688,14 +754,13 @@
   </header>
 
   <!-- ── hero ──────────────────────────────────────────────────────────── -->
-  <div class="hero">
-    <img class="hero-img" src="/assets/shot-hero.png" alt="The sharpEdge market dashboard"
-      onerror="this.remove()">
+  <div class="hero" id="hero">
+    <img class="hero-img" src="/assets/shot-hero.png" alt="The sharpEdge market dashboard" onerror="this.remove()">
     <h1>Every setup, stress&#8209;tested.</h1>
     <div class="hero-foot">
       <div class="hero-copy">
         <p>1,500 stocks scanned every six hours. Six-dimension AI validation.
-          Options priced by a real Black-Scholes engine.</p>
+          Black-Scholes options pricing.</p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="/app?mode=signup">Get started</a>
           <a class="btn btn-ghost" href="#explore">Learn more</a>
@@ -706,7 +771,7 @@
   </div>
 
   <!-- ── explore tiles ─────────────────────────────────────────────────── -->
-  <section id="explore">
+  <section class="sec-tiles" id="explore">
     <div class="wrap">
       <h2 class="eyebrow-h">Explore sharpEdge</h2>
       <div class="tiles">
@@ -764,8 +829,7 @@
 
       <div class="pair">
         <div class="card">
-          <img src="/assets/shot-stock.png" alt="A stock detail page with its factor breakdown"
-            onerror="this.remove()">
+          <img src="/assets/shot-stock.png" alt="A stock detail page with its factor breakdown" onerror="this.remove()">
           <div class="eyebrow">Any of ~12,000 symbols</div>
           <h3>Score any ticker on demand</h3>
           <div class="card-cta">
@@ -797,7 +861,7 @@
   </div>
 
   <!-- ── why band ──────────────────────────────────────────────────────── -->
-  <section class="why" id="why">
+  <section class="sec-band why" id="why">
     <div class="wrap">
       <h2 class="band-h">Why sharpEdge</h2>
       <div class="why-grid">
@@ -846,7 +910,7 @@
   </section>
 
   <!-- ── latest ────────────────────────────────────────────────────────── -->
-  <section>
+  <section class="sec-band">
     <div class="wrap">
       <h2 class="band-h">The latest from sharpEdge</h2>
       <div class="latest-grid">
@@ -864,7 +928,7 @@
   </section>
 
   <!-- ── signup strip ──────────────────────────────────────────────────── -->
-  <section>
+  <section class="sec-band">
     <div class="wrap signup">
       <div class="signup-label">Create your<br>sharpEdge account</div>
       <div>
@@ -966,10 +1030,16 @@
   </footer>
 
   <script>
-    // Hairline under the header only once the hero has scrolled past.
+    // The header rides transparently over the hero and only takes a surface once
+    // the hero has scrolled past, matching the reference's behaviour.
     const hdr = document.getElementById("hdr");
-    const onScroll = () => hdr.classList.toggle("scrolled", window.scrollY > 8);
+    const hero = document.getElementById("hero");
+    const onScroll = () => {
+      const past = window.scrollY > hero.offsetHeight - hdr.offsetHeight;
+      hdr.classList.toggle("solid", past);
+    };
     addEventListener("scroll", onScroll, { passive: true });
+    addEventListener("resize", onScroll, { passive: true });
     onScroll();
 
     // Hand the typed email to the app's existing signup form via query param —
