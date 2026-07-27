@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>sharpEdge — Make Sharper Decisions</title>
+  <meta name="description"
+    content="A trading research and decision-support engine. 1,500 stocks scanned every six hours, six-dimension AI validation, and options priced by a real Black-Scholes engine.">
+  <link rel="icon" type="image/png" href="/assets/favicon.png">
+  <!-- Same pre-paint theme stamp as the app shell (index.html) — without it a user
+       whose saved choice contradicts their OS sees a flash of the wrong theme. -->
+  <script>
+    try {
+      var t = localStorage.getItem("theme");
+      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
+    } catch (e) { /* storage blocked — fall back to prefers-color-scheme */ }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    /* Only the tokens this page uses, copied from index.html's design system so the
+       site and the dashboard read as one product. Deliberately a partial copy — the
+       full 150-line block would be a sync burden for no benefit here. */
+    :root {
+      --bg: #e8ede7;
+      --surface: #ffffff;
+      --surface-2: #f2f5f0;
+      --line: #dde3da;
+      --text: #14181a;
+      --dim: #5a6560;
+      --brand: #14684c;
+      --brand-ink: #0f5039;
+      --on-brand: #ffffff;
+      --sans: "Inter", -apple-system, system-ui, sans-serif;
+      --shadow-sm: 0 1px 2px rgba(20, 30, 24, .05);
+      color-scheme: light;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        /* MUST match the [data-theme="dark"] block below — edit both together */
+        --bg: #0e1211;
+        --surface: #161b19;
+        --surface-2: #1c2220;
+        --line: #2a322e;
+        --text: #e8ede9;
+        --dim: #9aa59e;
+        --brand: #3fc9a4;
+        --brand-ink: #6fdcbd;
+        --on-brand: #0e1211;
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+        color-scheme: dark;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #0e1211;
+      --surface: #161b19;
+      --surface-2: #1c2220;
+      --line: #2a322e;
+      --text: #e8ede9;
+      --dim: #9aa59e;
+      --brand: #3fc9a4;
+      --brand-ink: #6fdcbd;
+      --on-brand: #0e1211;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 400 16px/1.5 var(--sans);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    img {
+      max-width: 100%;
+      display: block;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    /* 1280px content column with 24px gutters — the modern equivalent of the
+       reference's ~90% content width. */
+    .wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* ── pill buttons ─────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 40px;
+      padding: 0 22px;
+      border-radius: 999px;
+      border: 0;
+      font: 600 15px/1 var(--sans);
+      white-space: nowrap;
+      cursor: pointer;
+      transition: transform .15s ease, opacity .15s ease, background .15s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      opacity: .92;
+    }
+
+    .btn-primary {
+      background: var(--brand);
+      color: var(--on-brand);
+    }
+
+    /* Secondary sits on photography, so it needs its own opaque surface rather
+       than a translucent fill that would inherit whatever is behind it. */
+    .btn-ghost {
+      background: rgba(255, 255, 255, .92);
+      color: #14181a;
+      backdrop-filter: blur(6px);
+    }
+
+    .btn-line {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    /* ── header ───────────────────────────────────────────────────────────── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid transparent;
+    }
+
+    header.scrolled {
+      border-bottom-color: var(--line);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      height: 60px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: 800 17px/1 var(--sans);
+      letter-spacing: -.02em;
+      flex: none;
+    }
+
+    .brand img {
+      height: 26px;
+      width: auto;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 22px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .nav-links a:hover {
+      color: var(--brand);
+    }
+
+    .nav-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .nav-right .btn {
+      height: 34px;
+      padding: 0 16px;
+      font-size: 14px;
+    }
+
+    /* ── hero ─────────────────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      margin: 0 24px;
+      /* falls back to the brand wash if the screenshot is missing, so the white
+         overlay type stays readable either way */
+      background: linear-gradient(135deg, #0f2c22 0%, #14684c 55%, #1c3b30 100%);
+      aspect-ratio: 1348 / 737;
+      min-height: 460px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(28px, 4vw, 56px);
+      isolation: isolate;
+    }
+
+    .hero-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      z-index: -2;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(180deg, rgba(6, 14, 11, .62) 0%, rgba(6, 14, 11, .18) 34%, rgba(6, 14, 11, .78) 100%);
+    }
+
+    .hero h1 {
+      color: #fff;
+      font-size: clamp(38px, 6.4vw, 88px);
+      font-weight: 700;
+      line-height: 1.02;
+      letter-spacing: -.03em;
+      max-width: 14ch;
+      text-wrap: balance;
+    }
+
+    .hero-foot {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .hero-copy p {
+      color: #fff;
+      font-size: clamp(15px, 1.4vw, 19px);
+      font-weight: 500;
+      line-height: 1.35;
+      max-width: 34ch;
+      margin-bottom: 20px;
+      text-shadow: 0 1px 12px rgba(0, 0, 0, .35);
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .hero-mark {
+      color: #fff;
+      font-size: clamp(30px, 5.2vw, 74px);
+      font-weight: 700;
+      letter-spacing: -.03em;
+      line-height: 1;
+      flex: none;
+    }
+
+    /* ── section rhythm ───────────────────────────────────────────────────── */
+    section {
+      padding: clamp(48px, 7vw, 96px) 0;
+    }
+
+    .eyebrow-h {
+      text-align: center;
+      font-size: 19px;
+      font-weight: 600;
+      letter-spacing: -.01em;
+      margin-bottom: 28px;
+    }
+
+    .band-h {
+      text-align: center;
+      font-size: clamp(26px, 3vw, 38px);
+      font-weight: 700;
+      letter-spacing: -.025em;
+      margin-bottom: 40px;
+    }
+
+    /* ── explore tiles ────────────────────────────────────────────────────── */
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .tile {
+      background: var(--surface-2);
+      border-radius: 20px;
+      padding: 26px 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: transform .18s ease;
+    }
+
+    .tile:hover {
+      transform: translateY(-2px);
+    }
+
+    .tile svg {
+      width: 34px;
+      height: 34px;
+      color: var(--brand);
+    }
+
+    .tile span {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* ── product cards ────────────────────────────────────────────────────── */
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .pair {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .card {
+      position: relative;
+      border-radius: 28px;
+      overflow: hidden;
+      isolation: isolate;
+      background: linear-gradient(145deg, #17392c 0%, #14684c 100%);
+      aspect-ratio: 1232 / 590;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      text-align: center;
+      padding: clamp(24px, 3.4vw, 44px);
+    }
+
+    .pair .card {
+      aspect-ratio: 604 / 590;
+    }
+
+    /* The pair cards crop a landscape screenshot to near-square, so anchor left —
+       centring slices the app's sidebar in half. */
+    .pair .card img {
+      object-position: top left;
+    }
+
+    .card img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+      z-index: -2;
+    }
+
+    /* Screenshots are light and busy; the scrim is heavier than a photo would
+       need so the overlay type keeps its contrast. */
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background: linear-gradient(180deg, rgba(6, 14, 11, .12) 0%, rgba(6, 14, 11, .55) 55%, rgba(6, 14, 11, .88) 100%);
+    }
+
+    .card .eyebrow {
+      color: #fff;
+      font-size: clamp(13px, 1.1vw, 16px);
+      font-weight: 500;
+      opacity: .92;
+      margin-bottom: 6px;
+    }
+
+    .card h3 {
+      color: #fff;
+      font-size: clamp(24px, 3.2vw, 42px);
+      font-weight: 700;
+      letter-spacing: -.025em;
+      line-height: 1.08;
+      margin-bottom: 20px;
+      text-wrap: balance;
+    }
+
+    .card-cta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── why band ─────────────────────────────────────────────────────────── */
+    .why {
+      background: var(--surface-2);
+    }
+
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 20px;
+    }
+
+    .why-card {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 26px 22px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .why-card svg {
+      width: 26px;
+      height: 26px;
+      color: var(--brand);
+      margin-bottom: 22px;
+    }
+
+    .why-card h4 {
+      font-size: 21px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+
+    .why-card p {
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--dim);
+    }
+
+    /* ── latest ───────────────────────────────────────────────────────────── */
+    .latest-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    .latest-item figure {
+      background: var(--surface-2);
+      border-radius: 14px;
+      overflow: hidden;
+      aspect-ratio: 16 / 10;
+      margin-bottom: 16px;
+    }
+
+    .latest-item figure img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top center;
+    }
+
+    .latest-item p {
+      font-size: 17px;
+      font-weight: 500;
+      line-height: 1.35;
+      letter-spacing: -.01em;
+      max-width: 46ch;
+    }
+
+    /* ── signup strip ─────────────────────────────────────────────────────── */
+    .signup {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 40px;
+      align-items: start;
+    }
+
+    .signup-label {
+      font-size: 15px;
+      font-weight: 500;
+      line-height: 1.35;
+    }
+
+    .signup form {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .signup input {
+      flex: 1;
+      height: 44px;
+      padding: 0 18px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--text);
+      font: 400 15px var(--sans);
+    }
+
+    .signup input:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 18%, transparent);
+    }
+
+    .signup .btn {
+      height: 44px;
+    }
+
+    .fine {
+      font-size: 11.5px;
+      line-height: 1.6;
+      color: var(--dim);
+      max-width: 78ch;
+    }
+
+    .fine a {
+      text-decoration: underline;
+    }
+
+    /* ── footer ───────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--line);
+      padding: 48px 0 64px;
+    }
+
+    .foot-grid {
+      display: grid;
+      grid-template-columns: 260px repeat(4, 1fr);
+      gap: 32px;
+    }
+
+    .foot-col h5 {
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+
+    .foot-col ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .foot-col a {
+      font-size: 13px;
+      color: var(--dim);
+    }
+
+    .foot-col a:hover {
+      color: var(--brand);
+      text-decoration: underline;
+    }
+
+    .foot-col+.foot-col h5.spaced {
+      margin-top: 26px;
+    }
+
+    .foot-legal {
+      margin-top: 56px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 32px;
+    }
+
+    .foot-legal .fine strong {
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    /* ── responsive ───────────────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        margin: 0 12px;
+        aspect-ratio: auto;
+        min-height: 78vh;
+      }
+
+      .hero-foot {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-mark {
+        align-self: flex-end;
+      }
+
+      .tiles {
+        grid-template-columns: 1fr;
+      }
+
+      .pair,
+      .latest-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card,
+      .pair .card {
+        aspect-ratio: 4 / 5;
+      }
+
+      .why-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .signup,
+      .foot-legal {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .foot-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .why-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .signup form {
+        flex-direction: column;
+      }
+
+      .nav-right .plain {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        transition: none !important;
+      }
+
+      .btn:hover,
+      .tile:hover {
+        transform: none;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header id="hdr">
+    <nav class="wrap nav">
+      <a class="brand" href="/">
+        <img src="/assets/logo-mark.png" alt="">
+        sharpEdge
+      </a>
+      <div class="nav-links">
+        <a href="#explore">Screener</a>
+        <a href="#analyze">Analyze</a>
+        <a href="#backtest">Backtest</a>
+      </div>
+      <div class="nav-right">
+        <a class="plain" href="#why">Why sharpEdge</a>
+        <a class="plain" href="/app">Log in</a>
+        <a class="btn btn-primary" href="/app?mode=signup">Get started</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- ── hero ──────────────────────────────────────────────────────────── -->
+  <div class="hero">
+    <img class="hero-img" src="/assets/shot-hero.png" alt="The sharpEdge market dashboard"
+      onerror="this.remove()">
+    <h1>Every setup, stress&#8209;tested.</h1>
+    <div class="hero-foot">
+      <div class="hero-copy">
+        <p>1,500 stocks scanned every six hours. Six-dimension AI validation.
+          Options priced by a real Black-Scholes engine.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="/app?mode=signup">Get started</a>
+          <a class="btn btn-ghost" href="#explore">Learn more</a>
+        </div>
+      </div>
+      <div class="hero-mark">sharpEdge</div>
+    </div>
+  </div>
+
+  <!-- ── explore tiles ─────────────────────────────────────────────────── -->
+  <section id="explore">
+    <div class="wrap">
+      <h2 class="eyebrow-h">Explore sharpEdge</h2>
+      <div class="tiles">
+        <a class="tile" href="#ideas">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M3 17l5-6 4 4 5-8 4 5" />
+            <path d="M3 21h18" />
+          </svg>
+          <span>Screener</span>
+        </a>
+        <a class="tile" href="#analyze">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <path d="M7 14l3-4 3 3 4-6" />
+          </svg>
+          <span>Analyze</span>
+        </a>
+        <a class="tile" href="#backtest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7" />
+            <path d="M3 4v5h5" />
+            <path d="M12 8v4l3 2" />
+          </svg>
+          <span>Backtest</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── product cards ─────────────────────────────────────────────────── -->
+  <div class="wrap">
+    <div class="cards">
+      <div class="card" id="ideas">
+        <img src="/assets/shot-ideas.png" alt="Ideas tab with a validated setup open" onerror="this.remove()">
+        <div class="eyebrow">The core</div>
+        <h3>Idea validation</h3>
+        <div class="card-cta">
+          <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
+          <a class="btn btn-ghost" href="#why">Learn more</a>
+        </div>
+      </div>
+
+      <div class="card" id="analyze">
+        <img src="/assets/shot-analyze.png" alt="Analyze tab with a completed chart analysis" onerror="this.remove()">
+        <div class="eyebrow">Chart in, plan out</div>
+        <h3>Intraday analyzer</h3>
+        <div class="card-cta">
+          <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
+          <a class="btn btn-ghost" href="#why">Learn more</a>
+        </div>
+      </div>
+
+      <div class="pair">
+        <div class="card">
+          <img src="/assets/shot-stock.png" alt="A stock detail page with its factor breakdown"
+            onerror="this.remove()">
+          <div class="eyebrow">Any of ~12,000 symbols</div>
+          <h3>Score any ticker on demand</h3>
+          <div class="card-cta">
+            <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
+            <a class="btn btn-ghost" href="#why">Learn more</a>
+          </div>
+        </div>
+        <div class="card" id="backtest">
+          <img src="/assets/shot-backtest.png" alt="A walk-forward backtest result" onerror="this.remove()">
+          <div class="eyebrow">Edge or curve-fit?</div>
+          <h3>Walk-forward backtests</h3>
+          <div class="card-cta">
+            <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
+            <a class="btn btn-ghost" href="#why">Learn more</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <img src="/assets/shot-activity.png" alt="The Activity feed with triaged events" onerror="this.remove()">
+        <div class="eyebrow">Always watching</div>
+        <h3>Live event monitoring</h3>
+        <div class="card-cta">
+          <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
+          <a class="btn btn-ghost" href="#why">Learn more</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── why band ──────────────────────────────────────────────────────── -->
+  <section class="why" id="why">
+    <div class="wrap">
+      <h2 class="band-h">Why sharpEdge</h2>
+      <div class="why-grid">
+        <div class="why-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M12 3l8 3v6c0 4.4-3.2 7.9-8 9-4.8-1.1-8-4.6-8-9V6l8-3z" />
+            <path d="M9 12l2 2 4-4" />
+          </svg>
+          <h4>Read-only, always</h4>
+          <p>sharpEdge never places or cancels a broker order. Link Robinhood for live positions and the app
+            only ever reads them.</p>
+        </div>
+        <div class="why-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />
+          </svg>
+          <h4>The math is free</h4>
+          <p>Screener, regime, sector rotation and support/resistance are pure deterministic math. No tokens,
+            no cost, nothing to hallucinate.</p>
+        </div>
+        <div class="why-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M4 5h13a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3V5z" />
+            <path d="M4 16a3 3 0 0 1 3-3h13" />
+            <path d="M8 9h6" />
+          </svg>
+          <h4>Learns your mistakes</h4>
+          <p>Log how each closed trade actually went. Relevant past trades feed future validations, so the AI
+            flags the errors you keep repeating.</p>
+        </div>
+        <div class="why-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" />
+          </svg>
+          <h4>Your own account</h4>
+          <p>Every account gets its own portfolio, broker link, journal and alerts. Market data is shared —
+            your positions never are.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── latest ────────────────────────────────────────────────────────── -->
+  <section>
+    <div class="wrap">
+      <h2 class="band-h">The latest from sharpEdge</h2>
+      <div class="latest-grid">
+        <a class="latest-item" href="/app?mode=signup">
+          <figure><img src="/assets/shot-learn.png" alt="The Learn tab" onerror="this.remove()"></figure>
+          <p>Learn: twelve lessons wired to the numbers in your own portfolio, not a generic textbook.</p>
+        </a>
+        <a class="latest-item" href="/app?mode=signup">
+          <figure><img src="/assets/shot-practice.png" alt="The Practice tab" onerror="this.remove()"></figure>
+          <p>Practice: blind replay drills on real historical candles, graded on your process rather than
+            the P&amp;L.</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── signup strip ──────────────────────────────────────────────────── -->
+  <section>
+    <div class="wrap signup">
+      <div class="signup-label">Create your<br>sharpEdge account</div>
+      <div>
+        <form id="signup-form">
+          <input type="email" name="email" placeholder="Email" autocomplete="email" required aria-label="Email">
+          <button class="btn btn-line" type="submit">Get started</button>
+        </form>
+        <p class="fine">
+          Creating an account gives you your own portfolio, broker link, trade journal, alerts and background
+          monitoring. Market data — the screener, regime and universe — is shared across accounts; nothing
+          derived from your positions ever is.<br>
+          sharpEdge is read-only and never places or cancels broker orders.
+          Alerts are delivered over Telegram, which you configure yourself.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── footer ────────────────────────────────────────────────────────── -->
+  <footer>
+    <div class="wrap">
+      <div class="foot-grid">
+        <div>
+          <a class="brand" href="/"><img src="/assets/logo-mark.png" alt="">sharpEdge</a>
+        </div>
+        <div class="foot-col">
+          <h5>Product</h5>
+          <ul>
+            <li><a href="#explore">Full-market screener</a></li>
+            <li><a href="#ideas">Idea validation</a></li>
+            <li><a href="#analyze">Intraday analyzer</a></li>
+            <li><a href="#backtest">Backtest &amp; walk-forward</a></li>
+            <li><a href="/app?mode=signup">Options structures</a></li>
+            <li><a href="/app?mode=signup">Price &amp; score alerts</a></li>
+            <li><a href="/app?mode=signup">Learn</a></li>
+            <li><a href="/app?mode=signup">Practice</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h5>Engine</h5>
+          <ul>
+            <li><a href="#why">Market regime</a></li>
+            <li><a href="#why">Sector rotation</a></li>
+            <li><a href="#why">Technicals &amp; levels</a></li>
+            <li><a href="#why">Black-Scholes pricing</a></li>
+            <li><a href="#why">Two-tier AI triage</a></li>
+            <li><a href="#why">Trade journal</a></li>
+            <li><a href="#why">Idea scoreboard</a></li>
+          </ul>
+          <h5 class="spaced">Data sources</h5>
+          <ul>
+            <li><a href="#why">Yahoo Finance</a></li>
+            <li><a href="#why">Finnhub</a></li>
+            <li><a href="#why">SEC EDGAR</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h5>Get set up</h5>
+          <ul>
+            <li><a href="/app?mode=signup">Create an account</a></li>
+            <li><a href="/app">Log in</a></li>
+            <li><a href="/app">Link a brokerage</a></li>
+            <li><a href="/app">Import positions</a></li>
+            <li><a href="/app">Telegram alerts</a></li>
+            <li><a href="/app">Risk settings</a></li>
+            <li><a href="/app">Appearance</a></li>
+          </ul>
+        </div>
+        <div class="foot-col">
+          <h5>About</h5>
+          <ul>
+            <li><a href="#why">Read-only by design</a></li>
+            <li><a href="#why">How costs are controlled</a></li>
+            <li><a href="#why">Multi-account isolation</a></li>
+          </ul>
+          <h5 class="spaced">Terms</h5>
+          <ul>
+            <li><a href="#legal">Disclaimer</a></li>
+            <li><a href="#legal">Data &amp; privacy</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="foot-legal" id="legal">
+        <div class="fine">United States (English)</div>
+        <div class="fine">
+          <p><strong>Decision-support tool, not licensed financial advice. Every trade is your
+              decision.</strong></p>
+          <p>Market data is sourced from Yahoo Finance, Finnhub and SEC EDGAR and may be delayed, incomplete or
+            wrong. Scores, ratings and stress tests are model output, not predictions. Backtested and
+            walk-forward results are hypothetical and do not represent actual trading; options backtests are
+            model-priced because no historical option-quote feed is used.</p>
+          <p>Brokerage integration is read-only. Robinhood has no official public API and the link can break
+            without notice, in which case the app falls back to imported or configured positions.</p>
+          <p>© 2026 sharpEdge.</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Hairline under the header only once the hero has scrolled past.
+    const hdr = document.getElementById("hdr");
+    const onScroll = () => hdr.classList.toggle("scrolled", window.scrollY > 8);
+    addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+
+    // Hand the typed email to the app's existing signup form via query param —
+    // no new endpoint, the SPA does the actual account creation.
+    document.getElementById("signup-form").addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const email = new FormData(ev.target).get("email");
+      location.href = "/app?mode=signup&email=" + encodeURIComponent(email);
+    });
+  </script>
+</body>
+
+</html>

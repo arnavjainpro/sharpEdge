@@ -87,9 +87,15 @@ export function startServer() {
     async fetch(req) {
       const url = new URL(req.url);
 
-      if (url.pathname === "/" || url.pathname === "/index.html") {
-        // SPA shell always serves; the frontend itself shows a login screen if
-        // GET /api/auth/me comes back 401.
+      // Public marketing page. The app itself lives at /app.
+      if (url.pathname === "/") {
+        return new Response(Bun.file(join(import.meta.dir, "public/landing.html")));
+      }
+
+      // SPA shell always serves; the frontend itself shows a login screen if
+      // GET /api/auth/me comes back 401. /index.html stays wired to the app so
+      // pre-existing bookmarks don't land on the marketing page.
+      if (url.pathname === "/app" || url.pathname === "/app/" || url.pathname === "/index.html") {
         return new Response(Bun.file(join(import.meta.dir, "public/index.html")));
       }
 
@@ -101,9 +107,16 @@ export function startServer() {
         const ALLOWED = new Set([
           "logo-mark.png", "logo-sidebar.png", "logo-sidebar-dark.png",
           "logo-lockup.png", "logo-lockup-dark.png", "favicon.png",
+          // landing page screenshots
+          "shot-hero.png", "shot-ideas.png", "shot-analyze.png", "shot-stock.png",
+          "shot-backtest.png", "shot-activity.png", "shot-learn.png", "shot-practice.png",
         ]);
         if (!ALLOWED.has(name)) return new Response("not found", { status: 404 });
-        return new Response(Bun.file(join(import.meta.dir, "public/assets", name)), {
+        const file = Bun.file(join(import.meta.dir, "public/assets", name));
+        // An allowlisted-but-missing file (a screenshot not captured yet) is a 404,
+        // not the 500 that streaming a nonexistent Bun.file would throw.
+        if (!(await file.exists())) return new Response("not found", { status: 404 });
+        return new Response(file, {
           headers: { "Cache-Control": "public, max-age=86400" },
         });
       }

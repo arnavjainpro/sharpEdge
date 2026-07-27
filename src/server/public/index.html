@@ -8123,8 +8123,15 @@
         const res = await fetch("/api/auth/me");
         if (res.ok) { bootApp(); return; }
       } catch { }
+      // The landing page hands off its "Get started" click here: ?mode=signup
+      // opens the form in create-account mode with the typed email prefilled.
+      const q = new URLSearchParams(location.search);
+      if (q.get("mode") === "signup") authMode = "signup";
       renderAuthMode();
+      const handoffEmail = q.get("email");
+      if (handoffEmail) $("#auth-email").value = handoffEmail;
       $("#auth-screen").hidden = false;
+      (handoffEmail ? $("#auth-password") : $("#auth-email")).focus();
     })();
   </script>
 </body>
