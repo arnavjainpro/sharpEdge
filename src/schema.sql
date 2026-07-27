@@ -88,6 +88,46 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- Signups awaiting email verification. Deliberately a separate table and NOT a
+-- `verified` flag on `users`: since SHARP-29 every row in users joins
+-- monitoredUserIds(), so an unverified row would immediately start spending
+-- Finnhub calls and AI tokens on a portfolio nobody has proven they own — and
+-- it would hold the UNIQUE email slot, letting anyone squat an address they
+-- don't control. Keeping them apart preserves the invariant "a row in users is
+-- a real, verified account", so nothing downstream needs to learn about
+-- verification at all. Verified status here IS the promotion into users.
+CREATE TABLE IF NOT EXISTS pending_signups (
+  email text PRIMARY KEY,
+  password_hash text NOT NULL,       -- already bcrypt-hashed, never plaintext
+  code text NOT NULL,                -- 6 digits, uniformly sampled from a CSPRNG
+  expires_at integer NOT NULL,
+  attempts integer NOT NULL DEFAULT 0,  -- 6 digits is only ~20 bits, so the cap is
+                                        -- the real defence, not the expiry window
+  created_at integer NOT NULL,
+  verified_at integer                -- NULL until the code comes back, set exactly once,
+                                     -- so a resubmit reads as "already done", not an error
+);
+-- CREATE TABLE IF NOT EXISTS is a no-op on an existing table, so any earlier
+-- shape has to be moved forward by hand: 73c8b86 shipped this without
+-- verified_at, and an intermediate build swapped `code` for a link token. The
+-- table has never held a row, so none of this touches real data.
+ALTER TABLE pending_signups ADD COLUMN IF NOT EXISTS code text;
+ALTER TABLE pending_signups ADD COLUMN IF NOT EXISTS attempts integer NOT NULL DEFAULT 0;
+ALTER TABLE pending_signups ADD COLUMN IF NOT EXISTS verified_at integer;
+ALTER TABLE pending_signups DROP COLUMN IF EXISTS token;
+DROP INDEX IF EXISTS idx_pending_signups_token;
+
+-- An in-flight email change (SHARP-17). The new address lives here, NOT in
+-- users.email, until a code mailed to it comes back — so an unverified or
+-- mistyped address can never become the thing you sign in with. At most one
+-- pending change per user, which is why these are columns and not a table like
+-- pending_signups (which needs one row per not-yet-a-user, keyed on the email
+-- itself — there's no user id to hang columns off yet).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_code text;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_expires integer;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_attempts integer NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS broker_links (
   user_id integer PRIMARY KEY REFERENCES users(id),
   provider text NOT NULL,

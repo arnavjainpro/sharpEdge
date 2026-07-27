@@ -28,7 +28,8 @@ import { clearAuth } from "../broker/robinhood";
 import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
 import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
-import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, updateEmail, createSession, destroySession } from "../auth";
+import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, createSession, destroySession, startSignup, confirmSignup, pendingSignupExists, discardSignup, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail } from "../auth";
+import { emailEnabled, sendEmail, verificationEmail } from "../notify/email";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
 import { join } from "path";
 
@@ -129,9 +130,41 @@ export function startServer() {
           if (!email || !email.includes("@")) return Response.json({ ok: false, error: "invalid email" }, { status: 400 });
           if (password.length < 8) return Response.json({ ok: false, error: "password must be at least 8 characters" }, { status: 400 });
           if (await findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
-          const userId = await createUser(email, await hashPassword(password));
-          const token = await createSession(userId);
-          return Response.json({ ok: true, email }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
+          const passwordHash = await hashPassword(password);
+
+          // No mail transport means there is no way to verify anything, so
+          // signup behaves as it did before this feature rather than bricking
+          // the app — every other optional key here disables one feature.
+          if (!emailEnabled()) {
+            const userId = await createUser(email, passwordHash);
+            const token = await createSession(userId);
+            return Response.json({ ok: true, email }, { headers: { "Set-Cookie": sessionCookieHeader(token) } });
+          }
+
+          const code = await startSignup(email, passwordHash);
+          const mail = verificationEmail(code);
+          if (!(await sendEmail(email, mail.subject, mail.text, mail.html))) {
+            await discardSignup(email); // don't strand a signup nobody can confirm
+            return Response.json({ ok: false, error: "could not send the verification email — try again shortly" }, { status: 502 });
+          }
+          return Response.json({ ok: true, pending: true, email });
+        } catch (err) {
+          return Response.json({ ok: false, error: String(err) }, { status: 400 });
+        }
+      }
+
+      // Finishes a staged signup. Unauthenticated by definition — it sits above
+      // the session gate because it is what creates the account and the session.
+      if (url.pathname === "/api/auth/confirm-signup" && req.method === "POST") {
+        try {
+          const body = (await req.json()) as { email?: string; code?: string };
+          const email = String(body.email ?? "").trim().toLowerCase();
+          const result = await confirmSignup(email, String(body.code ?? ""));
+          // 400 for a wrong code, not 401: nothing here is authenticated yet, and
+          // the client distinguishes on `restart`, not on the status.
+          if (!result.ok) return Response.json({ ok: false, error: result.error, restart: result.restart }, { status: 400 });
+          const session = await createSession(result.userId);
+          return Response.json({ ok: true, email }, { headers: { "Set-Cookie": sessionCookieHeader(session) } });
         } catch (err) {
           return Response.json({ ok: false, error: String(err) }, { status: 400 });
         }
@@ -143,6 +176,14 @@ export function startServer() {
           const email = String(body.email ?? "").trim().toLowerCase();
           const password = String(body.password ?? "");
           const user = await findUserByEmail(email);
+          // A staged signup isn't an account yet, so the lookup misses and the
+          // generic answer leaves you stuck with no way forward. Naming the
+          // situation is a mild account-enumeration leak — the wrong trade on a
+          // public service, the right one on a personal tool where being unable
+          // to get in is the worse bug.
+          if (!user && (await pendingSignupExists(email))) {
+            return Response.json({ ok: false, error: "check your email for the verification code and enter it to finish creating this account" }, { status: 403 });
+          }
           if (!user || !(await verifyPassword(password, user.password_hash))) {
             return Response.json({ ok: false, error: "invalid email or password" }, { status: 401 });
           }
@@ -755,8 +796,11 @@ export function startServer() {
       }
 
       // Profile: name/phone edit freely. Email is the sign-in identity, so a
-      // change to it is gated on the current password — an unlocked laptop
-      // shouldn't be enough to move the account to an attacker's address.
+      // change to it needs two independent proofs: the current password (gated
+      // here) and a mailed code (staged here, applied by /confirm-email below).
+      // A new address is never written to users.email in this route — see
+      // startEmailChange's comment for why an unconfirmed one can't be allowed
+      // to become the login.
       if (url.pathname === "/api/profile") {
         if (req.method === "PUT") {
           try {
@@ -769,6 +813,9 @@ export function startServer() {
             const current = await getProfile(userId);
             const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
             if (email && email !== current?.email) {
+              if (!emailEnabled()) {
+                return Response.json({ ok: false, error: "email changes need a mail provider — set RESEND_API_KEY (see .env.example)" }, { status: 503 });
+              }
               if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
                 return Response.json({ ok: false, error: "that doesn't look like an email address" }, { status: 400 });
               }
@@ -776,17 +823,45 @@ export function startServer() {
               if (!hash || !(await verifyPassword(String(body.password ?? ""), hash))) {
                 return Response.json({ ok: false, error: "current password is wrong" }, { status: 403 });
               }
-              if (!(await updateEmail(userId, email))) {
+              // Advisory only — the binding check is the UNIQUE index at
+              // confirm time, since the address could be claimed by someone
+              // else during the 15-minute window this code is live.
+              if (await findUserByEmail(email)) {
                 return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
               }
+              const code = await startEmailChange(userId, email);
+              const mail = verificationEmail(code);
+              if (!(await sendEmail(email, mail.subject, mail.text, mail.html))) {
+                await cancelEmailChange(userId); // don't leave a change staged that can never be confirmed
+                return Response.json({ ok: false, error: "could not send the verification email — try again shortly" }, { status: 502 });
+              }
+              await updateProfile(userId, fields);
+              return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: email });
             }
             await updateProfile(userId, fields);
-            return Response.json({ ok: true, profile: await getProfile(userId) });
+            return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: await getPendingEmail(userId) });
           } catch (err) {
             return Response.json({ ok: false, error: String(err) }, { status: 400 });
           }
         }
-        return Response.json({ ok: true, profile: await getProfile(userId) });
+        // pendingEmail keeps the "enter your code" box on screen across a
+        // reload; emailChangeAvailable === false means no mail provider is
+        // configured, so the field goes read-only rather than offering a
+        // change that will just 503.
+        return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: await getPendingEmail(userId), emailChangeAvailable: emailEnabled() });
+      }
+
+      // Second half of an email change: the code proves the new inbox is real.
+      if (url.pathname === "/api/profile/confirm-email" && req.method === "POST") {
+        const body = (await req.json().catch(() => ({}))) as { code?: string; cancel?: boolean };
+        if (body.cancel) {
+          await cancelEmailChange(userId);
+          return Response.json({ ok: true, cancelled: true });
+        }
+        const res = await confirmEmailChange(userId, String(body.code ?? ""));
+        return res.ok
+          ? Response.json({ ok: true, email: res.email })
+          : Response.json({ ok: false, error: res.error, restart: res.restart }, { status: 400 });
       }
 
       // Master switch for automatic AI spend (triage/analysis/scheduled briefings).

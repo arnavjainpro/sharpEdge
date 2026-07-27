@@ -29,7 +29,11 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+
+## Task tracking
+
+sharpEdge planning, TODOs and bug reports live in Jira, project key **SHARP** (`vigneshwinner.atlassian.net`) — not in `docs/` or a TODO file in this repo. When you finish work that closes or advances a ticket, update it (comment + transition status) as part of the same change; when you start work that isn't already tracked, create a ticket rather than letting it exist only in a commit message or chat history.
 
 ## Architecture
 

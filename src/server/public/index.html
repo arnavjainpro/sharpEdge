@@ -2280,6 +2280,11 @@
       min-height: 16px;
     }
 
+    /* Same slot, non-alarming colour — "we mailed you a link" is not an error. */
+    #auth-error.ok {
+      color: var(--dim);
+    }
+
     #auth-flip {
       border: none;
       background: none;
@@ -3978,6 +3983,10 @@
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required
         minlength="8">
+      <!-- inputmode brings up the numeric keypad on a phone; one-time-code lets
+           iOS and Safari offer the code straight from the mail. -->
+      <input type="text" id="auth-code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric"
+        pattern="[0-9]{6}" maxlength="6" hidden>
       <div id="auth-error"></div>
       <button type="submit" class="advise-btn" id="auth-submit">Sign in</button>
       <button type="button" id="auth-flip">New here? Create an account</button>
@@ -4292,8 +4301,8 @@
                    from the metrics the filter actually knows how to read. -->
               <select id="cf-metric" aria-label="Metric"></select>
               <select id="cf-op" aria-label="Comparison">
-                <option value=">">&gt; greater than</option>
-                <option value="<">&lt; less than</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
               </select>
               <input type="number" id="cf-val" step="any" placeholder="value" style="width:74px">
               <button class="refresh-btn" id="cf-add" title="Add this rule as a removable filter">+ Add rule</button>
@@ -4500,6 +4509,14 @@
                   placeholder="type it again"></label>
               <label>Current password<input type="password" id="pf-password" autocomplete="current-password"
                   placeholder="required to change email"></label>
+            </div>
+            <!-- Second step: the address is staged server-side, waiting on the mailed code. -->
+            <div class="settings-row" id="pf-email-pending" hidden>
+              <label>Code sent to <span id="pf-pending-addr" style="color:var(--fg)"></span>
+                <input type="text" id="pf-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+                  pattern="[0-9]{6}" placeholder="6 digits"></label>
+              <button type="button" class="advise-btn" id="pf-code-confirm" style="margin-top:0">Confirm email</button>
+              <button type="button" id="pf-code-cancel" title="Discard the pending change and keep your current email">Cancel</button>
             </div>
             <div class="settings-msg" id="profile-msg"></div>
           </form>
@@ -6892,13 +6909,63 @@
     }
     $("#pf-email").addEventListener("input", syncEmailConfirm);
 
+    // Step two of the change: the address is staged server-side and only
+    // becomes the login once the mailed code comes back. Survives a reload
+    // because /api/profile reports the pending address.
+    function showPendingEmail(addr) {
+      $("#pf-email-pending").hidden = !addr;
+      $("#pf-pending-addr").textContent = addr ?? "";
+      if (!addr) $("#pf-code").value = "";
+      else $("#pf-code").focus();
+    }
+    $("#pf-code-confirm").addEventListener("click", async () => {
+      const btn = $("#pf-code-confirm");
+      const msg = $("#profile-msg");
+      btn.disabled = true;
+      try {
+        const res = await (await fetch("/api/profile/confirm-email", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: $("#pf-code").value.trim() }),
+        })).json();
+        if (res.ok) {
+          showPendingEmail(null);
+          msg.textContent = "Email confirmed — sign in with the new address next time.";
+          toast("Email updated");
+          await loadProfile();
+        } else {
+          // Wrong/expired codes are the normal case here, not an exception —
+          // the server's message already says how many tries are left.
+          msg.textContent = res.error;
+          toast(res.error, "err");
+          if (res.restart) showPendingEmail(null);
+        }
+      } catch (e) { msg.textContent = `Failed: ${e}`; }
+      finally { btn.disabled = false; }
+    });
+    $("#pf-code-cancel").addEventListener("click", async () => {
+      await fetch("/api/profile/confirm-email", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cancel: true }),
+      }).catch(() => {});
+      showPendingEmail(null);
+      $("#pf-email").value = savedEmail;
+      syncEmailConfirm();
+      $("#profile-msg").textContent = "Email change cancelled.";
+    });
+
     async function loadProfile() {
       try {
-        const { profile } = await (await fetch("/api/profile")).json();
+        const { profile, pendingEmail, emailChangeAvailable } = await (await fetch("/api/profile")).json();
         if (!profile) return;
         $("#pf-email").value = profile.email ?? "";
         savedEmail = (profile.email ?? "").trim().toLowerCase();
         syncEmailConfirm();
+        showPendingEmail(pendingEmail ?? null);
+        // No mail provider configured → the address can't be verified, so it
+        // goes back to read-only rather than offering a change that 503s.
+        if (emailChangeAvailable === false) {
+          $("#pf-email").readOnly = true;
+          $("#pf-email").title = "Changing your sign-in email needs a mail provider — set RESEND_API_KEY (see .env.example)";
+        }
         $("#pf-name").value = profile.full_name ?? "";
         $("#pf-phone").value = profile.phone ?? "";
         const name = (profile.full_name || profile.email || "").trim();
@@ -6938,14 +7005,25 @@
         }),
       })).json();
       if (res.ok) {
-        savedEmail = (res.profile?.email ?? email).trim().toLowerCase();
-        $("#pf-email").value = res.profile?.email ?? email;
-        syncEmailConfirm();
-        loadProfile();  // header name/initials follow the new address
+        // The email is NOT applied yet when a change was requested — the server
+        // staged it and mailed a code, so leave the field on the address still
+        // signed in with and hand over to the code box.
+        if (res.pendingEmail) {
+          $("#pf-email").value = savedEmail;
+          syncEmailConfirm(); // hides the confirm row, wipes the password
+          showPendingEmail(res.pendingEmail);
+        } else {
+          $("#pf-email").value = res.profile?.email ?? email;
+          savedEmail = (res.profile?.email ?? email).trim().toLowerCase();
+          syncEmailConfirm();
+        }
+        loadProfile();  // header name/initials follow the saved profile
       }
-      msg.textContent = res.ok ? (changingEmail ? "Saved — sign in with the new email next time." : "Saved.") : `Failed: ${res.error}`;
+      msg.textContent = res.ok
+        ? (res.pendingEmail ? `Saved. Check ${res.pendingEmail} for a 6-digit code to finish the email change.` : "Saved.")
+        : `Failed: ${res.error}`;
       if (res.ok) toast("Profile saved"); else toast(`Save failed: ${res.error}`, "err");
-      setTimeout(() => { msg.textContent = ""; }, 5000);
+      setTimeout(() => { msg.textContent = ""; }, 8000);
     });
 
     /* ── settings: brokerage link ── */
@@ -8085,28 +8163,66 @@
       setInterval(loadMarket, 10 * 60_000);
     }
 
+    // Three states: login, signup, and — when signup staged a pending account
+    // rather than creating one — "confirm", where the form takes the mailed code
+    // instead of an email and password.
     let authMode = "login";
+    let pendingEmail = "";
     function renderAuthMode() {
-      const signup = authMode === "signup";
-      $("#auth-blurb").textContent = signup ? "Create your account." : "Sign in to your account.";
-      $("#auth-submit").textContent = signup ? "Create account" : "Sign in";
-      $("#auth-flip").textContent = signup ? "Already have an account? Sign in" : "New here? Create an account";
+      const signup = authMode === "signup", confirm = authMode === "confirm";
+      $("#auth-blurb").textContent = confirm
+        ? `Enter the 6-digit code sent to ${pendingEmail}. Your account is created when you do.`
+        : signup ? "Create your account." : "Sign in to your account.";
+      $("#auth-submit").textContent = confirm ? "Confirm" : signup ? "Create account" : "Sign in";
+      $("#auth-flip").textContent = confirm
+        ? "Use a different email"
+        : signup ? "Already have an account? Sign in" : "New here? Create an account";
       $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
+      // `required` on a hidden input blocks submit in every browser, so the two
+      // groups have to swap together.
+      for (const sel of ["#auth-email", "#auth-password"]) { $(sel).hidden = confirm; $(sel).required = !confirm; }
+      $("#auth-code").hidden = !confirm;
+      $("#auth-code").required = confirm;
       $("#auth-error").textContent = "";
+      $("#auth-error").classList.remove("ok");
+      if (confirm) { $("#auth-code").value = ""; $("#auth-code").focus(); }
     }
-    $("#auth-flip").addEventListener("click", () => { authMode = authMode === "login" ? "signup" : "login"; renderAuthMode(); });
+    $("#auth-flip").addEventListener("click", () => {
+      // From confirm, "use a different email" goes back to signup — the pending
+      // row is harmless and expires on its own.
+      authMode = authMode === "login" ? "signup" : authMode === "signup" ? "login" : "signup";
+      renderAuthMode();
+    });
     $("#auth-card").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const btn = $("#auth-submit");
       btn.disabled = true;
       try {
-        const res = await (await fetch(`/api/auth/${authMode}`, {
+        const confirm = authMode === "confirm";
+        const res = await (await fetch(confirm ? "/api/auth/confirm-signup" : `/api/auth/${authMode}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: $("#auth-email").value, password: $("#auth-password").value }),
+          body: JSON.stringify(confirm
+            ? { email: pendingEmail, code: $("#auth-code").value }
+            : { email: $("#auth-email").value, password: $("#auth-password").value }),
         })).json();
-        if (res.ok) location.reload(); // rerun the full boot against the new session
-        else $("#auth-error").textContent = res.error || "Something went wrong.";
+        // Signup with a mail transport configured creates nothing yet, so there
+        // is no session to reload into — switch the form to code entry instead
+        // of pretending it succeeded.
+        if (res.ok && res.pending) {
+          pendingEmail = res.email;
+          authMode = "confirm";
+          renderAuthMode();
+          $("#auth-error").textContent = "Didn't arrive? Check spam, or go back and submit again for a fresh code.";
+          $("#auth-error").classList.add("ok");
+        } else if (res.ok) {
+          location.reload(); // rerun the full boot against the new session
+        } else {
+          // `restart` means the pending signup is gone (expired, or too many
+          // wrong codes) — leaving the code box up would be a dead end.
+          if (res.restart) { authMode = "signup"; renderAuthMode(); }
+          $("#auth-error").textContent = res.error || "Something went wrong.";
+        }
       } catch (e) {
         $("#auth-error").textContent = "Could not reach the server.";
       } finally {

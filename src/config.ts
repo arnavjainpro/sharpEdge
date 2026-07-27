@@ -145,6 +145,13 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // Transactional email (Resend), used only to prove someone controls the
+  // address they signed up with. The default sender is Resend's shared sandbox
+  // domain: no DNS setup, but it ONLY delivers to your own Resend account
+  // address — set EMAIL_FROM to an address on a domain you've verified to reach
+  // anyone else.
+  resendKey: process.env.RESEND_API_KEY ?? "",
+  emailFrom: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
   // Supabase Postgres connection string. Required — the app has no local fallback.
   databaseUrl: process.env.DATABASE_URL ?? "",
   // Legacy SQLite path, retained only for the one-time migration script.
