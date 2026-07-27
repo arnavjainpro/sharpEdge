@@ -1,0 +1,12 @@
+node_modules/
+data/
+.git/
+.gstack/
+.claude/
+.env
+.env.local
+*.log
+.DS_Store
+dist/
+build/
+**/*.test.ts

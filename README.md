@@ -44,6 +44,21 @@ Optional: Robinhood link (read-only, stores tokens locally). Do it in the dashbo
 - `config/portfolio.yaml` — holdings (shares, cost basis, thesis), watchlist, and `risk:` (account equity fallback, max risk per trade %, max position %). Held/watched tickers get real-time news/filing monitoring.
 - `config/screener.yaml` — universe `filters:` (min market cap / price / volume, max stocks) plus extra tickers to force into the scan. These gate **what gets scanned**, not what's searchable: every US stock and ETF is stored and searchable regardless, and `max_stocks` only caps the ~1,500 names the 6-hour scan actually walks. ETFs are stored but never auto-scanned unless you hold or watch one (dollar-volume ranking would otherwise let SPY/QQQ crowd out real setups).
 
+## Deploying
+
+sharpEdge needs a host that runs a **persistent process** — the HTTP server and every background scheduler share one runtime, and it holds a Finnhub websocket open. Serverless platforms (Vercel, Netlify Functions, Cloudflare Workers) cannot run it: there is nowhere for the ~90-second detector loop, the 6-hour screener or the websocket to live. `railway.toml` + `Dockerfile` are set up for **Railway**; the same container works on Render or Fly.io.
+
+1. Point Railway at the repo. It reads `railway.toml`, builds the `Dockerfile` (Bun image, no build step) and starts `bun run src/index.ts`.
+2. Set the variables under **Variables** — `DATABASE_URL` and `FINNHUB_API_KEY` are mandatory, everything else degrades one feature: `ANTHROPIC_API_KEY` (all AI features), `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` (alert delivery), `SHARPEDGE_MODEL_DEEP` / `SHARPEDGE_MODEL_FAST` (model overrides). Do **not** set `PORT` — Railway injects it and `config.ts` reads it.
+3. Generate a domain. `/` is the marketing page, `/app` is the dashboard, and the healthcheck hits `/` because it needs no auth or database.
+
+Notes specific to a hosted instance:
+
+- **Keep `numReplicas = 1`.** `src/index.ts` owns every `setInterval` in the app, so a second replica runs a second copy of every detector, sweep, briefing and triage pass — duplicate Finnhub calls and duplicate AI spend against the same database.
+- **`config/portfolio.yaml` is gitignored**, so a deployed instance boots without one. That is fine — it degrades to an empty portfolio, and positions come from the Robinhood link or the Import panel instead. `config/screener.yaml` *is* committed, so universe filters carry over.
+- **Every account with holdings generates background AI spend.** On a public instance that is a real cost; the "Live AI updates" toggle and the circuit breaker in `src/ai/breaker.ts` are the controls.
+- The Robinhood link stores tokens in the database, so it survives a redeploy, but the container filesystem does not — nothing else is written to disk.
+
 ## Architecture
 
 ```

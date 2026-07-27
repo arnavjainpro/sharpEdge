@@ -40,7 +40,14 @@ export interface RiskConfig {
 const ROOT = join(import.meta.dir, "..");
 
 function readPortfolioYaml(): any {
-  return parse(readFileSync(join(ROOT, "config/portfolio.yaml"), "utf-8"));
+  // Optional. The file holds personal holdings so it's gitignored, which means a
+  // deployed instance won't have one — there, positions come from the broker link
+  // or the import panel instead. Absent file = empty portfolio, not a boot crash.
+  try {
+    return parse(readFileSync(join(ROOT, "config/portfolio.yaml"), "utf-8")) ?? {};
+  } catch {
+    return {};
+  }
 }
 
 export function loadPortfolio(): Portfolio {
