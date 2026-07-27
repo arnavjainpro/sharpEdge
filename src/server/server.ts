@@ -13,7 +13,8 @@ import { fetchDailyCandles, fetchIntradayBars } from "../ingest/yahoo";
 import { getScreenerRows, sectorBoards } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";
-import { getMarketSnapshot } from "../engine/market";
+import { getMarketSnapshot, sectorHeatmap } from "../engine/market";
+import { canaryStatus, runCanaries } from "../engine/canary";
 import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist } from "../broker";
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
@@ -24,27 +25,38 @@ import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } 
 import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
 import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
 import { clearAuth } from "../broker/robinhood";
-import { getBrokerLink, insertArtifact, deleteArtifact, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
-import { allTickers } from "../config";
+import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
+import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
-import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, createSession, destroySession } from "../auth";
+import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, updateEmail, createSession, destroySession } from "../auth";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
 import { join } from "path";
 
 // ── SSE hub ──────────────────────────────────────────────────────────────────
-type SSEClient = { controller: ReadableStreamDefaultController; id: number };
+// Clients carry their userId so pushes can be addressed. Market-wide news
+// (regime refresh, screener finished) still goes to everyone via broadcast();
+// anything derived from a portfolio — an event's severity, a signal, a briefing
+// — goes through broadcastTo so it reaches only the account it was written for.
+type SSEClient = { controller: ReadableStreamDefaultController; id: number; userId: number };
 const clients = new Map<number, SSEClient>();
 let nextClientId = 1;
 
+function push(c: SSEClient, msg: string) {
+  try {
+    c.controller.enqueue(new TextEncoder().encode(msg));
+  } catch {
+    clients.delete(c.id);
+  }
+}
+
 export function broadcast(type: string, payload: object) {
   const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
-  for (const [id, c] of clients) {
-    try {
-      c.controller.enqueue(new TextEncoder().encode(msg));
-    } catch {
-      clients.delete(id);
-    }
-  }
+  for (const c of [...clients.values()]) push(c, msg);
+}
+
+export function broadcastTo(userId: number, type: string, payload: object) {
+  const msg = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const c of [...clients.values()]) if (c.userId === userId) push(c, msg);
 }
 
 // Hook for dev-only test event injection; wired up by index.ts.
@@ -53,12 +65,15 @@ export function setTestEventHandler(fn: (body: any) => Promise<void>) {
   onTestEvent = fn;
 }
 
-// Hook for on-demand briefing generation; wired up by index.ts.
-let onBriefingRequest: (() => Promise<string>) | null = null;
-export function setBriefingHandler(fn: () => Promise<string>) {
+// Hook for on-demand briefing generation; wired up by index.ts. Takes the
+// requesting user so the briefing is written against THEIR portfolio.
+let onBriefingRequest: ((userId: number) => Promise<string>) | null = null;
+export function setBriefingHandler(fn: (userId: number) => Promise<string>) {
   onBriefingRequest = fn;
 }
-let briefingInFlight = false;
+// Per-user: two accounts asking for a briefing at once are two separate jobs,
+// and a global flag made the second one 429 on the first one's work.
+const briefingInFlight = new Set<number>();
 let generateInFlight = false;
 // Per-user, unlike generateInFlight: portfolio scoring is a per-account action.
 const scoreInFlight = new Set<number>();
@@ -147,7 +162,7 @@ export function startServer() {
         const id = nextClientId++;
         const stream = new ReadableStream({
           start(controller) {
-            clients.set(id, { controller, id });
+            clients.set(id, { controller, id, userId });
             controller.enqueue(new TextEncoder().encode(`event: hello\ndata: {}\n\n`));
           },
           cancel() {
@@ -165,16 +180,27 @@ export function startServer() {
 
       if (url.pathname === "/api/state") {
         const portfolio = currentPortfolio(userId);
+        // Per-account view of a shared event log. The event row is global market
+        // fact; the severity/rationale shown is THIS user's triage, and the
+        // attached signal is THIS user's analysis. COALESCE falls back to the
+        // global column for events recorded before the fan-out existed, so
+        // history doesn't go blank.
         const events = await db
           .query(
-            `SELECT e.*, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact
-             FROM events e LEFT JOIN signals s ON s.event_id = e.id
+            `SELECT e.id, e.ts, e.ticker, e.kind, e.title, e.detail,
+                    COALESCE(t.severity, e.severity) AS severity,
+                    COALESCE(t.rationale, e.triage_rationale) AS triage_rationale,
+                    s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact
+             FROM events e
+             LEFT JOIN event_triage t ON t.event_id = e.id AND t.user_id = ?
+             LEFT JOIN signals s ON s.event_id = e.id AND s.user_id = ?
+             WHERE e.user_id IS NULL OR e.user_id = ?
              ORDER BY e.ts DESC LIMIT 100`
           )
-          .all();
+          .all(userId, userId, userId);
         const briefing = await db
-          .query(`SELECT * FROM briefings ORDER BY ts DESC LIMIT 1`)
-          .get();
+          .query(`SELECT * FROM briefings WHERE user_id = ? ORDER BY ts DESC LIMIT 1`)
+          .get(userId);
         const broker = brokerSnapshot(userId);
         return Response.json({
           portfolio, events, briefing, marketPhase: marketPhase(), marketClock: nextMarketTransition(),
@@ -186,6 +212,8 @@ export function startServer() {
           health: {
             ws: { ...wsStatus, staleSec: wsStatus.lastMessageAt ? Math.round((Date.now() - wsStatus.lastMessageAt) / 1000) : null },
             breakers: [opusBreaker.status(), haikuBreaker.status()],
+            // Empty until the first probe runs a minute after boot.
+            canaries: canaryStatus(),
           },
         });
       }
@@ -391,11 +419,13 @@ export function startServer() {
         }
       }
 
-      // Market regime + sector rotation + per-sector setup boards
+      // Market regime + sector rotation + per-sector setup boards + the
+      // trailing-weeks rotation heatmap (empty until sector_history fills in).
       if (url.pathname === "/api/market") {
         return Response.json({
           snapshot: await getMarketSnapshot(),
           boards: await sectorBoards(currentPortfolio(userId)),
+          heatmap: await sectorHeatmap(12),
         });
       }
 
@@ -700,6 +730,7 @@ export function startServer() {
               max_risk_per_trade_pct: Math.min(Math.max(num(body.max_risk_per_trade_pct, cur.max_risk_per_trade_pct), 0.1), 10),
               max_position_pct: Math.min(Math.max(num(body.max_position_pct, cur.max_position_pct), 1), 100),
               target_rr_ratio: Math.min(Math.max(num(body.target_rr_ratio, cur.target_rr_ratio), 1), 10),
+              risk_appetite: body.risk_appetite === undefined ? cur.risk_appetite : asRiskAppetite(body.risk_appetite),
             };
             await setRiskPrefs(userId, prefs);
             return Response.json({ ok: true, prefs });
@@ -710,7 +741,9 @@ export function startServer() {
         return Response.json({ prefs: await loadRiskConfigFor(userId), customized: !!(await getRiskPrefs(userId)) });
       }
 
-      // Profile: name/phone are editable; email is the login identity and stays read-only.
+      // Profile: name/phone edit freely. Email is the sign-in identity, so a
+      // change to it is gated on the current password — an unlocked laptop
+      // shouldn't be enough to move the account to an attacker's address.
       if (url.pathname === "/api/profile") {
         if (req.method === "PUT") {
           try {
@@ -720,6 +753,20 @@ export function startServer() {
               return s || null;
             };
             const fields = { full_name: str(body.full_name, 120), phone: str(body.phone, 32) };
+            const current = await getProfile(userId);
+            const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
+            if (email && email !== current?.email) {
+              if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
+                return Response.json({ ok: false, error: "that doesn't look like an email address" }, { status: 400 });
+              }
+              const hash = await getPasswordHash(userId);
+              if (!hash || !(await verifyPassword(String(body.password ?? ""), hash))) {
+                return Response.json({ ok: false, error: "current password is wrong" }, { status: 403 });
+              }
+              if (!(await updateEmail(userId, email))) {
+                return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
+              }
+            }
             await updateProfile(userId, fields);
             return Response.json({ ok: true, profile: await getProfile(userId) });
           } catch (err) {
@@ -812,7 +859,8 @@ export function startServer() {
               cursor: `${r.ts}.${r.src}.${r.id}`,
               id: r.id, ts: r.ts, kind: r.kind, ticker: r.ticker,
               direction: r.direction, rating: r.rating, score: r.score, summary: r.summary,
-              deletable: r.src === "a",
+              src: r.src,          // which table the id belongs to — DELETE needs it
+              deletable: true,
               payload,
             };
           });
@@ -823,10 +871,15 @@ export function startServer() {
         }
       }
 
+      // The feed spans two tables with independent id sequences, so the row's
+      // `src` ('i' = ideas/intraday, 'a' = artifacts) has to come back with the
+      // id. Defaults to 'a' — the only source that was deletable before.
       if (url.pathname.startsWith("/api/history/") && req.method === "DELETE") {
         const id = Number(url.pathname.split("/").pop());
         if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
-        return Response.json({ ok: await deleteArtifact(userId, id) });
+        const src = url.searchParams.get("src") ?? "a";
+        if (src !== "i" && src !== "a") return Response.json({ ok: false, error: "bad src" }, { status: 400 });
+        return Response.json({ ok: src === "i" ? await deleteIdea(userId, id) : await deleteArtifact(userId, id) });
       }
 
       // Conversational advisor
@@ -848,6 +901,12 @@ export function startServer() {
         opusBreaker.reset();
         haikuBreaker.reset();
         return Response.json({ ok: true });
+      }
+
+      // Re-probe the data feeds on demand — the timer is 30 minutes, which is
+      // too long to sit through when you're watching a feed come back.
+      if (url.pathname === "/api/canary/check" && req.method === "POST") {
+        return Response.json({ ok: true, canaries: await runCanaries() });
       }
 
       if (url.pathname === "/api/quotes") {
@@ -917,7 +976,7 @@ export function startServer() {
         // Intraday plans included: History links here, and excluding them meant
         // the analysis you clicked through to wasn't on the page.
         const ideaRows = await db
-          .query(`SELECT ts, source, ticker, direction, rating, report FROM ideas WHERE user_id = ? AND ticker = ? ORDER BY ts DESC LIMIT 5`)
+          .query(`SELECT id, ts, source, ticker, direction, rating, report FROM ideas WHERE user_id = ? AND ticker = ? ORDER BY ts DESC LIMIT 5`)
           .all(userId, ticker) as any[];
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;
         return Response.json({
@@ -925,7 +984,9 @@ export function startServer() {
           screener: row ? { ...row, indicators: JSON.parse(row.indicators) } : null,
           ideas: ideaRows.flatMap((r) => {
             try {
-              return [{ ...JSON.parse(r.report), ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
+              // `id` rides along so the card's ✕ can delete the stored row, not
+              // just the DOM node — dismissing here used to leave it in history.
+              return [{ ...JSON.parse(r.report), id: r.id, ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
             } catch { return []; }
           }),
         });
@@ -962,16 +1023,16 @@ export function startServer() {
       // On-demand briefing (also generated automatically at 9:00 / 16:15 ET).
       if (url.pathname === "/api/briefing" && req.method === "POST") {
         if (!onBriefingRequest) return new Response("pipeline not ready", { status: 503 });
-        if (briefingInFlight) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
-        briefingInFlight = true;
+        if (briefingInFlight.has(userId)) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
+        briefingInFlight.add(userId);
         try {
-          const content = await onBriefingRequest();
+          const content = await onBriefingRequest(userId);
           return Response.json({ ok: true, content });
         } catch (err) {
           console.error("[server] briefing failed:", err);
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
         } finally {
-          briefingInFlight = false;
+          briefingInFlight.delete(userId);
         }
       }
 

@@ -32,3 +32,11 @@ risk:
   account_equity: 25000       # USD; remove if a broker link provides it
   max_risk_per_trade_pct: 1   # % of equity risked between entry and stop
   max_position_pct: 20        # % of equity in any single position
+  # Which options structures the swing analyzer may propose, and how much
+  # confirmation it wants before an entry. Also settable per-user in the UI
+  # (Analyze → Position sizing & risk), which takes priority over this file.
+  #   conservative — covered calls, cash-secured puts, credit spreads, condors
+  #   balanced     — verticals, calendars, covered calls, CSPs (default)
+  #   aggressive   — adds naked long calls/puts, straddles, strangles
+  # An uncovered short call is never proposed at any setting.
+  risk_appetite: balanced

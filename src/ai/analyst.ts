@@ -13,15 +13,17 @@ const client = new Anthropic();
 // Last N significant events (and this advisor's own past signals) for a ticker,
 // so Opus analyzes the *delta* of new news rather than each headline in amnesia —
 // e.g. a "$50B buyback" reads very differently if a $60B one was announced last quarter.
-export async function recentHistory(ticker: string, excludeEventId: number, limit = 3): Promise<string> {
+// The events half is global (public market fact); the signals half is joined on
+// userId so "your prior signal" means theirs and not another account's.
+export async function recentHistory(ticker: string, excludeEventId: number, userId: number, limit = 3): Promise<string> {
   const rows = await db
     .query(
       `SELECT e.ts, e.kind, e.title, e.severity, s.action, s.conviction, s.thesis
-       FROM events e LEFT JOIN signals s ON s.event_id = e.id
+       FROM events e LEFT JOIN signals s ON s.event_id = e.id AND s.user_id = ?
        WHERE e.ticker = ? AND e.id != ? AND e.severity IN ('critical','high')
        ORDER BY e.ts DESC LIMIT ?`
     )
-    .all(ticker, excludeEventId, limit) as {
+    .all(userId, ticker, excludeEventId, limit) as {
     ts: number; kind: string; title: string; severity: string;
     action: string | null; conviction: string | null; thesis: string | null;
   }[];
@@ -88,7 +90,10 @@ const SIGNAL_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export async function analyzeEvent(event: RawEvent, portfolio: Portfolio): Promise<Signal | null> {
+// userId owns the resulting signal — the analysis is written against THIS
+// portfolio ("you hold 200 shares, trimming half…"), so it must not surface on
+// another account's dashboard.
+export async function analyzeEvent(event: RawEvent, portfolio: Portfolio, userId: number): Promise<Signal | null> {
   if (!opusBreaker.allow()) {
     console.warn(`[analyst] circuit breaker tripped — skipping analysis for event ${event.id}`);
     return null;
@@ -97,7 +102,7 @@ export async function analyzeEvent(event: RawEvent, portfolio: Portfolio): Promi
   const stats = await db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(event.ticker) as { prev_close: number } | null;
   const tech = snapshot(bars, stats?.prev_close ?? null);
   const marketCtx = await marketContextText();
-  const history = await recentHistory(event.ticker, event.id);
+  const history = await recentHistory(event.ticker, event.id, userId);
 
   try {
     const response = await claudeQueue(() => client.messages.create({
@@ -135,7 +140,7 @@ export async function analyzeEvent(event: RawEvent, portfolio: Portfolio): Promi
     }));
 
     const signal = parseJsonResponse<Signal>(response, "analyst");
-    await insertSignal({ event_id: event.id, ticker: event.ticker, ...signal });
+    await insertSignal({ event_id: event.id, user_id: userId, ticker: event.ticker, ...signal });
     return signal;
   } catch (err) {
     console.error(`[analyst] failed for event ${event.id}:`, err);

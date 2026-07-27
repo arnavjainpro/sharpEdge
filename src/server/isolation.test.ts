@@ -1,0 +1,111 @@
+import { expect, test, afterAll } from "bun:test";
+import { db, insertEvent, insertSignal, setTriageFor } from "../db";
+import { createUser, hashPassword } from "../auth";
+
+// The security claim of SHARP-29: fanning monitoring out to every account must
+// not let one account see another's reading of the market. Three things are
+// per-account — the severity a shared event got, the signal written from it,
+// and the handful of events that are private by nature — and this pins the
+// exact query /api/state uses to enforce that.
+//
+// NOTE: writes to the configured database, using throwaway @example.invalid
+// accounts that are deleted afterwards.
+
+// Every row this file creates is tagged so cleanup can find it. Events need the
+// prefix rather than a user_id: the public ones are deliberately unowned, so
+// deleting by owner would leave them behind in the live Activity feed.
+const TAG = "fanout-test:";
+const made: number[] = [];
+async function throwawayUser(): Promise<number> {
+  const id = await createUser(`fanout-test-${crypto.randomUUID()}@example.invalid`, await hashPassword("x"));
+  made.push(id);
+  return id;
+}
+const testEvent = (ticker: string, kind: string, title: string, userId?: number) =>
+  insertEvent({ ts: Math.floor(Date.now() / 1000), ticker, kind, title, dedupeKey: `${TAG}${crypto.randomUUID()}`, userId });
+
+// Exactly the /api/state projection: global events, this user's triage, this
+// user's signal, private events filtered to their owner.
+const stateEvents = (userId: number) => db.query(
+  `SELECT e.id, e.ticker, e.kind,
+          COALESCE(t.severity, e.severity) AS severity,
+          s.action, s.thesis
+   FROM events e
+   LEFT JOIN event_triage t ON t.event_id = e.id AND t.user_id = ?
+   LEFT JOIN signals s ON s.event_id = e.id AND s.user_id = ?
+   WHERE e.user_id IS NULL OR e.user_id = ?
+   ORDER BY e.ts DESC LIMIT 100`
+).all(userId, userId, userId) as Promise<any[]>;
+
+// Order matters: event_triage and signals reference both users and events, so
+// they go first, then the events, then the accounts.
+afterAll(async () => {
+  const ids = await db.query(`SELECT id FROM events WHERE dedupe_key LIKE ?`).all<{ id: number }>(`${TAG}%`);
+  for (const { id } of ids) {
+    await db.query(`DELETE FROM event_triage WHERE event_id = ?`).run(id);
+    await db.query(`DELETE FROM signals WHERE event_id = ?`).run(id);
+  }
+  await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(`${TAG}%`);
+  for (const id of made) {
+    await db.query(`DELETE FROM briefings WHERE user_id = ?`).run(id);
+    await db.query(`DELETE FROM users WHERE id = ?`).run(id);
+  }
+});
+
+test("one shared event, two accounts, two different readings", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  // A public market event — one row, detected once.
+  const eventId = (await testEvent("NVDA", "price_move", "NVDA test move"))!;
+  expect(eventId).toBeNumber();
+
+  // A holds it, B doesn't — so the same event is critical to one and info to the other.
+  await setTriageFor(eventId, a, "critical", "you hold 300 shares");
+  await setTriageFor(eventId, b, "info", "not held");
+
+  const seenByA = (await stateEvents(a)).find((r) => r.id === eventId);
+  const seenByB = (await stateEvents(b)).find((r) => r.id === eventId);
+  expect(seenByA.severity).toBe("critical");
+  expect(seenByB.severity).toBe("info");
+});
+
+test("a signal is only ever attached for the account it was written for", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const eventId = (await testEvent("AAPL", "news", "AAPL test headline"))!;
+  await insertSignal({
+    event_id: eventId, user_id: a, ticker: "AAPL", action: "trim", conviction: "high",
+    plain_headline: "Trim AAPL", thesis: "your 400 shares are 22% of the book",
+    invalidation: "n/a", portfolio_impact: "n/a",
+  });
+
+  const forA = (await stateEvents(a)).find((r) => r.id === eventId);
+  const forB = (await stateEvents(b)).find((r) => r.id === eventId);
+  // Both see the event — it's public market fact.
+  expect(forA).toBeDefined();
+  expect(forB).toBeDefined();
+  // Only A sees the advice, which names A's position size.
+  expect(forA.action).toBe("trim");
+  expect(forB.action).toBeNull();
+});
+
+test("a private event never reaches another account", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  // "You closed NVDA — journal it?" is a fact about A's account, not the market.
+  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA (long) ~+12% — journal it?", a))!;
+
+  expect((await stateEvents(a)).some((r) => r.id === eventId)).toBe(true);
+  expect((await stateEvents(b)).some((r) => r.id === eventId)).toBe(false);
+});
+
+test("re-triage corrects rather than duplicating", async () => {
+  const a = await throwawayUser();
+  const eventId = (await testEvent("AMD", "news", "AMD test headline"))!;
+  await setTriageFor(eventId, a, "info", "first pass");
+  await setTriageFor(eventId, a, "high", "second pass");
+
+  const rows = await db.query(`SELECT severity FROM event_triage WHERE event_id = ? AND user_id = ?`).all(eventId, a) as any[];
+  expect(rows).toHaveLength(1);
+  expect(rows[0].severity).toBe("high");
+});

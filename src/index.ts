@@ -1,10 +1,13 @@
-import { config, allTickers, marketPhase, etNow } from "./config";
-import { aiLive } from "./db";
+import { config, allTickers, marketPhase, etNow, type Portfolio } from "./config";
+import { aiLive, monitoredUserIds, setTriage, setTriageFor, severityRank } from "./db";
+import { findUserById, cleanupExpiredSessions } from "./auth";
 import { runScan } from "./engine/screener";
 import { evaluateActiveAlerts } from "./engine/alerts";
 import { refreshUniverse, scanUniverse } from "./ingest/universe";
 import { seedFutures } from "./ingest/futures";
 import { refreshMarketContext } from "./engine/market";
+import { runCanaries } from "./engine/canary";
+import { buildWatchMap, unionPortfolio } from "./engine/fanout";
 import { sweepIndex, activeDynamicTickers } from "./engine/sweep";
 import { loadCikMap } from "./ingest/edgar";
 import { refreshDailyStats, startTradeStream } from "./ingest/finnhub";
@@ -18,27 +21,47 @@ import { refreshBroker, currentPortfolio } from "./broker";
 import { refreshEarnings, checkOptionExpiries } from "./engine/insights";
 import { notifyMac } from "./notify/macos";
 import { notifyTelegram, telegramEnabled } from "./notify/telegram";
-import { startServer, broadcast, setTestEventHandler, setBriefingHandler } from "./server/server";
+import { startServer, broadcast, broadcastTo, setTestEventHandler, setBriefingHandler } from "./server/server";
 
 if (!config.finnhubKey) {
   console.error("FINNHUB_API_KEY is not set. Get a free key at https://finnhub.io and put it in .env");
   process.exit(1);
 }
 
-// Background monitoring (detectors, triage, scheduled briefings, sweep) is a
-// single shared pipeline, not fanned out per signed-in user — it watches one
-// account's holdings/watchlist. That account is whoever signed up first (user
-// id 1, the original single-user data's new owner). Other users get the
-// interactive features (validate/generate/intraday/chat, their own linked
-// broker) but not their own independent background event monitoring.
-const PRIMARY_USER_ID = 1;
+// SHARP-29: background monitoring covers EVERY account, not just the first
+// signup. The split that makes that affordable:
+//
+//   detection  — a market fact, shared. Each ticker is fetched ONCE per cycle
+//                no matter how many accounts watch it, so the Finnhub call
+//                budget is driven by the union of everyone's tickers, not by
+//                users × tickers.
+//   triage/analysis/briefings — an opinion about YOUR portfolio, so these fan
+//                out per account. This is the part that costs tokens, and it
+//                only runs for accounts that actually hold or watch the ticker.
+//
+// Cost therefore scales with (accounts × events on tickers they care about),
+// not with accounts × the whole universe.
+async function monitoredUsers(): Promise<{ id: number; portfolio: Portfolio }[]> {
+  const ids = await monitoredUserIds();
+  const out: { id: number; portfolio: Portfolio }[] = [];
+  for (const id of ids) {
+    // Cached per user; the timer below keeps them warm. A first-seen account
+    // gets its snapshot pulled here rather than waiting a full broker cycle.
+    try { await refreshBroker(id); } catch (err) { console.error(`[broker] refresh failed for user ${id}:`, err); }
+    out.push({ id, portfolio: currentPortfolio(id) });
+  }
+  return out;
+}
 
-// Broker snapshot first: positions/watchlist may come from a linked account
-// (Robinhood), a prior JSON import, or portfolio.yaml — everything downstream
-// reads currentPortfolio(PRIMARY_USER_ID) so it always sees the freshest view.
-await refreshBroker(PRIMARY_USER_ID);
-const bootTickers = allTickers(currentPortfolio(PRIMARY_USER_ID));
-console.log(`[sharpEdge] monitoring ${bootTickers.length} tickers: ${bootTickers.join(", ")}`);
+// Built fresh each cycle so a position opened mid-session is monitored on the
+// next pass. The mapping itself lives in engine/fanout.ts where it's testable.
+const watchMap = async () => buildWatchMap(await monitoredUsers());
+
+const bootWatch = await watchMap();
+console.log(
+  `[sharpEdge] monitoring ${bootWatch.size} tickers across ${(await monitoredUserIds()).length} accounts: ` +
+  `${[...bootWatch.keys()].join(", ")}`
+);
 
 // Circuit breaker trips fire an immediate CRITICAL alert on every channel.
 setTripHandler(async (name, count, windowSec) => {
@@ -50,9 +73,11 @@ setTripHandler(async (name, count, windowSec) => {
 
 // ── Pipeline: event → triage → (analysis) → notify → broadcast ──────────────
 
-// No-token severity heuristic used when live AI updates are paused.
-function heuristicSeverity(event: RawEvent): { severity: "critical" | "high" | "info"; rationale: string } {
-  const held = currentPortfolio(PRIMARY_USER_ID).holdings.some((h) => h.ticker === event.ticker);
+// No-token severity heuristic used when live AI updates are paused. Takes the
+// portfolio explicitly — "held" is the whole point of the heuristic and it
+// differs per account.
+function heuristicSeverity(event: RawEvent, portfolio: Portfolio): { severity: "critical" | "high" | "info"; rationale: string } {
+  const held = portfolio.holdings.some((h) => h.ticker === event.ticker);
   const kind = event.kind;
   if (kind === "death_cross") return { severity: "high", rationale: "AI paused — death cross on held position (rule-based)." };
   if (kind === "market_mover") return { severity: "info", rationale: "AI paused — abnormal mover promoted to monitoring (rule-based)." };
@@ -64,52 +89,86 @@ function heuristicSeverity(event: RawEvent): { severity: "critical" | "high" | "
   return { severity: "info", rationale: "AI paused — rule-based severity." };
 }
 
-async function processEvent(event: RawEvent) {
-  const portfolio = currentPortfolio(PRIMARY_USER_ID);
-  let triage;
-  let signal = null;
+// One event, interpreted once per account that watches the ticker. `owners` is
+// empty for a swept market mover nobody holds — then nothing is triaged and no
+// tokens are spent, which is the desired behaviour rather than an edge case.
+async function processEvent(event: RawEvent, owners: number[]) {
+  if (!owners.length) return;
+  const live = await aiLive();
+  // Read once: the global events.severity should end up as the strongest
+  // reading any account gave it, not whichever account happened to run last.
+  let strongest = "";
 
-  if (!(await aiLive())) {
-    // Live updates paused: no tokens spent — rule-based severity, no analysis.
-    triage = heuristicSeverity(event);
-    const { setTriage } = await import("./db");
-    await setTriage(event.id, triage.severity, triage.rationale);
-  } else {
-    triage = await triageEvent(event, portfolio);
-    if (triage.severity === "critical" || triage.severity === "high") {
-      signal = await analyzeEvent(event, portfolio);
+  for (const userId of owners) {
+    const portfolio = currentPortfolio(userId);
+    let triage;
+    let signal = null;
+
+    if (!live) {
+      // Live updates paused: no tokens spent — rule-based severity, no analysis.
+      triage = heuristicSeverity(event, portfolio);
+    } else {
+      triage = await triageEvent(event, portfolio);
+      if (triage.severity === "critical" || triage.severity === "high") {
+        signal = await analyzeEvent(event, portfolio, userId);
+      }
+    }
+
+    await setTriageFor(event.id, userId, triage.severity, triage.rationale);
+    if (severityRank(triage.severity) > severityRank(strongest)) strongest = triage.severity;
+    console.log(`[pipeline] user ${userId} · ${event.ticker} ${event.kind} → ${triage.severity}: ${event.title}`);
+
+    // Targeted: this severity and this signal are this account's reading.
+    broadcastTo(userId, "event", {
+      id: event.id, ts: event.ts, ticker: event.ticker, kind: event.kind,
+      title: event.title, severity: triage.severity, triage_rationale: triage.rationale,
+      ...(signal ?? {}),
+    });
+
+    // Notifications fire ONLY for actionable buy/sell advice — plain language.
+    const isBuy = signal && (signal.action === "buy" || signal.action === "add");
+    const isSell = signal && (signal.action === "sell" || signal.action === "trim");
+    if (signal && (isBuy || isSell)) {
+      const headline = signal.plain_headline || `${isBuy ? "Consider buying" : "Consider selling"} ${event.ticker}.`;
+      // macOS and Telegram are single, machine-wide channels — there is one
+      // TELEGRAM_CHAT_ID, not one per account. With more than one monitored
+      // account the alert is tagged so it's clear whose position it's about.
+      const tag = await accountTag(userId);
+      await notifyMac(isBuy ? `Buy idea: ${event.ticker}${tag}` : `Sell alert: ${event.ticker}${tag}`, headline);
+      if (telegramEnabled()) {
+        await notifyTelegram(`*${isBuy ? "Buy idea" : "Sell alert"}: ${event.ticker}*${tag}\n\n${headline}\n\n_${signal.thesis}_`);
+      }
     }
   }
-  console.log(`[pipeline] ${event.ticker} ${event.kind} → ${triage.severity}: ${event.title}`);
 
-  broadcast("event", {
-    id: event.id, ts: event.ts, ticker: event.ticker, kind: event.kind,
-    title: event.title, severity: triage.severity, triage_rationale: triage.rationale,
-    ...(signal ?? {}),
-  });
+  if (strongest) await setTriage(event.id, strongest, `strongest reading across ${owners.length} monitored account(s)`);
+}
 
-  // Notifications fire ONLY for actionable buy/sell advice — plain language.
-  const isBuy = signal && (signal.action === "buy" || signal.action === "add");
-  const isSell = signal && (signal.action === "sell" || signal.action === "trim");
-  if (signal && (isBuy || isSell)) {
-    const headline = signal.plain_headline || `${isBuy ? "Consider buying" : "Consider selling"} ${event.ticker}.`;
-    await notifyMac(isBuy ? `Buy idea: ${event.ticker}` : `Sell alert: ${event.ticker}`, headline);
-    if (telegramEnabled()) {
-      await notifyTelegram(`*${isBuy ? "Buy idea" : "Sell alert"}: ${event.ticker}*\n\n${headline}\n\n_${signal.thesis}_`);
-    }
+// " (vignesh@…)" when more than one account is monitored, "" when there's only
+// one — a solo user shouldn't have their own email stapled to every alert.
+const emailCache = new Map<number, string>();
+async function accountTag(userId: number): Promise<string> {
+  if ((await monitoredUserIds()).length < 2) return "";
+  if (!emailCache.has(userId)) {
+    emailCache.set(userId, (await findUserById(userId))?.email ?? `user ${userId}`);
   }
+  return ` (${emailCache.get(userId)})`;
 }
 
 async function runDetectors() {
   const phase = marketPhase();
-  const tickers = allTickers(currentPortfolio(PRIMARY_USER_ID));
+  // The union across accounts: each ticker is detected once, then its events
+  // are interpreted for whichever accounts watch it. Two users holding NVDA
+  // costs one set of Finnhub calls, not two.
+  const watch = await watchMap();
+  const tickers = [...watch.keys()];
   for (const t of tickers) {
     try {
       const events: RawEvent[] = [];
       if (phase !== "closed") events.push(...(await detectPriceVolume(t)));
       events.push(...(await detectNews(t)));
       events.push(...(await detectFilings(t)));
-      for (const e of events) await processEvent(e);
+      for (const e of events) await processEvent(e, watch.get(t) ?? []);
       await Bun.sleep(1100); // respect Finnhub 60 req/min free tier
     } catch (err) {
       console.error(`[detectors] ${t}:`, err);
@@ -117,20 +176,22 @@ async function runDetectors() {
   }
   // Dynamically-promoted market movers (from the index sweep): news + filings
   // only — they have no local bar history for price detectors, and their move
-  // was already captured by the sweep event itself.
+  // was already captured by the sweep event itself. Nobody holds these by
+  // definition, so they go to every monitored account as market awareness.
+  const everyone = await monitoredUserIds();
   for (const t of activeDynamicTickers()) {
     try {
       const events: RawEvent[] = [];
       events.push(...(await detectNews(t)));
       events.push(...(await detectFilings(t)));
-      for (const e of events) await processEvent(e);
+      for (const e of events) await processEvent(e, watch.get(t) ?? everyone);
       await Bun.sleep(1100);
     } catch (err) {
       console.error(`[detectors:dynamic] ${t}:`, err);
     }
   }
   try {
-    for (const e of await detectEarnings(tickers)) await processEvent(e);
+    for (const e of await detectEarnings(tickers)) await processEvent(e, watch.get(e.ticker) ?? []);
   } catch (err) {
     console.error("[detectors] earnings:", err);
   }
@@ -179,13 +240,20 @@ function scheduleBriefings() {
     if (!kind || lastBriefingDay[kind] === today) return;
     if (!aiLive()) return; // live updates paused — skip scheduled briefings
     lastBriefingDay[kind] = today;
-    try {
-      console.log(`[briefing] generating ${kind} briefing`);
-      const content = await generateBriefing(kind, currentPortfolio(PRIMARY_USER_ID));
-      broadcast("briefing", { kind, content });
-      // no notification — briefings live on the dashboard; alerts are reserved for buy/sell advice
-    } catch (err) {
-      console.error("[briefing]", err);
+    // One briefing per account, each written against that account's positions.
+    // A deep-model call each, twice a day — the largest fixed per-account cost
+    // in the fan-out. Accounts with nothing to brief on are skipped rather than
+    // paying for "you hold nothing".
+    for (const u of await monitoredUsers()) {
+      if (!allTickers(u.portfolio).length) continue;
+      try {
+        console.log(`[briefing] generating ${kind} briefing for user ${u.id}`);
+        const content = await generateBriefing(kind, u.portfolio, u.id);
+        broadcastTo(u.id, "briefing", { kind, content });
+        // no notification — briefings live on the dashboard; alerts are reserved for buy/sell advice
+      } catch (err) {
+        console.error(`[briefing] user ${u.id}:`, err);
+      }
     }
   }, 5 * 60_000);
 }
@@ -198,9 +266,15 @@ function scheduleSweep() {
     try {
       const universe = await scanUniverse();
       if (!universe.length) return;
-      const watched = new Set(allTickers(currentPortfolio(PRIMARY_USER_ID)));
-      const events = await sweepIndex(universe, watched);
-      for (const e of events) await processEvent(e);
+      // "watched" excludes tickers already covered by the detector loop — that's
+      // the union across accounts now, so a name one user holds isn't swept as
+      // an anonymous mover for everyone else.
+      const watch = await watchMap();
+      const events = await sweepIndex(universe, new Set(watch.keys()));
+      // A swept mover is a name nobody holds, so it's market awareness for every
+      // monitored account rather than a position-specific alert.
+      const everyone = await monitoredUserIds();
+      for (const e of events) await processEvent(e, everyone);
     } catch (err) {
       console.error("[sweep]", err);
     }
@@ -218,8 +292,14 @@ function scheduleScreener() {
     try {
       await refreshMarketContext();
       broadcast("market", {});
-      const events = await runScan(currentPortfolio(PRIMARY_USER_ID));
-      for (const e of events) await processEvent(e);
+      // runScan takes a portfolio only to bias which names it surfaces; the
+      // scan itself is universe-wide, so the union portfolio covers everyone.
+      const watch = await watchMap();
+      const events = await runScan(unionPortfolio(await monitoredUsers()));
+      const everyone = await monitoredUserIds();
+      // A screener setup on a name you hold is about your position; on any other
+      // name it's a general idea, so it goes to all monitored accounts.
+      for (const e of events) await processEvent(e, watch.get(e.ticker) ?? everyone);
       broadcast("market", {}); // breadth updates after the scan completes
     } catch (err) {
       console.error("[screener]", err);
@@ -243,11 +323,36 @@ function scheduleMarketContext() {
   }, 90 * 60_000);
 }
 
+// Data-feed canaries (SHARP-9): every 30 minutes, plus one probe a minute after
+// boot so a feed that broke overnight is visible before the first scan leans on
+// it. Deliberately not tied to market hours — a shape change on a Sunday is
+// still worth knowing about before Monday's open.
+function scheduleCanaries() {
+  const tick = async () => {
+    try { await runCanaries(); } catch (err) { console.error("[canary]", err); }
+  };
+  setTimeout(tick, 60_000);
+  setInterval(tick, 30 * 60_000);
+}
+
+// Expired sessions, swept daily. cleanupExpiredSessions() has existed since auth
+// was added but was never actually called, so sessions accumulated forever — 14
+// rows survived across three accounts before the last account reset. Not
+// load-bearing (validateSession already checks expiry), this just stops dead
+// rows piling up.
+function scheduleAuthCleanup() {
+  const tick = async () => {
+    try { await cleanupExpiredSessions(); } catch (err) { console.error("[auth] cleanup:", err); }
+  };
+  setTimeout(tick, 120_000);
+  setInterval(tick, 24 * 3600_000);
+}
+
 // Universe: rebuild daily (constituents/market caps drift slowly).
 function scheduleUniverse() {
   setInterval(async () => {
     try {
-      const scan = await refreshUniverse(currentPortfolio(PRIMARY_USER_ID));
+      const scan = await refreshUniverse(unionPortfolio(await monitoredUsers()));
       await loadCikMap(scan);
     } catch (err) {
       console.error("[universe]", err);
@@ -258,18 +363,22 @@ function scheduleUniverse() {
 // Broker: re-pull positions/orders/equity and push to the dashboard. A live
 // linked broker (Robinhood) refreshes every 60s while the market is open
 // for near-live position updates; otherwise every 15 minutes.
+// Every account is refreshed, not just the first — a linked broker is what makes
+// an account's monitoring real, and it used to be pulled on a timer for user 1
+// only. The cadence is driven by whether ANY account has a live link.
 function scheduleBroker() {
   const tick = async () => {
-    let source = "manual";
-    try {
-      const snap = await refreshBroker(PRIMARY_USER_ID);
-      source = snap.source;
-      broadcast("broker", { source });
-    } catch (err) {
-      console.error("[broker]", err);
+    let anyLive = false;
+    for (const id of await monitoredUserIds()) {
+      try {
+        const snap = await refreshBroker(id);
+        if (snap.source === "robinhood") anyLive = true;
+        broadcastTo(id, "broker", { source: snap.source });
+      } catch (err) {
+        console.error(`[broker] user ${id}:`, err);
+      }
     }
-    const live = source === "robinhood";
-    setTimeout(tick, live && marketPhase() === "open" ? 60_000 : 15 * 60_000);
+    setTimeout(tick, anyLive && marketPhase() === "open" ? 60_000 : 15 * 60_000);
   };
   setTimeout(tick, 60_000);
 }
@@ -279,11 +388,19 @@ function scheduleBroker() {
 function scheduleInsights() {
   const tick = async () => {
     try {
-      const portfolio = currentPortfolio(PRIMARY_USER_ID);
-      await checkOptionExpiries(portfolio);
-      const held = portfolio.holdings.filter((h) => (h.asset_class ?? "equity") === "equity").map((h) => h.ticker);
+      const users = await monitoredUsers();
+      // Expiry warnings are position-specific — "your NVDA calls expire in 3
+      // days" only means something against the portfolio that holds them.
+      for (const u of users) {
+        try { await checkOptionExpiries(u.portfolio, u.id); }
+        catch (err) { console.error(`[insights] expiries for user ${u.id}:`, err); }
+      }
+      // The earnings cache is a shared lookup keyed by ticker, so it's filled
+      // once from the union rather than re-fetched per account.
+      const union = unionPortfolio(users);
+      const held = union.holdings.filter((h) => (h.asset_class ?? "equity") === "equity").map((h) => h.ticker);
       await refreshEarnings([...new Set(held)]);
-      console.log(`[insights] tick done — ${portfolio.holdings.filter((h) => h.asset_class === "option").length} options checked, earnings refreshed for ${held.length} tickers`);
+      console.log(`[insights] tick done — ${users.length} accounts, ${union.holdings.filter((h) => h.asset_class === "option").length} options checked, earnings refreshed for ${held.length} tickers`);
       broadcast("broker", { source: "insights" }); // nudge the dashboard to re-pull state (earnings chips)
     } catch (err) {
       console.error("[insights]", err);
@@ -295,7 +412,7 @@ function scheduleInsights() {
 
 function scheduleDailyStats() {
   const refresh = async () => {
-    for (const t of allTickers(currentPortfolio(PRIMARY_USER_ID))) {
+    for (const t of allTickers(unionPortfolio(await monitoredUsers()))) {
       try {
         await refreshDailyStats(t);
         await Bun.sleep(1100);
@@ -311,7 +428,7 @@ function scheduleDailyStats() {
 
 // Dev-only synthetic event injection: POST /api/test-event
 setTestEventHandler(async (body) => {
-  const ticker = (body.ticker ?? bootTickers[0]).toUpperCase();
+  const ticker = (body.ticker ?? [...bootWatch.keys()][0] ?? "SPY").toUpperCase();
   const event: RawEvent = {
     id: 0, ts: Math.floor(Date.now() / 1000), ticker,
     kind: body.kind ?? "news",
@@ -320,15 +437,17 @@ setTestEventHandler(async (body) => {
   };
   const { insertEvent } = await import("./db");
   const id = await insertEvent({ ...event, dedupeKey: `test:${Date.now()}` });
-  if (id) await processEvent({ ...event, id });
+  // Test events exercise the whole fan-out, so they go to every account.
+  if (id) await processEvent({ ...event, id }, await monitoredUserIds());
 });
 
-// On-demand briefing from the dashboard button: "open"-style before 1pm ET, else "close"-style.
-setBriefingHandler(async () => {
+// On-demand briefing from the dashboard button: "open"-style before 1pm ET, else
+// "close"-style. Written for whoever clicked it, not for a fixed account.
+setBriefingHandler(async (userId) => {
   const kind = etNow().mins < 13 * 60 ? "open" : "close";
-  console.log(`[briefing] on-demand ${kind} briefing requested`);
-  const content = await generateBriefing(kind, currentPortfolio(PRIMARY_USER_ID));
-  broadcast("briefing", { kind, content });
+  console.log(`[briefing] on-demand ${kind} briefing requested by user ${userId}`);
+  const content = await generateBriefing(kind, currentPortfolio(userId), userId);
+  broadcastTo(userId, "briefing", { kind, content });
   return content;
 });
 
@@ -336,11 +455,13 @@ setBriefingHandler(async () => {
 
 // Universe first (sector metadata + scan list), then CIK map so EDGAR lookups
 // work for any promoted mover across the whole universe.
-const universeList = await refreshUniverse(currentPortfolio(PRIMARY_USER_ID));
+const universeList = await refreshUniverse(unionPortfolio(await monitoredUsers()));
 await seedFutures(); // futures contracts join the universe (searchable/scorable/chartable)
 await loadCikMap(universeList);
 startServer();
-startTradeStream(bootTickers);
+// One websocket subscription list covering every account's tickers — trades are
+// public, so a shared stream is both correct and the only affordable option.
+startTradeStream([...bootWatch.keys()]);
 scheduleDailyStats();
 scheduleDetectors();
 scheduleBriefings();
@@ -350,5 +471,7 @@ scheduleMarketContext();
 scheduleUniverse();
 scheduleBroker();
 scheduleInsights();
-startCacheHeartbeat(currentPortfolio(PRIMARY_USER_ID));
+scheduleCanaries();
+scheduleAuthCleanup();
+startCacheHeartbeat(unionPortfolio(await monitoredUsers()));
 console.log(`[sharpEdge] running — market is currently ${marketPhase()}`);

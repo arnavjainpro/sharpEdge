@@ -176,6 +176,67 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   return snapshot;
 }
 
+// ── F6b / SHARP-8: sector rotation heatmap ───────────────────────────────────
+//
+// "What's rotating now" (the table above) versus "what's been rotating for
+// three weeks" (this). sector_history is appended irregularly — on a state
+// change, or hourly, whichever comes first — so the rows are neither weekly nor
+// evenly spaced. Each cell is therefore the LAST row inside that ISO week: how
+// the week ENDED, which is the reading that survives intraweek noise.
+//
+// The axis spans the weeks that actually have data, newest last, capped at
+// `weeks`. It deliberately does NOT pad out to a fixed 12 columns — eleven empty
+// cells next to one filled one reads as a broken widget rather than a young one.
+export interface HeatmapCell {
+  week: number;              // unix ts of the Monday starting that week
+  state: SectorRotation["state"];
+  rel1m: number | null;
+}
+export interface SectorHeatmap {
+  weeks: number[];                                       // axis, oldest → newest
+  rows: { sector: string; cells: (HeatmapCell | null)[] }[]; // cells align to weeks; null = no data that week
+}
+
+export async function sectorHeatmap(weeks = 12): Promise<SectorHeatmap> {
+  // DISTINCT ON (sector, week) with ts DESC = the week's closing state, in one
+  // pass. date_trunc('week') is Monday-based, matching ISO weeks.
+  const since = Math.floor(Date.now() / 1000) - weeks * 7 * 86400;
+  const rows = await db.query(
+    `SELECT DISTINCT ON (sector, week) sector,
+            extract(epoch from date_trunc('week', to_timestamp(ts)))::int AS week,
+            state, rel1m
+     FROM sector_history
+     WHERE ts >= ?
+     ORDER BY sector, week DESC, ts DESC`
+  ).all(since) as { sector: string; week: number; state: SectorRotation["state"]; rel1m: number | null }[];
+
+  if (!rows.length) return { weeks: [], rows: [] };
+
+  const axis = [...new Set(rows.map((r) => r.week))].sort((a, b) => a - b).slice(-weeks);
+  const bySector = new Map<string, Map<number, HeatmapCell>>();
+  for (const r of rows) {
+    if (!bySector.has(r.sector)) bySector.set(r.sector, new Map());
+    bySector.get(r.sector)!.set(r.week, { week: r.week, state: r.state, rel1m: r.rel1m });
+  }
+
+  // Strongest sector first, by the most recent week it has a reading for — same
+  // ordering idea as the rotation table, so the two line up visually.
+  const latestRel = (cells: Map<number, HeatmapCell>) => {
+    for (let i = axis.length - 1; i >= 0; i--) {
+      const c = cells.get(axis[i]!);
+      if (c?.rel1m != null) return c.rel1m;
+    }
+    return -Infinity;
+  };
+
+  return {
+    weeks: axis,
+    rows: [...bySector.entries()]
+      .sort((a, b) => latestRel(b[1]) - latestRel(a[1]))
+      .map(([sector, cells]) => ({ sector, cells: axis.map((w) => cells.get(w) ?? null) })),
+  };
+}
+
 export async function getMarketSnapshot(): Promise<MarketSnapshot | null> {
   const row = await db.query(`SELECT ts, regime, sectors, benchmarks FROM market_snapshot WHERE id = 1`).get() as any;
   if (!row) return null;

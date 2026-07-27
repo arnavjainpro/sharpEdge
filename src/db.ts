@@ -2,7 +2,7 @@ import { SQL } from "bun";
 import { AsyncLocalStorage } from "async_hooks";
 import { readFileSync } from "fs";
 import { join } from "path";
-import { config } from "./config";
+import { config, asRiskAppetite, type RiskAppetite } from "./config";
 
 if (!config.databaseUrl) {
   throw new Error("DATABASE_URL is not set — point it at your Supabase Postgres connection string (see .env.example).");
@@ -80,19 +80,23 @@ export interface RiskPrefs {
   max_risk_per_trade_pct: number;
   max_position_pct: number;
   target_rr_ratio: number; // minimum R:R for a "strong" rating in idea validation
+  risk_appetite: RiskAppetite;
 }
 
 export async function getRiskPrefs(userId: number): Promise<RiskPrefs | null> {
-  return await db.query(`SELECT account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio FROM risk_prefs WHERE user_id = ?`).get<RiskPrefs>(userId);
+  const row = await db.query(`SELECT account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio, risk_appetite FROM risk_prefs WHERE user_id = ?`).get<RiskPrefs>(userId);
+  // Rows written before the column existed default to 'balanced' at the DB level,
+  // but coerce anyway — this value selects which structures the analyzer may propose.
+  return row && { ...row, risk_appetite: asRiskAppetite(row.risk_appetite) };
 }
 
 export async function setRiskPrefs(userId: number, prefs: RiskPrefs) {
   await db.query(
-    `INSERT INTO risk_prefs (user_id, account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO risk_prefs (user_id, account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio, risk_appetite) VALUES (?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET account_equity = excluded.account_equity,
        max_risk_per_trade_pct = excluded.max_risk_per_trade_pct, max_position_pct = excluded.max_position_pct,
-       target_rr_ratio = excluded.target_rr_ratio`
-  ).run(userId, prefs.account_equity, prefs.max_risk_per_trade_pct, prefs.max_position_pct, prefs.target_rr_ratio);
+       target_rr_ratio = excluded.target_rr_ratio, risk_appetite = excluded.risk_appetite`
+  ).run(userId, prefs.account_equity, prefs.max_risk_per_trade_pct, prefs.max_position_pct, prefs.target_rr_ratio, asRiskAppetite(prefs.risk_appetite));
 }
 
 export interface BrokerLink {
@@ -138,6 +142,27 @@ export async function deleteArtifact(userId: number, id: number): Promise<boolea
   // Scoped by user_id so an id from another account can't be deleted.
   const rows = await db.query(`DELETE FROM artifacts WHERE user_id = ? AND id = ? RETURNING id`).all(userId, id);
   return rows.length > 0;
+}
+
+// Validated ideas and intraday plans live in `ideas`, the other half of the
+// history feed. Without this they could only be dismissed from the DOM and came
+// straight back on reload — which is what "I can't delete it" meant.
+//
+// trade_outcomes.idea_id and tracked_trades.idea_id reference this row with no
+// ON DELETE rule, so they're detached first, inside one transaction. The journal
+// entry and the tracked trade survive on their own; only the link goes.
+export async function deleteIdea(userId: number, id: number): Promise<boolean> {
+  return await db.transaction(async () => {
+    // Ownership is checked before anything is detached: the FKs force the
+    // UPDATEs to run first, and an id belonging to another account must not get
+    // its journal links cleared on the way to a DELETE that matches nothing.
+    const own = await db.query(`SELECT id FROM ideas WHERE id = ? AND user_id = ?`).get(id, userId);
+    if (!own) return false;
+    await db.query(`UPDATE trade_outcomes SET idea_id = NULL WHERE idea_id = ?`).run(id);
+    await db.query(`UPDATE tracked_trades SET idea_id = NULL WHERE idea_id = ?`).run(id);
+    await db.query(`DELETE FROM ideas WHERE id = ?`).run(id);
+    return true;
+  })();
 }
 
 export async function scoreHistory(userId: number, limit = 30): Promise<{ ts: number; score: number }[]> {
@@ -225,6 +250,11 @@ export interface EventRow {
   triage_rationale: string | null;
 }
 
+// userId is for the rare event that is about ONE account rather than the market
+// — a detected position close, an expiry warning naming your contract count.
+// Leave it unset for market facts so every watcher shares the one row (and the
+// one round of detection). An owned event MUST also carry the user in its
+// dedupeKey, or the first account to trigger it silences the rest.
 export async function insertEvent(e: {
   ts: number;
   ticker: string;
@@ -232,16 +262,31 @@ export async function insertEvent(e: {
   title: string;
   detail?: object;
   dedupeKey: string;
+  userId?: number;
 }): Promise<number | null> {
   const res = await db
     .query(
-      `INSERT INTO events (ts, ticker, kind, title, detail, dedupe_key)
-       VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`
+      `INSERT INTO events (ts, ticker, kind, title, detail, dedupe_key, user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(dedupe_key) DO NOTHING RETURNING id`
     )
-    .get<{ id: number }>(e.ts, e.ticker, e.kind, e.title, JSON.stringify(e.detail ?? {}), e.dedupeKey);
+    .get<{ id: number }>(e.ts, e.ticker, e.kind, e.title, JSON.stringify(e.detail ?? {}), e.dedupeKey, e.userId ?? null);
   return res?.id ?? null;
 }
 
+// Every account the background pipeline monitors. "Everyone with a login" is
+// the honest answer to what the user asked for; an account with no holdings and
+// no watchlist contributes no tickers, so it costs nothing to include.
+export async function monitoredUserIds(): Promise<number[]> {
+  const rows = await db.query(`SELECT id FROM users ORDER BY id`).all<{ id: number }>();
+  return rows.map((r) => r.id);
+}
+
+// events.severity is the GLOBAL reading: how significant this event was to
+// whoever it mattered most to. It stays because the AI context builders
+// (analyst, advisor, briefing) query "what happened recently that mattered" and
+// an event is public market fact — there's nothing private in the headline.
+// Per-user severity, which weighs the event against that user's holdings, is a
+// separate row: see setTriageFor.
 export async function setTriage(eventId: number, severity: string, rationale: string) {
   await db.query(`UPDATE events SET severity = ?, triage_rationale = ? WHERE id = ?`).run(
     severity,
@@ -250,8 +295,26 @@ export async function setTriage(eventId: number, severity: string, rationale: st
   );
 }
 
+// One user's reading of one event. Re-triage overwrites rather than stacking —
+// a repeat run for the same (event, user) is a correction, not a second opinion.
+export async function setTriageFor(eventId: number, userId: number, severity: string, rationale: string) {
+  await db.query(
+    `INSERT INTO event_triage (event_id, user_id, severity, rationale, ts)
+     VALUES (?, ?, ?, ?, extract(epoch from now())::int)
+     ON CONFLICT (event_id, user_id) DO UPDATE SET severity = excluded.severity, rationale = excluded.rationale, ts = excluded.ts`
+  ).run(eventId, userId, severity, rationale);
+}
+
+// Severity ranking, used to decide whether a new per-user reading should raise
+// the global one. Anything unrecognised sorts below "info" rather than throwing.
+const SEVERITY_RANK: Record<string, number> = { info: 1, high: 2, critical: 3 };
+export const severityRank = (s: string | null | undefined) => SEVERITY_RANK[s ?? ""] ?? 0;
+
+// user_id is required: a signal names your positions and your sizing, so an
+// unowned one would surface on every account's dashboard.
 export async function insertSignal(s: {
   event_id: number;
+  user_id: number;
   ticker: string;
   action: string;
   conviction: string;
@@ -262,10 +325,10 @@ export async function insertSignal(s: {
 }): Promise<number> {
   const res = await db
     .query(
-      `INSERT INTO signals (event_id, ts, ticker, action, conviction, plain_headline, thesis, invalidation, portfolio_impact)
-       VALUES (?, extract(epoch from now())::int, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
+      `INSERT INTO signals (event_id, user_id, ts, ticker, action, conviction, plain_headline, thesis, invalidation, portfolio_impact)
+       VALUES (?, ?, extract(epoch from now())::int, ?, ?, ?, ?, ?, ?, ?) RETURNING id`
     )
-    .get<{ id: number }>(s.event_id, s.ticker, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact);
+    .get<{ id: number }>(s.event_id, s.user_id, s.ticker, s.action, s.conviction, s.plain_headline, s.thesis, s.invalidation, s.portfolio_impact);
   return res!.id;
 }
 

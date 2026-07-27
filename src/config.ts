@@ -17,6 +17,16 @@ export interface Portfolio {
   watchlist: string[];
 }
 
+// How the trader wants trades shaped, not just sized. Drives which options
+// structures the swing analyzer is allowed to propose (see APPETITE_PLAYBOOK in
+// ai/intraday.ts) — income/defined-risk at one end, convexity at the other.
+export type RiskAppetite = "conservative" | "balanced" | "aggressive";
+export const RISK_APPETITES: readonly RiskAppetite[] = ["conservative", "balanced", "aggressive"];
+// Single coercion chokepoint: yaml, the settings PUT, and old rows all funnel
+// through here, so an unknown value can never reach a prompt or the strategy gate.
+export const asRiskAppetite = (v: unknown): RiskAppetite =>
+  RISK_APPETITES.includes(v as RiskAppetite) ? (v as RiskAppetite) : "balanced";
+
 // Risk-management knobs (portfolio.yaml `risk:` section). account_equity is a
 // fallback used for position sizing when no brokerage account is linked.
 export interface RiskConfig {
@@ -24,6 +34,7 @@ export interface RiskConfig {
   max_risk_per_trade_pct: number; // % of equity risked between entry and stop
   max_position_pct: number;       // % of equity in any single position
   target_rr_ratio: number;        // minimum R:R the trader wants for a "strong" idea rating
+  risk_appetite: RiskAppetite;    // which options structures fit this trader
 }
 
 const ROOT = join(import.meta.dir, "..");
@@ -54,6 +65,7 @@ export function loadRiskConfig(): RiskConfig {
     max_risk_per_trade_pct: Number(raw.max_risk_per_trade_pct ?? 1),
     max_position_pct: Number(raw.max_position_pct ?? 20),
     target_rr_ratio: Number(raw.target_rr_ratio ?? 2),
+    risk_appetite: asRiskAppetite(raw.risk_appetite),
   };
 }
 
@@ -114,6 +126,18 @@ if (import.meta.main) {
   const want = ["AAPL", "BRK-B", "MRVL", "NVDA"].sort();
   if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(`allTickers normalization failed: ${JSON.stringify(got)}`);
   console.log("allTickers self-check ok:", got);
+
+  // Risk appetite is the other money path through here: it selects which options
+  // structures the swing analyzer may propose, and it arrives from yaml, a raw
+  // settings PUT, and pre-migration DB rows. Anything unrecognized must land on
+  // 'balanced' rather than falling through as undefined and breaking the lookup.
+  for (const good of RISK_APPETITES) {
+    if (asRiskAppetite(good) !== good) throw new Error(`asRiskAppetite mangled a valid value: ${good}`);
+  }
+  for (const junk of [null, undefined, "", "AGGRESSIVE", "yolo", 3, {}, ["aggressive"]]) {
+    if (asRiskAppetite(junk) !== "balanced") throw new Error(`asRiskAppetite let junk through: ${JSON.stringify(junk)}`);
+  }
+  console.log("asRiskAppetite self-check ok");
 }
 
 export const config = {
