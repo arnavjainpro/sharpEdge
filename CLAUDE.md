@@ -8,6 +8,32 @@ sharpEdge is a personal trading research and decision-support engine (Bun + Type
 
 Read-only throughout: it never places or cancels broker orders.
 
+## Supabase MCP — ask before every use
+
+The Supabase MCP tools (`mcp__*Supabase*`) point at the **live production
+database**. There is no staging copy: the same project backs local `bun start`,
+the test suite, and real accounts with real positions.
+
+**Ask for explicit permission before every Supabase MCP call, including reads.**
+A prior approval covers that one call, not the next one, and not a different
+tool in the same family. Say which tool, which project, and what the query does.
+
+Never call `apply_migration`, `execute_sql` with DDL/DML, `create_branch`,
+`merge_branch`, `reset_branch`, `delete_branch`, `pause_project`, or
+`restore_project` on your own initiative — schema changes belong in
+`src/schema.sql`, which `db.exec()` applies on boot.
+
+Prefer the alternatives first, and reach for the MCP only when they genuinely
+cannot answer the question:
+- a throwaway script against `src/db.ts` (`bun run scripts/…`),
+- an existing `*.test.ts` (several already hit the real database),
+- the app's own HTTP endpoints.
+
+The one honest reason to prefer the MCP is connection pressure: `bun start`
+holds a pool of 15 and a second Bun client will hit
+`EMAXCONNSESSION: max clients reached`. That is a reason to ask, not a reason
+to skip asking.
+
 ## Commands
 
 ```bash
