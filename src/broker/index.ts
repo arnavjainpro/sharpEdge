@@ -74,7 +74,17 @@ export async function loadPersisted(userId: number): Promise<BrokerSnapshot | nu
     if (!row) return null;
     const snap = JSON.parse(row.snapshot) as BrokerSnapshot;
     // A corrupt row must degrade to the yaml path, not throw on a boot request.
-    return Array.isArray(snap?.holdings) ? snap : null;
+    if (!Array.isArray(snap?.holdings)) return null;
+    // The last-good rule is enforced on the way in AND on the way out. Nothing
+    // writes a 'manual' row today, but this table outlives any one writer — a
+    // migration, a hand-run INSERT, or a future caller that forgets the rule
+    // would otherwise get a portfolio.yaml snapshot restored as "last good",
+    // which is exactly the silent downgrade persistSnapshot exists to prevent.
+    if (snap.source === "manual") {
+      console.warn(`[broker] ignoring persisted 'manual' snapshot for user ${userId} — not a last-good source`);
+      return null;
+    }
+    return snap;
   } catch (err) {
     console.error(`[broker] persisted snapshot unreadable for user ${userId}:`, err);
     return null;

@@ -93,6 +93,21 @@ test("a corrupt stored snapshot reads as absent instead of throwing", async () =
   expect(await loadPersisted(u)).toBeNull();
 });
 
+// The last-good rule is enforced on read as well as on write. persistSnapshot
+// is not the only thing that can put a row in this table over its lifetime — a
+// migration, a hand-run INSERT, or a future caller that forgets could — and a
+// restored portfolio.yaml snapshot is exactly the silent downgrade the rule
+// exists to prevent.
+test("a 'manual' row already in the table is refused on read", async () => {
+  const u = await throwawayUser();
+  await db.query(
+    `INSERT INTO broker_snapshots (user_id, snapshot, source, as_of, updated_at)
+     VALUES (?, ?, 'manual', 0, 0)`
+  ).run(u, JSON.stringify(snap("manual", ["YAML_ONLY"], null)));
+
+  expect(await loadPersisted(u)).toBeNull();
+});
+
 test("one account's stored snapshot is never served to another", async () => {
   const a = await throwawayUser();
   const b = await throwawayUser();

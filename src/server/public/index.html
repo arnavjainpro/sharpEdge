@@ -8476,13 +8476,20 @@
       /* Killing the server drops this stream; EventSource reconnects on its own,
          but nothing used to re-read state, so the dashboard sat on whatever it
          had until the 5-minute poll or a manual browser refresh (SHARP-28).
-         The generation counter keeps a slow response from an earlier reconnect
-         from landing after a newer one and overwriting fresher data. */
-      let esGen = 0, esOpened = false;
+
+         A flapping server can fire onopen repeatedly, and loadState() assigns to
+         the module globals as soon as its response lands — so two overlapping
+         resyncs let the slower, older one write last. This is a mutex rather
+         than a version check for that reason: a generation counter compared
+         AFTER the fact cannot un-apply state that has already been assigned and
+         rendered. Skipping a reconnect while one is in flight loses nothing,
+         because the in-flight fetch is already reading current server state. */
+      let esOpened = false, esSyncing = false;
       es.onopen = () => {
         if (!esOpened) { esOpened = true; return; }   // boot already loads state below
-        const gen = ++esGen;
-        loadState().then(loadQuotes).then(() => { if (gen === esGen) stampUpdated(); }).catch(() => {});
+        if (esSyncing) return;
+        esSyncing = true;
+        loadState().then(loadQuotes).catch(() => {}).finally(() => { esSyncing = false; });
       };
       es.addEventListener("event", (m) => {
         const e = JSON.parse(m.data);

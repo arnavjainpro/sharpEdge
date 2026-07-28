@@ -220,9 +220,15 @@ function parseIssued(raw: string | null): IssuedBars | null {
   if (!raw) return null;
   try {
     const b = JSON.parse(raw) as IssuedBars;
-    const ok = Array.isArray(b?.closes) && b.closes.length > 0
-      && typeof b.asOf === "number" && b.asOf >= 0 && b.asOf < b.closes.length
-      && b.timestamps?.length === b.closes.length;
+    // Every series has to be the same length: grading indexes highs/lows/opens
+    // as well as closes, so a truncated payload would silently grade against
+    // undefined and produce a wrong outcome or NaN technicals rather than
+    // falling back to the re-fetch path.
+    const n = Array.isArray(b?.closes) ? b.closes.length : 0;
+    const ok = n > 0
+      && typeof b.asOf === "number" && b.asOf >= 0 && b.asOf < n
+      && b.timestamps?.length === n && b.opens?.length === n
+      && b.highs?.length === n && b.lows?.length === n;
     return ok ? b : null;   // corrupt payload falls back to the re-fetch path
   } catch {
     return null;
@@ -539,7 +545,7 @@ const RESET_KEY = "practice_reset_at";
 export async function resetPractice(userId: number): Promise<{ archived: number }> {
   const now = Math.floor(Date.now() / 1000);
   const n = await db.query(
-    `SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ? AND status = 'graded' AND ts > ?`
+    `SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ? AND status = 'graded' AND ts >= ?`
   ).get(userId, await resetAt(userId)) as { n: number };
   await setSettingFor(userId, RESET_KEY, String(now));
   return { archived: n?.n ?? 0 };
@@ -551,13 +557,18 @@ export async function resetAt(userId: number): Promise<number> {
 }
 
 export async function practiceStats(userId: number, cohort: Cohort = CURRENT_COHORT): Promise<PracticeStats> {
-  // Scoped to one cohort AND to drills after the last reset. A 26-bar intraday
-  // drill and a 40-day daily one are not the same measurement, so averaging them
-  // into a single "Avg R" would produce a number that means nothing.
+  // Scoped to one cohort AND to drills at or after the last reset. A 26-bar
+  // intraday drill and a 40-day daily one are not the same measurement, so
+  // averaging them into a single "Avg R" would produce a number that means
+  // nothing.
+  //
+  // `>=`, not `>`: both timestamps are whole seconds, and resetting then
+  // immediately starting a drill is a normal flow — that drill would land on the
+  // same second as the marker and be excluded from the record forever.
   const rows = await db.query(
     `SELECT direction, outcome, r_multiple, process_score
      FROM practice_attempts
-     WHERE user_id = ? AND status = 'graded' AND ts > ?
+     WHERE user_id = ? AND status = 'graded' AND ts >= ?
        AND interval = ? AND visible_bars = ? AND horizon = ? AND grading_version = ?`
   ).all(userId, await resetAt(userId),
     cohort.interval, cohort.visibleBars, cohort.horizon, cohort.gradingVersion,
