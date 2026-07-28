@@ -12,6 +12,7 @@ import { currentPortfolio } from "../broker";
 import { universeMeta } from "../ingest/universe";
 import { computeConcentration, type ConcHolding } from "./concentration";
 import { cachedQuote } from "../ingest/finnhub";
+import { practiceStats } from "./practice";
 import { LESSONS, LESSON_BY_ID, type Facts, type Lesson } from "../content/lessons";
 
 const DONE_KEY = "lessons_done";
@@ -84,16 +85,17 @@ export async function gatherFacts(userId: number): Promise<Facts> {
     } catch { }
   }
 
+  // Read the drill record through practiceStats rather than querying
+  // practice_attempts directly: it scopes to the current cohort and to drills
+  // taken since the last reset. A raw query here would average a 40-day daily
+  // drill together with a 26-bar intraday one and would keep counting drills the
+  // trader has already archived — so a lesson would quote a number the Practice
+  // tab no longer shows.
   try {
-    const p = await db.query(
-      `SELECT count(*)::int AS n,
-              avg(r_multiple) FILTER (WHERE outcome IN ('win','loss')) AS avg_r,
-              avg(process_score) AS avg_p
-       FROM practice_attempts WHERE user_id = ? AND status = 'graded'`
-    ).get(userId) as any;
-    facts.drills = p?.n ?? 0;
-    facts.avgR = p?.avg_r != null ? Number(p.avg_r) : null;
-    facts.avgProcess = p?.avg_p != null ? Number(p.avg_p) : null;
+    const p = await practiceStats(userId);
+    facts.drills = p.attempts;
+    facts.avgR = p.avgR;
+    facts.avgProcess = p.avgProcess;
   } catch { }
 
   return facts;
