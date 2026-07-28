@@ -8,20 +8,15 @@
   <meta name="description"
     content="A trading research and decision-support engine. 1,500 stocks scanned every six hours, six-dimension AI validation, and options priced by a real Black-Scholes engine.">
   <link rel="icon" type="image/png" href="/assets/favicon.png">
-  <!-- Same pre-paint theme stamp as the app shell (index.html) — without it a user
-       whose saved choice contradicts their OS sees a flash of the wrong theme. -->
-  <script>
-    try {
-      var t = localStorage.getItem("theme");
-      if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
-    } catch (e) { /* storage blocked — fall back to prefers-color-scheme */ }
-  </script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
     /* Only the tokens this page uses, copied from index.html's design system so the
        site and the dashboard read as one product. Deliberately a partial copy — the
-       full 150-line block would be a sync burden for no benefit here. */
+       full 150-line block would be a sync burden for no benefit here.
+
+       Light only, on purpose: the marketing page ignores the OS setting and the
+       app's saved theme. The dashboard (index.html) still has both themes. */
     :root {
       --bg: #ffffff;
       --surface: #ffffff;
@@ -36,39 +31,6 @@
       --sans: "Inter", -apple-system, system-ui, sans-serif;
       --shadow-sm: 0 1px 2px rgba(20, 30, 24, .05);
       color-scheme: light;
-    }
-
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        /* MUST match the [data-theme="dark"] block below — edit both together */
-        --bg: #0e1211;
-        --surface: #161b19;
-        --surface-2: #141a18;
-        --tile: #1c2220;
-        --line: #2a322e;
-        --text: #e8ede9;
-        --dim: #9aa59e;
-        --brand: #3fc9a4;
-        --brand-ink: #6fdcbd;
-        --on-brand: #0e1211;
-        --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
-        color-scheme: dark;
-      }
-    }
-
-    :root[data-theme="dark"] {
-      --bg: #0e1211;
-      --surface: #161b19;
-      --surface-2: #141a18;
-      --tile: #1c2220;
-      --line: #2a322e;
-      --text: #e8ede9;
-      --dim: #9aa59e;
-      --brand: #3fc9a4;
-      --brand-ink: #6fdcbd;
-      --on-brand: #0e1211;
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
-      color-scheme: dark;
     }
 
     * {
@@ -759,8 +721,7 @@
     <h1>Every setup, stress&#8209;tested.</h1>
     <div class="hero-foot">
       <div class="hero-copy">
-        <p>1,500 stocks scanned every six hours. Six-dimension AI validation.
-          Black-Scholes options pricing.</p>
+        <p>Scan 1,500 stocks. Pressure-test every trade.</p>
         <div class="hero-cta">
           <a class="btn btn-primary" href="/app?mode=signup">Get started</a>
           <a class="btn btn-ghost" href="#explore">Learn more</a>
@@ -813,37 +774,33 @@
         <h3>Idea validation</h3>
         <div class="card-cta">
           <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
-          <a class="btn btn-ghost" href="#why">Learn more</a>
         </div>
       </div>
 
       <div class="card" id="analyze">
         <img src="/assets/shot-analyze.png" alt="Analyze tab with a completed chart analysis" onerror="this.remove()">
-        <div class="eyebrow">Chart in, plan out</div>
+        <div class="eyebrow">Upload a chart</div>
         <h3>Intraday analyzer</h3>
         <div class="card-cta">
           <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
-          <a class="btn btn-ghost" href="#why">Learn more</a>
         </div>
       </div>
 
       <div class="pair">
         <div class="card">
           <img src="/assets/shot-stock.png" alt="A stock detail page with its factor breakdown" onerror="this.remove()">
-          <div class="eyebrow">Any of ~12,000 symbols</div>
-          <h3>Score any ticker on demand</h3>
+          <div class="eyebrow">12,000 symbols</div>
+          <h3>Score any ticker</h3>
           <div class="card-cta">
             <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
-            <a class="btn btn-ghost" href="#why">Learn more</a>
           </div>
         </div>
         <div class="card" id="backtest">
           <img src="/assets/shot-backtest.png" alt="A walk-forward backtest result" onerror="this.remove()">
           <div class="eyebrow">Edge or curve-fit?</div>
-          <h3>Walk-forward backtests</h3>
+          <h3>Backtests</h3>
           <div class="card-cta">
             <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
-            <a class="btn btn-ghost" href="#why">Learn more</a>
           </div>
         </div>
       </div>
@@ -851,10 +808,9 @@
       <div class="card">
         <img src="/assets/shot-activity.png" alt="The Activity feed with triaged events" onerror="this.remove()">
         <div class="eyebrow">Always watching</div>
-        <h3>Live event monitoring</h3>
+        <h3>Live monitoring</h3>
         <div class="card-cta">
           <a class="btn btn-primary" href="/app?mode=signup">Try it</a>
-          <a class="btn btn-ghost" href="#why">Learn more</a>
         </div>
       </div>
     </div>
@@ -872,8 +828,7 @@
             <path d="M9 12l2 2 4-4" />
           </svg>
           <h4>Read-only, always</h4>
-          <p>sharpEdge never places or cancels a broker order. Link Robinhood for live positions and the app
-            only ever reads them.</p>
+          <p>Link Robinhood for live positions. sharpEdge only ever reads them.</p>
         </div>
         <div class="why-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -881,8 +836,7 @@
             <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />
           </svg>
           <h4>The math is free</h4>
-          <p>Screener, regime, sector rotation and support/resistance are pure deterministic math. No tokens,
-            no cost, nothing to hallucinate.</p>
+          <p>Screening, regime and levels are deterministic math. Nothing to hallucinate.</p>
         </div>
         <div class="why-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -892,8 +846,7 @@
             <path d="M8 9h6" />
           </svg>
           <h4>Learns your mistakes</h4>
-          <p>Log how each closed trade actually went. Relevant past trades feed future validations, so the AI
-            flags the errors you keep repeating.</p>
+          <p>Closed trades feed future validations, so the errors you repeat get flagged.</p>
         </div>
         <div class="why-card">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
@@ -902,8 +855,7 @@
             <path d="M4 21a8 8 0 0 1 16 0" />
           </svg>
           <h4>Your own account</h4>
-          <p>Every account gets its own portfolio, broker link, journal and alerts. Market data is shared —
-            your positions never are.</p>
+          <p>Your own portfolio, journal and alerts. Market data is shared; positions never are.</p>
         </div>
       </div>
     </div>
@@ -916,12 +868,11 @@
       <div class="latest-grid">
         <a class="latest-item" href="/app?mode=signup">
           <figure><img src="/assets/shot-learn.png" alt="The Learn tab" onerror="this.remove()"></figure>
-          <p>Learn: twelve lessons wired to the numbers in your own portfolio, not a generic textbook.</p>
+          <p>Learn: twelve lessons wired to your own portfolio.</p>
         </a>
         <a class="latest-item" href="/app?mode=signup">
           <figure><img src="/assets/shot-practice.png" alt="The Practice tab" onerror="this.remove()"></figure>
-          <p>Practice: blind replay drills on real historical candles, graded on your process rather than
-            the P&amp;L.</p>
+          <p>Practice: blind replay drills, graded on process instead of P&amp;L.</p>
         </a>
       </div>
     </div>
@@ -937,11 +888,8 @@
           <button class="btn btn-line" type="submit">Get started</button>
         </form>
         <p class="fine">
-          Creating an account gives you your own portfolio, broker link, trade journal, alerts and background
-          monitoring. Market data — the screener, regime and universe — is shared across accounts; nothing
-          derived from your positions ever is.<br>
-          sharpEdge is read-only and never places or cancels broker orders.
-          Alerts are delivered over Telegram, which you configure yourself.
+          You get your own portfolio, broker link, journal and alerts. sharpEdge is read-only and never places
+          or cancels broker orders.
         </p>
       </div>
     </div>
@@ -957,14 +905,12 @@
         <div class="foot-col">
           <h5>Product</h5>
           <ul>
-            <li><a href="#explore">Full-market screener</a></li>
+            <li><a href="#explore">Screener</a></li>
             <li><a href="#ideas">Idea validation</a></li>
             <li><a href="#analyze">Intraday analyzer</a></li>
-            <li><a href="#backtest">Backtest &amp; walk-forward</a></li>
-            <li><a href="/app?mode=signup">Options structures</a></li>
-            <li><a href="/app?mode=signup">Price &amp; score alerts</a></li>
-            <li><a href="/app?mode=signup">Learn</a></li>
-            <li><a href="/app?mode=signup">Practice</a></li>
+            <li><a href="#backtest">Backtests</a></li>
+            <li><a href="/app?mode=signup">Options</a></li>
+            <li><a href="/app?mode=signup">Alerts</a></li>
           </ul>
         </div>
         <div class="foot-col">
@@ -972,17 +918,9 @@
           <ul>
             <li><a href="#why">Market regime</a></li>
             <li><a href="#why">Sector rotation</a></li>
-            <li><a href="#why">Technicals &amp; levels</a></li>
             <li><a href="#why">Black-Scholes pricing</a></li>
-            <li><a href="#why">Two-tier AI triage</a></li>
+            <li><a href="#why">AI triage</a></li>
             <li><a href="#why">Trade journal</a></li>
-            <li><a href="#why">Idea scoreboard</a></li>
-          </ul>
-          <h5 class="spaced">Data sources</h5>
-          <ul>
-            <li><a href="#why">Yahoo Finance</a></li>
-            <li><a href="#why">Finnhub</a></li>
-            <li><a href="#why">SEC EDGAR</a></li>
           </ul>
         </div>
         <div class="foot-col">
@@ -991,18 +929,15 @@
             <li><a href="/app?mode=signup">Create an account</a></li>
             <li><a href="/app">Log in</a></li>
             <li><a href="/app">Link a brokerage</a></li>
-            <li><a href="/app">Import positions</a></li>
             <li><a href="/app">Telegram alerts</a></li>
             <li><a href="/app">Risk settings</a></li>
-            <li><a href="/app">Appearance</a></li>
           </ul>
         </div>
         <div class="foot-col">
           <h5>About</h5>
           <ul>
             <li><a href="#why">Read-only by design</a></li>
-            <li><a href="#why">How costs are controlled</a></li>
-            <li><a href="#why">Multi-account isolation</a></li>
+            <li><a href="#why">Account isolation</a></li>
           </ul>
           <h5 class="spaced">Terms</h5>
           <ul>
@@ -1017,12 +952,10 @@
         <div class="fine">
           <p><strong>Decision-support tool, not licensed financial advice. Every trade is your
               decision.</strong></p>
-          <p>Market data is sourced from Yahoo Finance, Finnhub and SEC EDGAR and may be delayed, incomplete or
-            wrong. Scores, ratings and stress tests are model output, not predictions. Backtested and
-            walk-forward results are hypothetical and do not represent actual trading; options backtests are
-            model-priced because no historical option-quote feed is used.</p>
-          <p>Brokerage integration is read-only. Robinhood has no official public API and the link can break
-            without notice, in which case the app falls back to imported or configured positions.</p>
+          <p>Market data from Yahoo Finance, Finnhub and SEC EDGAR may be delayed, incomplete or wrong. Scores
+            and stress tests are model output, not predictions; backtested results are hypothetical, and
+            options backtests are model-priced. Brokerage integration is read-only, and the unofficial
+            Robinhood link can break without notice.</p>
           <p>© 2026 sharpEdge.</p>
         </div>
       </div>
