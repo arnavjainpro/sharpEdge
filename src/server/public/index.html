@@ -1629,6 +1629,126 @@
       display: block;
     }
 
+    /* Technicals overlay. Each level is a labelled HTML rule rather than an SVG
+       line so the label survives the chart's non-uniform stretch. Every line is
+       identified by BOTH a dash pattern and a direct text label — colour alone is
+       never the identifier, matching the rule the sector donut already follows. */
+    .drill-level {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      border-top: 1px dashed var(--dim);
+      pointer-events: none;
+      opacity: .85;
+    }
+
+    .drill-level>span {
+      position: absolute;
+      right: 2px;
+      top: -8px;
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: .01em;
+      padding: 1px 4px;
+      border-radius: var(--radius-xs);
+      background: var(--surface);
+      color: var(--dim);
+      white-space: nowrap;
+    }
+
+    .drill-level.support {
+      border-top-style: solid;
+      border-top-color: var(--green);
+    }
+
+    .drill-level.support>span {
+      color: var(--green);
+    }
+
+    .drill-level.resistance {
+      border-top-style: solid;
+      border-top-color: var(--red);
+    }
+
+    .drill-level.resistance>span {
+      color: var(--red);
+    }
+
+    .drill-level.sma20 {
+      border-top-style: dashed;
+      border-top-color: var(--blue);
+    }
+
+    .drill-level.sma20>span {
+      color: var(--blue);
+    }
+
+    .drill-level.sma50 {
+      border-top-style: dotted;
+      border-top-width: 2px;
+      border-top-color: var(--brand);
+    }
+
+    .drill-level.sma50>span {
+      color: var(--brand);
+    }
+
+    .drill-level.vwap {
+      border-top-style: dashed;
+      border-top-color: var(--amber);
+    }
+
+    .drill-level.vwap>span {
+      color: var(--amber);
+    }
+
+    /* "What was readable" evidence rows. Reuses .crit spacing so the reveal reads
+       as one scorecard rather than two stacked components. */
+    .readable {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 3px 10px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .readable:last-child {
+      border-bottom: none;
+    }
+
+    .readable .r-name {
+      font-size: var(--fs-data);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .readable .r-val {
+      font-variant-numeric: tabular-nums;
+      color: var(--dim);
+      font-weight: 600;
+      font-size: var(--fs-data);
+    }
+
+    .readable .r-meant,
+    .readable .r-plan {
+      grid-column: 1 / -1;
+      font-size: var(--fs-meta);
+      line-height: var(--lh-body);
+      color: var(--dim);
+    }
+
+    .readable .r-plan {
+      color: var(--text);
+      opacity: .9;
+    }
+
+    .readable .r-plan::before {
+      content: "Your plan: ";
+      color: var(--faint);
+      font-weight: 600;
+    }
+
     .drill-form {
       display: flex;
       flex-wrap: wrap;
@@ -2278,6 +2398,11 @@
       color: var(--red);
       font-size: 13px;
       min-height: 16px;
+    }
+
+    /* Same slot, non-alarming colour — "we mailed you a link" is not an error. */
+    #auth-error.ok {
+      color: var(--dim);
     }
 
     #auth-flip {
@@ -2934,6 +3059,34 @@
     #gen-btn:disabled {
       opacity: .5;
       cursor: wait;
+    }
+
+    /* Price and duration ride on the button itself. This is the only control in
+       the app that spends money on click, so what it costs is not tooltip
+       material. */
+    .gen-cost {
+      font-size: 10.5px;
+      font-weight: 600;
+      opacity: .78;
+      padding-left: 7px;
+      margin-left: 1px;
+      border-left: 1px solid currentColor;
+      white-space: nowrap;
+    }
+
+    /* Never hidden on small screens: the whole point is that the price is
+       readable without a hover, and touch users are the ones who can't hover. */
+    @media (max-width: 560px) {
+      #gen-btn {
+        flex-wrap: wrap;
+        row-gap: 0;
+      }
+
+      .gen-cost {
+        border-left: none;
+        padding-left: 0;
+        flex-basis: 100%;
+      }
     }
 
     /* report cards */
@@ -3978,6 +4131,10 @@
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required
         minlength="8">
+      <!-- inputmode brings up the numeric keypad on a phone; one-time-code lets
+           iOS and Safari offer the code straight from the mail. -->
+      <input type="text" id="auth-code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric"
+        pattern="[0-9]{6}" maxlength="6" hidden>
       <div id="auth-error"></div>
       <button type="submit" class="advise-btn" id="auth-submit">Sign in</button>
       <button type="button" id="auth-flip">New here? Create an account</button>
@@ -4102,7 +4259,13 @@
             <div class="kpi-grid" id="kpi-grid"></div>
             <div class="chart-wrap">
               <div class="chart-head">
-                <span class="klabel" style="margin:0">Balance history</span>
+                <!-- Named for what it actually is. The curve prices the shares you
+                     hold TODAY back through history, so it ignores past buys,
+                     sells, deposits and closed positions - it is not an account
+                     balance. Real equity history needs persisted snapshots. -->
+                <span class="klabel term" style="margin:0"
+                  title="Your current holdings priced with past closes. Not a true account balance: it ignores earlier buys and sells, deposits, dividends and positions you have since closed.">Holdings
+                  value, back-priced</span>
                 <div class="range-tabs" id="range-tabs" role="group" aria-label="Chart range">
                   <button data-range="30">1M</button>
                   <button data-range="90">3M</button>
@@ -4270,13 +4433,24 @@
               </svg> <span id="filters-btn-label">Filters</span></button>
             <div id="active-filter-chips" class="filter-bar" style="margin:0"></div>
             <span class="spacer"></span>
+            <!-- Free re-scan, same shape as the Market tab's refresh. Filters are
+                 module state, so they survive the re-render by construction. -->
+            <button class="refresh-btn" id="ideas-refresh"
+              title="Re-run the market scan and redraw these ideas. Free, no AI."><svg class="ic" width="13"
+                height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg> Refresh</button>
+            <!-- The cost is visible text, not a title: a tooltip is invisible to
+                 touch and keyboard users, and this button spends money. -->
             <button id="gen-btn"
-              title="Pick the strongest setups matching these filters and run each through full AI validation (a few cents, takes a minute or two)"><svg
+              title="Pick the strongest setups matching these filters and run each through full AI validation"><svg
                 class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />
               </svg>
-              Generate ideas from filters</button>
+              Validate top setups <span class="gen-cost">AI · ~$0.05 · 1-3 min</span></button>
           </div>
           <dialog id="filters-modal">
             <h3 style="margin:0 0 12px">Filter ideas</h3>
@@ -4292,8 +4466,8 @@
                    from the metrics the filter actually knows how to read. -->
               <select id="cf-metric" aria-label="Metric"></select>
               <select id="cf-op" aria-label="Comparison">
-                <option value=">">&gt; greater than</option>
-                <option value="<">&lt; less than</option>
+                <option value=">">&gt;</option>
+                <option value="<">&lt;</option>
               </select>
               <input type="number" id="cf-val" step="any" placeholder="value" style="width:74px">
               <button class="refresh-btn" id="cf-add" title="Add this rule as a removable filter">+ Add rule</button>
@@ -4437,7 +4611,14 @@
               <h3>Your record</h3>
               <span class="act" id="stats-note"></span>
             </div>
+            <!-- The cohort travels with the numbers: an average only means
+                 something next to the kind of drill that produced it. -->
+            <div class="widget-note" id="practice-cohort" style="margin-top:0"></div>
             <div class="kpi-grid" id="practice-kpis"></div>
+            <div aria-live="polite" class="hint" id="practice-reset-msg" style="margin-top:8px"></div>
+            <button class="refresh-btn" id="practice-reset" style="margin-top:8px"
+              title="Start a fresh record. Your past drills are kept, they just stop counting toward these numbers.">Start
+              a new record</button>
           </div>
         </section>
 
@@ -4500,6 +4681,14 @@
                   placeholder="type it again"></label>
               <label>Current password<input type="password" id="pf-password" autocomplete="current-password"
                   placeholder="required to change email"></label>
+            </div>
+            <!-- Second step: the address is staged server-side, waiting on the mailed code. -->
+            <div class="settings-row" id="pf-email-pending" hidden>
+              <label>Code sent to <span id="pf-pending-addr" style="color:var(--fg)"></span>
+                <input type="text" id="pf-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6"
+                  pattern="[0-9]{6}" placeholder="6 digits"></label>
+              <button type="button" class="advise-btn" id="pf-code-confirm" style="margin-top:0">Confirm email</button>
+              <button type="button" id="pf-code-cancel" title="Discard the pending change and keep your current email">Cancel</button>
             </div>
             <div class="settings-msg" id="profile-msg"></div>
           </form>
@@ -5152,8 +5341,9 @@
       }
       el.innerHTML = `${fill}<polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${big ? 1.75 : 1.5}" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/>`;
       if (!opts?.axes) return chartAxes(el, null);
-      // Timestamps are optional — the portfolio curve is a synthetic series with no
-      // dates behind it, so it gets the price axis and hover but no date row.
+      // Timestamps stay optional: a caller with no session calendar to hand still
+      // gets the price axis and hover, just without the date row. The length
+      // check is the guard against a mis-sliced axis dating the curve wrongly.
       const ts = opts.timestamps?.length === values.length ? opts.timestamps : null;
       const tspan = ts ? ts[ts.length - 1] - ts[0] : 0;
       const last = values.length - 1;
@@ -5234,6 +5424,7 @@
     let quotes = {};
     let earnings = {};   // ticker → next earnings ISO date (holdings, ≤14d out)
     let screener = {};   // ticker -> row
+    let sparkTs = [];    // shared session calendar behind every row's spark
     let events = [];
     let market = null;   // { snapshot, boards }
     let brokerInfo = null;
@@ -5354,6 +5545,11 @@
         balanceSeries = Array.from({ length: len }, (_, i) =>
           sparks.reduce((sum, x) => sum + x.h.shares * x.s[x.s.length - len + i], 0)
         );
+        // Sparks are all tails of the same session calendar, so the shared
+        // timestamp array is aligned by taking the same-length tail. Only used
+        // when the lengths agree — a mismatched axis would date the curve wrong,
+        // and sparkSvg already drops the date row when they don't line up.
+        balanceTs = sparkTs.length >= len ? sparkTs.slice(sparkTs.length - len) : [];
       }
       drawBalanceChart();
       renderKpis({ value, day, dayPct });
@@ -5364,20 +5560,43 @@
        is disabled rather than quietly returning a shorter window — a control
        that lies about its window is worse than one that admits the limit. */
     let balanceSeries = [];
+    let balanceTs = [];
     let chartRange = Number(localStorage.getItem("pfRange") ?? 0);
 
     function drawBalanceChart() {
       const n = balanceSeries.length;
+      // The series is ~30 DOWNSAMPLED points covering ~90 sessions, so one point
+      // is roughly three sessions. data-range is in days, so slicing by index
+      // made "1M" render about four months of history — invisible until the date
+      // axis landed and started contradicting the button. Slice by time instead.
+      const haveTs = balanceTs.length === n && n > 0;
+      const lastTs = haveTs ? balanceTs[n - 1] : 0;
+      const spanDays = haveTs ? (lastTs - balanceTs[0]) / 86400 : 0;
+
       document.querySelectorAll("#range-tabs [data-range]").forEach((b) => {
         const r = Number(b.dataset.range);
-        b.disabled = r > 0 && r > n;
+        // A window longer than the data we hold is disabled rather than quietly
+        // showing less than it claims.
+        b.disabled = r > 0 && (haveTs ? r > spanDays : r > n);
         b.classList.toggle("active", r === chartRange);
       });
       if (!n) return;
-      const slice = chartRange > 0 ? balanceSeries.slice(-chartRange) : balanceSeries;
-      // axes:true opts into the price-axis + hover readout; the portfolio curve is
-      // synthetic so it passes no timestamps and gets no date row.
-      sparkSvg($("#portfolio-spark"), slice, true, { axes: true });
+
+      let from = 0;
+      if (chartRange > 0) {
+        if (haveTs) {
+          const cutoff = lastTs - chartRange * 86400;
+          const i = balanceTs.findIndex((t) => t >= cutoff);
+          from = i < 0 ? 0 : Math.min(i, Math.max(0, n - 2)); // always leave a drawable line
+        } else {
+          from = Math.max(0, n - chartRange);
+        }
+      }
+      const slice = balanceSeries.slice(from);
+      // Timestamps are sliced by the SAME window as the values, or the axis would
+      // label the curve with the wrong dates.
+      const ts = haveTs ? balanceTs.slice(from) : null;
+      sparkSvg($("#portfolio-spark"), slice, true, { axes: true, timestamps: ts });
     }
 
     /* KPI strip. Beginner sees the four that answer "how am I doing"; Pro also
@@ -5415,13 +5634,46 @@
       const orders = brokerInfo?.openOrders?.length ?? 0;
       el.innerHTML = `
     <span class="chip ${src === "robinhood" ? "buy" : src === "import" ? "info" : "calm"} sm">${srcLabel}</span>
+    ${staleChip()}
     ${orders ? `<span>${orders} open order${orders === 1 ? "" : "s"}</span>` : ""}`;
     }
 
-    // "Updated 3:42:07 PM" under the portfolio — stamped whenever state/quotes reload.
+    /* A snapshot restored from the database after a restart carries its ORIGINAL
+       time, so the positions on screen can be hours old while "Updated" below
+       shows the moment we fetched them. Without this chip, persisting snapshots
+       would trade a visible failure (blank pane) for a silent one (stale numbers
+       that look live). 120s matches the websocket staleness bar in renderHealth,
+       so the dashboard has one definition of "stale". */
+    const STALE_SEC = 120;
+    function brokerAgeSec() {
+      const asOf = brokerInfo?.asOf;
+      return asOf ? Math.max(0, Math.round(Date.now() / 1000 - asOf)) : null;
+    }
+    function relAge(sec) {
+      if (sec < 90) return `${sec}s ago`;
+      if (sec < 5400) return `${Math.round(sec / 60)}m ago`;
+      if (sec < 172800) return `${Math.round(sec / 3600)}h ago`;
+      return `${Math.round(sec / 86400)}d ago`;
+    }
+    function staleChip() {
+      const age = brokerAgeSec();
+      if (age == null || age < STALE_SEC) return "";
+      return `<span class="chip warn sm" title="These positions were last confirmed with your broker ${relAge(age)}. A refresh is in progress or the broker is unreachable.">as of ${relAge(age)}</span>`;
+    }
+
+    // "Updated 3:42:07 PM" under the portfolio — stamped whenever state/quotes
+    // reload. This is the time WE last fetched, which is not the same thing as
+    // the time the positions were true: when the broker snapshot is older than
+    // the fetch, say so here rather than let the fresh timestamp imply the
+    // numbers above it are fresh too.
     function stampUpdated() {
       const el = $("#pf-updated");
-      if (el) el.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      if (!el) return;
+      const t = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+      const age = brokerAgeSec();
+      el.textContent = age != null && age >= STALE_SEC
+        ? `Checked ${t} · positions as of ${relAge(age)}`
+        : "Updated " + t;
     }
 
     // Dashboard controls: mode, chart range, greeting. Wired once at boot.
@@ -5758,12 +6010,13 @@
        renders what /new sent, and the reveal only ever comes from /submit. */
     let drill = null;   // { id, atr, bars } while a drill is open
 
-    function drillChart(el, ohlc, dates, splitFrac = null) {
+    function drillChart(el, ohlc, dates, splitFrac = null, levels = null) {
       candleSvg(el, ohlc, ohlc.closes.length);
       const lows = ohlc.lows, highs = ohlc.highs;
+      const min = Math.min(...lows), max = Math.max(...highs);
       chartAxes(el, {
-        min: Math.min(...lows), max: Math.max(...highs),
-        dates,   // null on the drill: a visible date is a lookup
+        min, max,
+        dates,   // null before the reveal: a visible date is a lookup
         at: (f) => {
           const i = Math.min(ohlc.closes.length - 1, Math.floor(f * ohlc.closes.length));
           return { x: ((i + 0.5) / ohlc.closes.length) * 100, label: `O ${money(ohlc.opens[i])}  H ${money(highs[i])}  L ${money(lows[i])}  C ${money(ohlc.closes[i])}` };
@@ -5772,11 +6025,25 @@
       // chartAxes clears .chart-y/.chart-note but not these, so drop stale ones
       // before re-adding — a second drill would otherwise stack dividers.
       const plot = el.parentElement;
-      plot.querySelectorAll(".drill-split, .drill-future").forEach((n) => n.remove());
+      plot.querySelectorAll(".drill-split, .drill-future, .drill-level").forEach((n) => n.remove());
       if (splitFrac != null) {
         const pct = (splitFrac * 100).toFixed(3);
         plot.insertAdjacentHTML("beforeend",
           `<div class="drill-future" style="left:${pct}%"></div><div class="drill-split" style="left:${pct}%"></div>`);
+      }
+      /* Levels are HTML overlays, not SVG. The chart is drawn with
+         preserveAspectRatio="none", which stretches the viewBox non-uniformly —
+         the same reason chartAxes and the no-data note are HTML (see the comment
+         above chartMessage). An SVG <text> label here would smear horizontally. */
+      if (levels?.length) {
+        const span = max - min || 1;
+        // candleSvg insets the drawing 4 units into a 100-unit box.
+        const topPct = (v) => 100 - ((v - min) / span) * 92 - 4;
+        for (const lv of levels) {
+          if (lv.level == null || lv.level < min || lv.level > max) continue;   // off-chart levels are not drawn
+          plot.insertAdjacentHTML("beforeend",
+            `<div class="drill-level ${esc(lv.kind ?? "")}" style="top:${topPct(lv.level).toFixed(2)}%"><span>${esc(lv.label)} ${esc(lv.value)}</span></div>`);
+        }
       }
     }
 
@@ -5867,7 +6134,17 @@
           ${d.got === 0 ? lessonLinkFor(d.criterion) : ""}
         </div>`).join("");
 
-      $("#drill-meta").textContent = `${g.ticker} · ${new Date(g.asOfTs * 1000).toLocaleDateString()}`;
+      // What was readable on the chart at the moment of the decision. Rendered
+      // after the outcome, because the point is "here is what you could have
+      // used", not "here is why you were wrong".
+      const readable = (g.technicals ?? []).map((t) => `
+        <div class="readable">
+          <span class="r-name">${esc(t.label)}</span><span class="r-val">${esc(t.value)}</span>
+          <div class="r-meant">${esc(t.meant)}</div>
+          <div class="r-plan">${esc(t.plan)}</div>
+        </div>`).join("");
+
+      $("#drill-meta").textContent = `${g.ticker} · ${new Date(g.asOfTs * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`;
       $("#drill-body").innerHTML = `
         <div class="score-pair">
           <div><div class="k">Process</div><div class="v">${g.process.score}<span style="font-size:15px;color:var(--faint)">/100</span></div>
@@ -5877,8 +6154,14 @@
         </div>
         <div style="margin-bottom:var(--sp-4)"><span class="chip ${tone}">${esc(label)}</span></div>
         <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none"></svg>
-        <div class="widget-note" style="margin-bottom:var(--sp-4)">Everything left of the line is what you saw. The shaded part is what happened after you committed.</div>
-        ${crits}`;
+        <div class="widget-note" style="margin-bottom:var(--sp-4)">Everything left of the line is what you saw. The shaded part is what happened after you committed. The levels drawn on it were all readable before you decided.</div>
+        ${crits}
+        ${readable ? `
+          <div class="widget-head" style="margin-top:var(--sp-5)">
+            <h3 style="font-size:var(--fs-data)">What was readable at decision time</h3>
+          </div>
+          <div class="widget-note" style="margin-bottom:6px">Every number below comes only from bars at or before the moment you committed — nothing here uses what happened next.</div>
+          ${readable}` : ""}`;
 
       // Draw history + future together. The y-axis rescales here, which is fine
       // — the plan is already committed, and pre-scaling to include the future
@@ -5890,7 +6173,8 @@
       const span = ts.length ? ts[ts.length - 1] - ts[0] : 0;
       const last = full.closes.length - 1;
       drillChart($("#drill-svg"), full, [0, Math.floor(last / 2), last].map((i) => chartDate(ts[i], span)),
-        h.closes.length / full.closes.length);
+        h.closes.length / full.closes.length,
+        (g.technicals ?? []).filter((t) => t.level != null));
 
       drill = null;
       const btn = $("#drill-new");
@@ -5905,6 +6189,10 @@
         const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
         const tile = (k, v, n) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
         $("#stats-note").textContent = s.enough ? `${s.attempts} drills` : `${s.attempts} of ${5} drills — stats unlock at 5`;
+        const c = s.cohort;
+        $("#practice-cohort").textContent = c
+          ? `${c.interval} bars · ${c.visibleBars}-bar read · ${c.horizon}-bar outcome · grading v${c.gradingVersion}`
+          : "";
         $("#practice-kpis").innerHTML = [
           tile("Avg process", s.avgProcess == null ? "—" : Math.round(s.avgProcess), "out of 100"),
           tile("Hit rate", pct(s.hitRate), `${s.taken} taken`),
@@ -5915,6 +6203,31 @@
     }
 
     $("#drill-new").addEventListener("click", startDrill);
+
+    /* Reset archives rather than deletes: it moves a marker so these stats start
+       fresh, and every drill you took is still on record. That is why a plain
+       confirm is proportionate here — nothing is being destroyed. */
+    $("#practice-reset").addEventListener("click", async () => {
+      const btn = $("#practice-reset");
+      const n = Number($("#stats-note").textContent.match(/^\d+/)?.[0] ?? 0);
+      if (!confirm(`Start a new practice record?\n\n${n} drill${n === 1 ? "" : "s"} will stop counting toward your averages. Nothing is deleted — your past drills stay in History.`)) return;
+      btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = "Resetting…";
+      try {
+        const r = await (await fetch("/api/practice/reset", { method: "POST" })).json();
+        if (!r.ok) { toast(r.error || "Could not reset the record.", "bad"); return; }
+        // The stats card hides itself once the new record is empty, so the
+        // confirmation has to live outside it.
+        $("#practice-reset-msg").textContent = `New record started. ${r.archived} earlier drill${r.archived === 1 ? "" : "s"} archived.`;
+        toast(`New record started — ${r.archived} earlier drill${r.archived === 1 ? "" : "s"} archived, none deleted.`);
+        await loadPracticeStats();
+      } catch {
+        toast("Could not reach the server.", "bad");
+      } finally {
+        btn.disabled = false; btn.textContent = orig;
+      }
+    });
 
     /* ── watchlist (starred in the UI; merged with broker/YAML lists) ── */
     function renderWatchlist() {
@@ -6498,9 +6811,10 @@
     });
 
     $("#gen-btn").addEventListener("click", async () => {
+      if (ideasBusy) return;
       const btn = $("#gen-btn");
-      btn.disabled = true;
-      const orig = btn.textContent;
+      const orig = btn.innerHTML;
+      setIdeasBusy(true);
       btn.textContent = "Validating top setups… (1-3 min)";
       try {
         // minScore is now just a rule like any other — pull the tightest lower
@@ -6538,7 +6852,7 @@
           for (const rep of res.reports.reverse()) showReport(rep, $("#report-area"));
         } else alert(`Generation failed: ${res.error}`);
       } catch (e) { alert(`Generation failed: ${e}`); }
-      finally { btn.disabled = false; btn.textContent = orig; }
+      finally { btn.innerHTML = orig; setIdeasBusy(false); }
     });
 
     /* ── manual refresh buttons: spinner + disabled while the fetch runs ── */
@@ -6550,6 +6864,37 @@
       try { await fn(); } finally { btn.disabled = false; btn.classList.remove("spinning"); btn.innerHTML = orig; }
     }
     $("#market-refresh").addEventListener("click", () => withSpin($("#market-refresh"), () => loadScreener().then(loadMarket)));
+
+    /* Free re-scan of the ideas board. Both this and the paid validate mutate
+       `screener`/`market`, so they are mutually exclusive rather than racing.
+       On failure the existing ideas stay on screen — a refresh that silently
+       empties the board is worse than one that admits it failed. */
+    let ideasBusy = false;
+    function setIdeasBusy(busy) {
+      ideasBusy = busy;
+      $("#ideas-refresh").disabled = busy;
+      $("#gen-btn").disabled = busy;
+      $("#ideas").setAttribute("aria-busy", busy ? "true" : "false");
+    }
+    $("#ideas-refresh").addEventListener("click", async () => {
+      if (ideasBusy) return;
+      setIdeasBusy(true);
+      const btn = $("#ideas-refresh");
+      const orig = btn.innerHTML;
+      btn.classList.add("spinning");
+      btn.innerHTML = `${icon("refresh", 13)} Refreshing…`;
+      try {
+        await loadScreener();
+        await loadMarket();
+        stampUpdated();
+      } catch {
+        toast("Could not refresh ideas — showing the last scan.", "err");
+      } finally {
+        btn.classList.remove("spinning");
+        btn.innerHTML = orig;
+        setIdeasBusy(false);
+      }
+    });
 
     /* ── history: past validated ideas ── */
 
@@ -6892,13 +7237,63 @@
     }
     $("#pf-email").addEventListener("input", syncEmailConfirm);
 
+    // Step two of the change: the address is staged server-side and only
+    // becomes the login once the mailed code comes back. Survives a reload
+    // because /api/profile reports the pending address.
+    function showPendingEmail(addr) {
+      $("#pf-email-pending").hidden = !addr;
+      $("#pf-pending-addr").textContent = addr ?? "";
+      if (!addr) $("#pf-code").value = "";
+      else $("#pf-code").focus();
+    }
+    $("#pf-code-confirm").addEventListener("click", async () => {
+      const btn = $("#pf-code-confirm");
+      const msg = $("#profile-msg");
+      btn.disabled = true;
+      try {
+        const res = await (await fetch("/api/profile/confirm-email", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: $("#pf-code").value.trim() }),
+        })).json();
+        if (res.ok) {
+          showPendingEmail(null);
+          msg.textContent = "Email confirmed — sign in with the new address next time.";
+          toast("Email updated");
+          await loadProfile();
+        } else {
+          // Wrong/expired codes are the normal case here, not an exception —
+          // the server's message already says how many tries are left.
+          msg.textContent = res.error;
+          toast(res.error, "err");
+          if (res.restart) showPendingEmail(null);
+        }
+      } catch (e) { msg.textContent = `Failed: ${e}`; }
+      finally { btn.disabled = false; }
+    });
+    $("#pf-code-cancel").addEventListener("click", async () => {
+      await fetch("/api/profile/confirm-email", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cancel: true }),
+      }).catch(() => {});
+      showPendingEmail(null);
+      $("#pf-email").value = savedEmail;
+      syncEmailConfirm();
+      $("#profile-msg").textContent = "Email change cancelled.";
+    });
+
     async function loadProfile() {
       try {
-        const { profile } = await (await fetch("/api/profile")).json();
+        const { profile, pendingEmail, emailChangeAvailable } = await (await fetch("/api/profile")).json();
         if (!profile) return;
         $("#pf-email").value = profile.email ?? "";
         savedEmail = (profile.email ?? "").trim().toLowerCase();
         syncEmailConfirm();
+        showPendingEmail(pendingEmail ?? null);
+        // No mail provider configured → the address can't be verified, so it
+        // goes back to read-only rather than offering a change that 503s.
+        if (emailChangeAvailable === false) {
+          $("#pf-email").readOnly = true;
+          $("#pf-email").title = "Changing your sign-in email needs a mail provider — set RESEND_API_KEY (see .env.example)";
+        }
         $("#pf-name").value = profile.full_name ?? "";
         $("#pf-phone").value = profile.phone ?? "";
         const name = (profile.full_name || profile.email || "").trim();
@@ -6938,14 +7333,25 @@
         }),
       })).json();
       if (res.ok) {
-        savedEmail = (res.profile?.email ?? email).trim().toLowerCase();
-        $("#pf-email").value = res.profile?.email ?? email;
-        syncEmailConfirm();
-        loadProfile();  // header name/initials follow the new address
+        // The email is NOT applied yet when a change was requested — the server
+        // staged it and mailed a code, so leave the field on the address still
+        // signed in with and hand over to the code box.
+        if (res.pendingEmail) {
+          $("#pf-email").value = savedEmail;
+          syncEmailConfirm(); // hides the confirm row, wipes the password
+          showPendingEmail(res.pendingEmail);
+        } else {
+          $("#pf-email").value = res.profile?.email ?? email;
+          savedEmail = (res.profile?.email ?? email).trim().toLowerCase();
+          syncEmailConfirm();
+        }
+        loadProfile();  // header name/initials follow the saved profile
       }
-      msg.textContent = res.ok ? (changingEmail ? "Saved — sign in with the new email next time." : "Saved.") : `Failed: ${res.error}`;
+      msg.textContent = res.ok
+        ? (res.pendingEmail ? `Saved. Check ${res.pendingEmail} for a 6-digit code to finish the email change.` : "Saved.")
+        : `Failed: ${res.error}`;
       if (res.ok) toast("Profile saved"); else toast(`Save failed: ${res.error}`, "err");
-      setTimeout(() => { msg.textContent = ""; }, 5000);
+      setTimeout(() => { msg.textContent = ""; }, 8000);
     });
 
     /* ── settings: brokerage link ── */
@@ -8045,6 +8451,8 @@
     async function loadScreener() {
       const data = await (await fetch("/api/screener")).json();
       screener = Object.fromEntries(data.rows.map((r) => [r.ticker, r]));
+      // One shared session calendar for every row's spark, not one per row.
+      sparkTs = Array.isArray(data.sparkTs) ? data.sparkTs : [];
       renderIdeas();
       renderPortfolio();
       renderHoldings();
@@ -8065,6 +8473,24 @@
       $("#auth-screen").hidden = true;
 
       const es = new EventSource("/api/stream");
+      /* Killing the server drops this stream; EventSource reconnects on its own,
+         but nothing used to re-read state, so the dashboard sat on whatever it
+         had until the 5-minute poll or a manual browser refresh (SHARP-28).
+
+         A flapping server can fire onopen repeatedly, and loadState() assigns to
+         the module globals as soon as its response lands — so two overlapping
+         resyncs let the slower, older one write last. This is a mutex rather
+         than a version check for that reason: a generation counter compared
+         AFTER the fact cannot un-apply state that has already been assigned and
+         rendered. Skipping a reconnect while one is in flight loses nothing,
+         because the in-flight fetch is already reading current server state. */
+      let esOpened = false, esSyncing = false;
+      es.onopen = () => {
+        if (!esOpened) { esOpened = true; return; }   // boot already loads state below
+        if (esSyncing) return;
+        esSyncing = true;
+        loadState().then(loadQuotes).catch(() => {}).finally(() => { esSyncing = false; });
+      };
       es.addEventListener("event", (m) => {
         const e = JSON.parse(m.data);
         const idx = events.findIndex((x) => x.id === e.id);
@@ -8085,28 +8511,66 @@
       setInterval(loadMarket, 10 * 60_000);
     }
 
+    // Three states: login, signup, and — when signup staged a pending account
+    // rather than creating one — "confirm", where the form takes the mailed code
+    // instead of an email and password.
     let authMode = "login";
+    let pendingEmail = "";
     function renderAuthMode() {
-      const signup = authMode === "signup";
-      $("#auth-blurb").textContent = signup ? "Create your account." : "Sign in to your account.";
-      $("#auth-submit").textContent = signup ? "Create account" : "Sign in";
-      $("#auth-flip").textContent = signup ? "Already have an account? Sign in" : "New here? Create an account";
+      const signup = authMode === "signup", confirm = authMode === "confirm";
+      $("#auth-blurb").textContent = confirm
+        ? `Enter the 6-digit code sent to ${pendingEmail}. Your account is created when you do.`
+        : signup ? "Create your account." : "Sign in to your account.";
+      $("#auth-submit").textContent = confirm ? "Confirm" : signup ? "Create account" : "Sign in";
+      $("#auth-flip").textContent = confirm
+        ? "Use a different email"
+        : signup ? "Already have an account? Sign in" : "New here? Create an account";
       $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
+      // `required` on a hidden input blocks submit in every browser, so the two
+      // groups have to swap together.
+      for (const sel of ["#auth-email", "#auth-password"]) { $(sel).hidden = confirm; $(sel).required = !confirm; }
+      $("#auth-code").hidden = !confirm;
+      $("#auth-code").required = confirm;
       $("#auth-error").textContent = "";
+      $("#auth-error").classList.remove("ok");
+      if (confirm) { $("#auth-code").value = ""; $("#auth-code").focus(); }
     }
-    $("#auth-flip").addEventListener("click", () => { authMode = authMode === "login" ? "signup" : "login"; renderAuthMode(); });
+    $("#auth-flip").addEventListener("click", () => {
+      // From confirm, "use a different email" goes back to signup — the pending
+      // row is harmless and expires on its own.
+      authMode = authMode === "login" ? "signup" : authMode === "signup" ? "login" : "signup";
+      renderAuthMode();
+    });
     $("#auth-card").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const btn = $("#auth-submit");
       btn.disabled = true;
       try {
-        const res = await (await fetch(`/api/auth/${authMode}`, {
+        const confirm = authMode === "confirm";
+        const res = await (await fetch(confirm ? "/api/auth/confirm-signup" : `/api/auth/${authMode}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: $("#auth-email").value, password: $("#auth-password").value }),
+          body: JSON.stringify(confirm
+            ? { email: pendingEmail, code: $("#auth-code").value }
+            : { email: $("#auth-email").value, password: $("#auth-password").value }),
         })).json();
-        if (res.ok) location.reload(); // rerun the full boot against the new session
-        else $("#auth-error").textContent = res.error || "Something went wrong.";
+        // Signup with a mail transport configured creates nothing yet, so there
+        // is no session to reload into — switch the form to code entry instead
+        // of pretending it succeeded.
+        if (res.ok && res.pending) {
+          pendingEmail = res.email;
+          authMode = "confirm";
+          renderAuthMode();
+          $("#auth-error").textContent = "Didn't arrive? Check spam, or go back and submit again for a fresh code.";
+          $("#auth-error").classList.add("ok");
+        } else if (res.ok) {
+          location.reload(); // rerun the full boot against the new session
+        } else {
+          // `restart` means the pending signup is gone (expired, or too many
+          // wrong codes) — leaving the code box up would be a dead end.
+          if (res.restart) { authMode = "signup"; renderAuthMode(); }
+          $("#auth-error").textContent = res.error || "Something went wrong.";
+        }
       } catch (e) {
         $("#auth-error").textContent = "Could not reach the server.";
       } finally {

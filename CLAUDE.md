@@ -8,6 +8,32 @@ sharpEdge is a personal trading research and decision-support engine (Bun + Type
 
 Read-only throughout: it never places or cancels broker orders.
 
+## Supabase MCP — ask before every use
+
+The Supabase MCP tools (`mcp__*Supabase*`) point at the **live production
+database**. There is no staging copy: the same project backs local `bun start`,
+the test suite, and real accounts with real positions.
+
+**Ask for explicit permission before every Supabase MCP call, including reads.**
+A prior approval covers that one call, not the next one, and not a different
+tool in the same family. Say which tool, which project, and what the query does.
+
+Never call `apply_migration`, `execute_sql` with DDL/DML, `create_branch`,
+`merge_branch`, `reset_branch`, `delete_branch`, `pause_project`, or
+`restore_project` on your own initiative — schema changes belong in
+`src/schema.sql`, which `db.exec()` applies on boot.
+
+Prefer the alternatives first, and reach for the MCP only when they genuinely
+cannot answer the question:
+- a throwaway script against `src/db.ts` (`bun run scripts/…`),
+- an existing `*.test.ts` (several already hit the real database),
+- the app's own HTTP endpoints.
+
+The one honest reason to prefer the MCP is connection pressure: `bun start`
+holds a pool of 15 and a second Bun client will hit
+`EMAXCONNSESSION: max clients reached`. That is a reason to ask, not a reason
+to skip asking.
+
 ## Commands
 
 ```bash
@@ -29,7 +55,11 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+
+## Task tracking
+
+sharpEdge planning, TODOs and bug reports live in Jira, project key **SHARP** (`vigneshwinner.atlassian.net`) — not in `docs/` or a TODO file in this repo. When you finish work that closes or advances a ticket, update it (comment + transition status) as part of the same change; when you start work that isn't already tracked, create a ticket rather than letting it exist only in a commit message or chat history.
 
 ## Architecture
 

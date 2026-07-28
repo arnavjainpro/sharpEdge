@@ -1,6 +1,9 @@
 import { expect, test, afterAll } from "bun:test";
 import { db, insertEvent, insertSignal, setTriageFor } from "../db";
 import { createUser, hashPassword } from "../auth";
+import {
+  practiceStats, resetPractice, INTERVAL, VISIBLE, HORIZON, GRADING_VERSION,
+} from "../engine/practice";
 
 // The security claim of SHARP-29: fanning monitoring out to every account must
 // not let one account see another's reading of the market. Three things are
@@ -48,8 +51,89 @@ afterAll(async () => {
   await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(`${TAG}%`);
   for (const id of made) {
     await db.query(`DELETE FROM briefings WHERE user_id = ?`).run(id);
+    await db.query(`DELETE FROM practice_attempts WHERE user_id = ?`).run(id);
+    await db.query(`DELETE FROM settings WHERE user_id = ?`).run(id);
+    await db.query(`DELETE FROM broker_snapshots WHERE user_id = ?`).run(id);
     await db.query(`DELETE FROM users WHERE id = ?`).run(id);
   }
+});
+
+// ── SHARP-32: resetting a practice record is scoped to one account ────────────
+// Reset archives rather than deletes, but it still has to be per-account: one
+// trader clearing their record must never blank someone else's. A leak here is
+// silent — the other account just quietly shows zero drills.
+
+const gradedDrill = (userId: number, ts: number) => db.query(
+  `INSERT INTO practice_attempts
+     (user_id, ts, ticker, as_of_ts, horizon, status, direction, outcome, r_multiple,
+      process_score, interval, visible_bars, grading_version)
+   VALUES (?, ?, 'TEST', ?, ?, 'graded', 'long', 'win', 1.5, 80, ?, ?, ?)`
+).run(userId, ts, ts, HORIZON, INTERVAL, VISIBLE, GRADING_VERSION);
+
+test("resetting one account's practice record leaves another account's intact", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const now = Math.floor(Date.now() / 1000);
+  for (const u of [a, b]) for (let i = 0; i < 6; i++) await gradedDrill(u, now - 600 + i);
+
+  expect((await practiceStats(a)).attempts).toBe(6);
+  expect((await practiceStats(b)).attempts).toBe(6);
+
+  await resetPractice(a);
+
+  expect((await practiceStats(a)).attempts).toBe(0);   // A starts fresh
+  expect((await practiceStats(b)).attempts).toBe(6);   // B is untouched
+});
+
+test("reset archives rather than destroys — the drills are still on record", async () => {
+  const a = await throwawayUser();
+  const now = Math.floor(Date.now() / 1000);
+  for (let i = 0; i < 4; i++) await gradedDrill(a, now - 600 + i);
+
+  const { archived } = await resetPractice(a);
+  expect(archived).toBe(4);
+
+  // Stats stop counting them, but nothing was deleted.
+  expect((await practiceStats(a)).attempts).toBe(0);
+  const rows = await db.query(`SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ?`)
+    .get(a) as { n: number };
+  expect(rows.n).toBe(4);
+});
+
+test("drills taken after a reset count again", async () => {
+  const a = await throwawayUser();
+  const now = Math.floor(Date.now() / 1000);
+  await gradedDrill(a, now - 600);
+  await resetPractice(a);
+  expect((await practiceStats(a)).attempts).toBe(0);
+
+  await gradedDrill(a, Math.floor(Date.now() / 1000) + 5);
+  expect((await practiceStats(a)).attempts).toBe(1);
+});
+
+// ── SHARP-32: stats never blend one kind of drill with another ────────────────
+test("legacy daily drills are kept but never averaged into the intraday record", async () => {
+  const a = await throwawayUser();
+  const now = Math.floor(Date.now() / 1000);
+  // Three drills posed the old way: daily bars, 120-bar read, 40-bar horizon, v1.
+  for (let i = 0; i < 3; i++) {
+    await db.query(
+      `INSERT INTO practice_attempts
+         (user_id, ts, ticker, as_of_ts, horizon, status, direction, outcome, r_multiple,
+          process_score, interval, visible_bars, grading_version)
+       VALUES (?, ?, 'OLD', ?, 40, 'graded', 'long', 'win', 3.0, 95, '1d', 120, 1)`
+    ).run(a, now - 900 + i, now - 900 + i);
+  }
+  await gradedDrill(a, now - 300);   // one current-cohort drill
+
+  const s = await practiceStats(a);
+  expect(s.attempts).toBe(1);        // only the intraday one counts
+
+  // The daily rows are still there — history is preserved, not relabelled.
+  const kept = await db.query(
+    `SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ? AND interval = '1d'`
+  ).get(a) as { n: number };
+  expect(kept.n).toBe(3);
 });
 
 test("one shared event, two accounts, two different readings", async () => {

@@ -5,7 +5,7 @@
 // context, support/resistance, and relative strength vs sector and market.
 // Momentum alone is capped so it can never dominate a score, and shorts require
 // genuine structural breakdown — negative price action by itself is not enough.
-import { db, insertEvent } from "../db";
+import { db, insertEvent, getSetting, setSetting } from "../db";
 import { fetchDailyCandles } from "../ingest/yahoo";
 import { scanUniverse, sectorMap, sectorEtf } from "../ingest/universe";
 import { benchmarkCandles, refreshMarketContext, getMarketSnapshot } from "./market";
@@ -44,13 +44,28 @@ export interface Indicators {
   spark: number[];         // ~30 downsampled closes from the last 90 sessions
 }
 
+// Which source indices a downsample to `points` keeps. Exported so the spark
+// values and the spark timestamps are selected by the SAME indices rather than
+// by two independent calls that could drift apart — a drifted date axis is
+// silently wrong, which is worse than no axis at all (SHARP-23).
+export function downsampleIndices(len: number, points: number): number[] {
+  if (len <= points) return Array.from({ length: len }, (_, i) => i);
+  return Array.from({ length: points }, (_, i) => Math.floor((i / (points - 1)) * (len - 1)));
+}
+
 function downsample(values: number[], points: number): number[] {
-  if (values.length <= points) return values.map((v) => Number(v.toFixed(2)));
-  const out: number[] = [];
-  for (let i = 0; i < points; i++) {
-    out.push(Number(values[Math.floor((i / (points - 1)) * (values.length - 1))].toFixed(2)));
-  }
-  return out;
+  return downsampleIndices(values.length, points).map((i) => Number(values[i].toFixed(2)));
+}
+
+// The session calendar behind every spark, downsampled the same way.
+// One shared array rather than one per screener row: /api/screener returns the
+// whole table with no LIMIT, so a per-row copy would add ~30 timestamps x ~1500
+// rows to a payload the dashboard re-polls every 10 minutes.
+export const SPARK_POINTS = 30;
+export const SPARK_WINDOW = 90;
+export function sparkTimestamps(timestamps: number[]): number[] {
+  const tail = timestamps.slice(-SPARK_WINDOW);
+  return downsampleIndices(tail.length, SPARK_POINTS).map((i) => tail[i]);
 }
 
 function smaSeries(values: number[], period: number): (number | null)[] {
@@ -159,7 +174,7 @@ export function computeIndicators(
     rsSpy3m: spyCloses ? pctBack(closes, 63) - pctBack(spyCloses, 63) : null,
     rsSector1m: sectorCloses ? pctBack(closes, 21) - pctBack(sectorCloses, 21) : null,
     beta: beta?.beta ?? null,
-    spark: downsample(closes.slice(-90), 30),
+    spark: downsample(closes.slice(-SPARK_WINDOW), SPARK_POINTS),
   };
 }
 
@@ -288,6 +303,17 @@ export interface ScreenRow {
   market_cap: number | null; // from the universe table (dashboard filters)
 }
 
+// The session calendar behind every row's `spark`, for charts that need dates.
+// Empty until the first scan has run.
+export async function getSparkTimestamps(): Promise<number[]> {
+  try {
+    const raw = JSON.parse(await getSetting("spark_timestamps", "[]"));
+    return Array.isArray(raw) ? raw.filter((n) => typeof n === "number") : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function getScreenerRows(portfolio: Portfolio): Promise<ScreenRow[]> {
   const heldSet = new Set(portfolio.holdings.map((h) => h.ticker));
   const rows = await db
@@ -369,7 +395,14 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   try {
   // Benchmarks must be loaded for RS/beta math — refresh if the cache is cold.
   if (!benchmarkCandles("SPY")) await refreshMarketContext();
-  const spyCloses = benchmarkCandles("SPY")?.closes ?? null;
+  const spy = benchmarkCandles("SPY");
+  const spyCloses = spy?.closes ?? null;
+
+  // SPY is the reference session calendar for every spark drawn this scan: US
+  // equities all trade the same sessions, so one array dates all of them.
+  if (spy?.timestamps?.length) {
+    await setSetting("spark_timestamps", JSON.stringify(sparkTimestamps(spy.timestamps)));
+  }
 
   const tickers = await scanUniverse();
   const sectors = await sectorMap();
