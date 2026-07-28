@@ -226,6 +226,19 @@ CREATE TABLE IF NOT EXISTS broker_positions (
   updated_at integer NOT NULL
 );
 
+-- SHARP-28: last GOOD broker snapshot per user, so a restart doesn't blank the
+-- portfolio. `cached` in broker/index.ts is process memory; this is the copy
+-- that survives. Only a real provider (robinhood/import) is ever written here —
+-- persisting a yaml fallback would let one failed refresh destroy the very
+-- snapshot this table exists to protect.
+CREATE TABLE IF NOT EXISTS broker_snapshots (
+  user_id integer PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  snapshot text NOT NULL,            -- JSON BrokerSnapshot
+  source text NOT NULL,              -- robinhood | import (never 'manual', the yaml fallback)
+  as_of integer NOT NULL,            -- the snapshot's OWN time, not the write time
+  updated_at integer NOT NULL
+);
+
 -- F1b: per-call Anthropic token usage so AI spend is never invisible.
 CREATE TABLE IF NOT EXISTS ai_spend (
   id serial PRIMARY KEY,
@@ -306,6 +319,30 @@ CREATE INDEX IF NOT EXISTS idx_practice_user_ts ON practice_attempts(user_id, ts
 -- Which options structures the swing analyzer may propose for this trader.
 -- 'balanced' matches the behavior every existing row had before the setting existed.
 ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFAULT 'balanced';
+
+-- SHARP-32: drills moved from daily bars to 15-minute bars. A drill's numbers
+-- only mean something next to other drills posed the SAME way, so the cohort it
+-- was created under is stamped on the row and practiceStats() filters to one
+-- cohort. Without this, "Avg R" would silently average a 40-day-horizon swing
+-- drill with a 26-bar intraday one.
+--
+-- The defaults are deliberately the OLD values: every row that already exists
+-- was posed with 120 daily bars under the v1 grader, so the default backfills
+-- history truthfully. A '15m' default here would relabel real daily drills as
+-- intraday and corrupt the very stats this is meant to protect.
+ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS interval text NOT NULL DEFAULT '1d';
+ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS visible_bars integer NOT NULL DEFAULT 120;
+ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS grading_version integer NOT NULL DEFAULT 1;
+-- (horizon is NOT duplicated here — practice_attempts.horizon above already
+--  stores exactly the forward bar count.)
+
+-- The bars the drill was actually posed with, stored at creation.
+-- Grading used to re-fetch from Yahoo and match on as_of_ts, which meant a drill
+-- could become ungradeable once the rolling intraday window advanced past it,
+-- and could be graded against revised OHLC values the trader never saw. Storing
+-- the issued slice makes grading deterministic and offline. NULL on legacy rows,
+-- which still take the re-fetch path.
+ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS bars text;
 
 -- SHARP-29: background monitoring fans out to every account.
 --
