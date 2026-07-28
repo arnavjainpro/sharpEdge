@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { scoreProcess, gradePass, atrAt, type Plan } from "./practice";
+import {
+  scoreProcess, gradePass, atrAt, readableAt,
+  CURRENT_COHORT, INTERVAL, VISIBLE, HORIZON, GRADING_VERSION,
+  type Plan,
+} from "./practice";
 
 // Process scoring is the claim the whole feature rests on: that a plan can be
 // judged on its own terms, before anyone knows whether it won. These tests pin
@@ -115,4 +119,84 @@ test("atrAt measures volatility as of the given bar, not the end of the series",
   const storm = atrAt(c as any, 39)!;
   expect(calm).toBeCloseTo(2, 5);
   expect(storm).toBeGreaterThan(20);
+});
+
+// ── SHARP-32: the reveal must describe what was READABLE, never what happened ──
+// This is the invariant the whole drill rests on. If a level, average or momentum
+// reading shifts because future bars exist in the series, the "what you could
+// have seen" panel is quietly grading with hindsight and the feature is a lie.
+
+// Calm, gently rising bars up to the as-of point, then a violent spike after it.
+// Anything that leaks the future will move when the tail is attached.
+function series(n: number, spikeFrom: number) {
+  const opens: number[] = [], highs: number[] = [], lows: number[] = [], closes: number[] = [], timestamps: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const spiked = i >= spikeFrom;
+    const base = spiked ? 400 : 100 + (i % 7);
+    opens.push(base); closes.push(base);
+    highs.push(base + (spiked ? 60 : 1));
+    lows.push(base - (spiked ? 60 : 1));
+    // 15-minute bars, so the session-boundary logic gets realistic spacing.
+    timestamps.push(1_700_000_000 + i * 900);
+  }
+  return { ticker: "T", opens, highs, lows, closes, volumes: closes.map(() => 1000), timestamps };
+}
+
+const plan: Plan = { direction: "long", entry: 100, stop: 98, target: 106 };
+
+test("readableAt is identical with and without the bars that came after it", () => {
+  const asOf = 119;
+  const visibleOnly = series(asOf + 1, 9_999);          // no future at all
+  const withFuture = series(asOf + 1 + 26, asOf + 1);   // violent spike after as-of
+
+  const a = readableAt(visibleOnly as any, asOf, 2, plan);
+  const b = readableAt(withFuture as any, asOf, 2, plan);
+
+  expect(b).toEqual(a);
+});
+
+test("every level the reveal draws sits inside the range the trader could see", () => {
+  const asOf = 119;
+  const c = series(asOf + 1 + 26, asOf + 1);
+  const visHigh = Math.max(...c.highs.slice(0, asOf + 1));
+  const visLow = Math.min(...c.lows.slice(0, asOf + 1));
+
+  for (const r of readableAt(c as any, asOf, 2, plan)) {
+    if (r.level == null) continue;
+    expect(r.level).toBeLessThanOrEqual(visHigh);
+    expect(r.level).toBeGreaterThanOrEqual(visLow);
+  }
+});
+
+test("the reveal explains every reading it shows", () => {
+  const asOf = 119;
+  const out = readableAt(series(asOf + 1, 9_999) as any, asOf, 2, plan);
+  expect(out.length).toBeGreaterThan(0);
+  for (const r of out) {
+    // A number with no explanation is decoration, which is what this panel exists
+    // not to be.
+    expect(r.label.length).toBeGreaterThan(0);
+    expect(r.value.length).toBeGreaterThan(0);
+    expect(r.meant.length).toBeGreaterThan(20);
+    expect(r.plan.length).toBeGreaterThan(10);
+  }
+  expect(out.some((r) => r.label === "ATR")).toBe(true);
+});
+
+test("a passed drill still gets its read explained, without a direction to judge", () => {
+  const asOf = 119;
+  const out = readableAt(series(asOf + 1, 9_999) as any, asOf, 2, { direction: "no_trade" });
+  expect(out.length).toBeGreaterThan(0);
+  for (const r of out) expect(r.plan.length).toBeGreaterThan(0);
+});
+
+test("the current cohort is the one new drills are stamped with", () => {
+  // Stats filter on these four values, so a drift between the constants used to
+  // POSE a drill and the ones used to COUNT it would silently empty the record.
+  expect(CURRENT_COHORT).toEqual({
+    interval: INTERVAL, visibleBars: VISIBLE, horizon: HORIZON, gradingVersion: GRADING_VERSION,
+  });
+  expect(INTERVAL).toBe("15m");
+  // "at most a week" of context: 120 bars of 15m is well under 5 sessions.
+  expect(VISIBLE / 26).toBeLessThan(5);
 });

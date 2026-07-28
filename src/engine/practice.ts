@@ -10,14 +10,37 @@
 // No AI anywhere in here — grading is arithmetic over real bars, so a drill is
 // instant, free, and reproducible.
 
-import { db } from "../db";
-import { fetchDailyCandles, type DailyCandles } from "../ingest/yahoo";
-import { atr } from "./technicals";
+import { db, getSettingFor, setSettingFor } from "../db";
+import { fetchDailyCandles, fetchIntradayBars, type DailyCandles } from "../ingest/yahoo";
+import { atr, sma, rsi, vwap, pivotLevels } from "./technicals";
 import { replayIdea, rMultiple } from "./insights";
 
-export const VISIBLE = 120;   // bars of history the drill shows
-export const HORIZON = 40;    // bars revealed when the plan is graded
+// Drills are posed on 15-minute bars: the read they train (structure, a level to
+// lean on, a stop outside the noise) is the one the rest of the app is about,
+// and a 120-bar window is a little under a week of sessions rather than the six
+// months of daily bars this used to show.
+//
+// Yahoo serves 60 days of 15m history (yahoo.ts:72), which at ~26 bars a session
+// is ~1,500 bars — plenty to pick a random as-of point inside.
+export const INTERVAL = "15m" as const;
+export const RANGE = "60d";
+export const VISIBLE = 120;   // bars of history the drill shows (~4.6 sessions)
+export const HORIZON = 26;    // bars revealed when the plan is graded (~1 session)
+export const GRADING_VERSION = 2;
 export const MIN_N = 5;       // stats stay blank under this, matching insights.ts
+
+// A drill's numbers only mean something next to drills posed the same way, so
+// every stat query is scoped to one cohort. Legacy daily drills keep their rows
+// and their history; they simply are not averaged in with intraday ones.
+export interface Cohort {
+  interval: string;
+  visibleBars: number;
+  horizon: number;
+  gradingVersion: number;
+}
+export const CURRENT_COHORT: Cohort = {
+  interval: INTERVAL, visibleBars: VISIBLE, horizon: HORIZON, gradingVersion: GRADING_VERSION,
+};
 
 export type Direction = "long" | "short" | "no_trade";
 export type Outcome = "win" | "loss" | "open" | "pass_correct" | "pass_missed";
@@ -157,15 +180,53 @@ const fmt = (v: number) => (v >= 10 ? v.toFixed(0) : v.toFixed(2));
 const CACHE_TTL_MS = 15 * 60_000;
 const candleCache = new Map<string, { at: number; candles: DailyCandles | null }>();
 
-async function candlesFor(ticker: string): Promise<DailyCandles | null> {
-  const hit = candleCache.get(ticker);
+// Keyed by ticker AND interval. A legacy daily drill being graded and a new
+// intraday drill being posed can ask for the same symbol inside the TTL, and a
+// ticker-only key would hand one of them the other's bars.
+async function candlesFor(ticker: string, interval: string = INTERVAL): Promise<DailyCandles | null> {
+  const key = `${ticker}:${interval}`;
+  const hit = candleCache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.candles;
   let candles: DailyCandles | null = null;
   try {
-    candles = await fetchDailyCandles(ticker, "5y", VISIBLE + HORIZON + 20);
+    candles = interval === "1d"
+      ? await fetchDailyCandles(ticker, "5y", 120 + 40 + 20)
+      : await fetchIntradayBars(ticker, INTERVAL, RANGE);
   } catch { candles = null; }
-  candleCache.set(ticker, { at: Date.now(), candles });
+  candleCache.set(key, { at: Date.now(), candles });
   return candles;
+}
+
+// The exact bars a drill was posed with, stored on the row at creation.
+// Grading used to re-fetch and match on as_of_ts, which meant a drill could
+// become ungradeable once the 60-day intraday window rolled past it, and could
+// be graded against OHLC values Yahoo had since revised. Storing the slice makes
+// grading deterministic and needs no network at all.
+interface IssuedBars {
+  timestamps: number[]; opens: number[]; highs: number[]; lows: number[]; closes: number[];
+  // Volumes are stored too: VWAP is volume-weighted by definition, so dropping
+  // them here silently produces a 0/0 and the reveal loses VWAP without erroring.
+  volumes: number[];
+  asOf: number;   // index of the last visible bar within these arrays
+}
+
+const sliceBars = (c: DailyCandles, from: number, to: number) => ({
+  timestamps: c.timestamps.slice(from, to), opens: c.opens.slice(from, to),
+  highs: c.highs.slice(from, to), lows: c.lows.slice(from, to), closes: c.closes.slice(from, to),
+  volumes: (c.volumes ?? []).slice(from, to),
+});
+
+function parseIssued(raw: string | null): IssuedBars | null {
+  if (!raw) return null;
+  try {
+    const b = JSON.parse(raw) as IssuedBars;
+    const ok = Array.isArray(b?.closes) && b.closes.length > 0
+      && typeof b.asOf === "number" && b.asOf >= 0 && b.asOf < b.closes.length
+      && b.timestamps?.length === b.closes.length;
+    return ok ? b : null;   // corrupt payload falls back to the re-fetch path
+  } catch {
+    return null;
+  }
 }
 
 // ── drill lifecycle ─────────────────────────────────────────────────────────
@@ -204,10 +265,17 @@ export async function createDrill(userId: number): Promise<Drill | { error: stri
     if (!a || !(a > 0)) continue;
 
     const from = asOf - VISIBLE + 1;
+    // Store visible + forward together; `asOf` indexes the last visible bar, so
+    // grading can split them again without trusting anything from the client.
+    const to = Math.min(c.closes.length, asOf + 1 + HORIZON);
+    const issued: IssuedBars = { ...sliceBars(c, from, to), asOf: asOf - from };
+
     const id = (await db.query(
-      `INSERT INTO practice_attempts (user_id, ts, ticker, as_of_ts, horizon, status)
-       VALUES (?, extract(epoch from now())::int, ?, ?, ?, 'open') RETURNING id`
-    ).get(userId, row.ticker, c.timestamps[asOf], HORIZON)) as { id: number };
+      `INSERT INTO practice_attempts
+         (user_id, ts, ticker, as_of_ts, horizon, status, interval, visible_bars, grading_version, bars)
+       VALUES (?, extract(epoch from now())::int, ?, ?, ?, 'open', ?, ?, ?, ?) RETURNING id`
+    ).get(userId, row.ticker, c.timestamps[asOf], HORIZON,
+      INTERVAL, VISIBLE, GRADING_VERSION, JSON.stringify(issued))) as { id: number };
 
     return {
       id: id.id,
@@ -234,20 +302,34 @@ export interface Grade {
   plan: Plan;
   forward: { timestamps: number[]; opens: number[]; highs: number[]; lows: number[]; closes: number[] };
   history: { timestamps: number[]; opens: number[]; highs: number[]; lows: number[]; closes: number[] };
+  technicals: Readable[];       // what was readable at the as-of point
 }
 
 export async function gradeDrill(userId: number, id: number, plan: Plan, targetRR: number): Promise<Grade | { error: string }> {
   const row = await db.query(
-    `SELECT id, ticker, as_of_ts, horizon, status FROM practice_attempts WHERE id = ? AND user_id = ?`
-  ).get(id, userId) as { id: number; ticker: string; as_of_ts: number; horizon: number; status: string } | null;
+    `SELECT id, ticker, as_of_ts, horizon, status, interval, bars FROM practice_attempts WHERE id = ? AND user_id = ?`
+  ).get(id, userId) as
+    { id: number; ticker: string; as_of_ts: number; horizon: number; status: string; interval: string; bars: string | null } | null;
   if (!row) return { error: "Drill not found." };
   if (row.status === "graded") return { error: "This drill has already been graded." };
 
-  const c = await candlesFor(row.ticker);
-  if (!c) return { error: "Could not reload the chart to grade it. Try again in a moment." };
-
-  const asOf = c.timestamps.indexOf(row.as_of_ts);
-  if (asOf < 0) return { error: "The chart data shifted underneath this drill and it can no longer be graded." };
+  // Preferred path: the bars the drill was actually posed with. No network, no
+  // rolling-window expiry, no chance of grading against revised OHLC values.
+  let c: DailyCandles | null = null;
+  let asOf = -1;
+  const issued = parseIssued(row.bars);
+  if (issued) {
+    c = { ticker: row.ticker, ...issued, volumes: issued.volumes ?? [] } as unknown as DailyCandles;
+    asOf = issued.asOf;
+  } else {
+    // Legacy row from before bars were stored. Fetch at the interval it was
+    // POSED at — a daily drill re-fetched as 15m would never find its as_of_ts
+    // and would be permanently ungradeable.
+    c = await candlesFor(row.ticker, row.interval ?? "1d");
+    if (!c) return { error: "Could not reload the chart to grade it. Try again in a moment." };
+    asOf = c.timestamps.indexOf(row.as_of_ts);
+  }
+  if (!c || asOf < 0) return { error: "The chart data shifted underneath this drill and it can no longer be graded." };
 
   const a = atrAt(c, asOf);
   if (!a || !(a > 0)) return { error: "Could not compute volatility for this drill." };
@@ -293,16 +375,147 @@ export async function gradeDrill(userId: number, id: number, plan: Plan, targetR
     r = rMultiple(long, levels, outcome);
   }
 
-  await db.query(
+  // `AND status = 'open'` makes this the race guard as well as the write: a
+  // double-submit, or a reset landing between the SELECT above and here, must
+  // not produce a second grade (and a second history artifact) for one drill.
+  const done = await db.query(
     `UPDATE practice_attempts
      SET status = 'graded', direction = ?, entry = ?, stop = ?, target = ?,
          outcome = ?, r_multiple = ?, process_score = ?, process_detail = ?,
          graded_at = extract(epoch from now())::int
-     WHERE id = ? AND user_id = ?`
-  ).run(plan.direction, num(plan.entry), num(plan.stop), num(plan.target),
-    outcome, r, process.score, JSON.stringify(process.detail), id, userId);
+     WHERE id = ? AND user_id = ? AND status = 'open' RETURNING id`
+  ).get(plan.direction, num(plan.entry), num(plan.stop), num(plan.target),
+    outcome, r, process.score, JSON.stringify(process.detail), id, userId) as { id: number } | null;
+  if (!done) return { error: "This drill is no longer open — it was already graded or the record was reset." };
 
-  return { outcome, rMultiple: r, process, netAtr, ticker: row.ticker, asOfTs: row.as_of_ts, plan, forward, history };
+  return {
+    outcome, rMultiple: r, process, netAtr, ticker: row.ticker, asOfTs: row.as_of_ts, plan, forward, history,
+    technicals: readableAt(c, asOf, a, plan),
+  };
+}
+
+// ── what was readable at decision time ───────────────────────────────────────
+// Computed ONLY from bars at or before the as-of point, and only ever returned
+// from gradeDrill — the whole drill rests on the reveal describing what could
+// have been read, not what turned out to be true.
+//
+// Every level comes from technicals.ts, so a drill and the screener agree on
+// what "support" or "the 20 SMA" means.
+
+export interface Readable {
+  label: string;
+  value: string;
+  meant: string;      // what it implied at the as-of point
+  plan: string;       // how the trader's plan sat against it
+  level?: number;     // drawn on the chart when present
+  kind?: "support" | "resistance" | "sma20" | "sma50" | "vwap";
+}
+
+export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan: Plan): Readable[] {
+  const to = asOf + 1;
+  const closes = c.closes.slice(0, to), highs = c.highs.slice(0, to), lows = c.lows.slice(0, to);
+  const price = closes[closes.length - 1];
+  const out: Readable[] = [];
+  const entry = num(plan.entry), stop = num(plan.stop), target = num(plan.target);
+  const long = plan.direction === "long";
+  const f = (v: number) => (v >= 10 ? v.toFixed(2) : v.toFixed(3));
+
+  const piv = pivotLevels(highs, lows, price);
+  const support = piv.supports[0] ?? null;
+  const resistance = piv.resistances[0] ?? null;
+
+  if (support != null) {
+    out.push({
+      label: "Support", value: `$${f(support)}`, level: support, kind: "support",
+      meant: `Buyers turned price back here before. It is the level a long can lean on, and the one a breakdown would have to lose.`,
+      plan: stop == null ? "No stop to compare."
+        : long
+          ? (stop < support ? `Your stop at $${f(stop)} sits below it, so normal defence of the level doesn't take you out.`
+            : `Your stop at $${f(stop)} sits above it — you get stopped out while the level is still holding.`)
+          : (target != null && target <= support ? `Your target at $${f(target)} is at or below it, so you're aiming into the level buyers defend.`
+            : `Short target is above support, leaving room before the level matters.`),
+    });
+  }
+  if (resistance != null) {
+    out.push({
+      label: "Resistance", value: `$${f(resistance)}`, level: resistance, kind: "resistance",
+      meant: `Sellers capped price here before. A long has to get through it; a short can lean on it.`,
+      plan: target == null ? "No target to compare."
+        : long
+          ? (target > resistance ? `Your target at $${f(target)} is beyond it — the trade needs a breakout, not just a bounce.`
+            : `Your target at $${f(target)} stops short of it, which is the higher-probability ask.`)
+          : (stop != null && stop > resistance ? `Your stop at $${f(stop)} is above it, so the level has to genuinely fail before you're wrong.`
+            : `Your stop sits below resistance — a normal retest of the level can take you out.`),
+    });
+  }
+
+  for (const [period, kind] of [[20, "sma20"], [50, "sma50"]] as const) {
+    const v = sma(closes, period);
+    if (v == null) continue;
+    const above = price > v;
+    out.push({
+      label: `SMA ${period}`, value: `$${f(v)}`, level: v, kind,
+      meant: `Price was ${above ? "above" : "below"} its ${period}-bar average, so the short-term drift was ${above ? "up" : "down"}.`,
+      plan: plan.direction === "no_trade" ? "No direction to compare."
+        : long === above ? `Your ${plan.direction} traded with that drift.`
+          : `Your ${plan.direction} traded against it — possible, but it needs a reason beyond the trend.`,
+    });
+  }
+
+  const r = rsi(closes);
+  if (r != null) {
+    out.push({
+      label: "RSI 14", value: r.toFixed(0),
+      meant: r > 70 ? "Momentum was strong but stretched — moves starting here often need a pause first."
+        : r < 30 ? "Momentum was weak and stretched — falling knives and bounces both start from here."
+          : "Momentum was in its normal band, so it neither helped nor argued against the setup.",
+      plan: plan.direction === "no_trade" ? "Passing on an unstretched tape is a defensible read."
+        : (r > 70 && long) || (r < 30 && !long)
+          ? "You entered in the direction price had already stretched — the worse half of the entry."
+          : "Your entry was not chasing a stretched move.",
+    });
+  }
+
+  // VWAP is a SESSION measure. Anchoring it to the whole 120-bar window would
+  // silently average across several days and mean nothing, so it is computed
+  // from the last session boundary in the visible bars.
+  const day = (ts: number) => Math.floor(ts / 86400);
+  const lastDay = day(c.timestamps[asOf]);
+  let sessionFrom = asOf;
+  while (sessionFrom > 0 && day(c.timestamps[sessionFrom - 1]) === lastDay) sessionFrom--;
+  const vols = c.volumes ?? [];
+  const sessionBars = [];
+  for (let i = sessionFrom; i <= asOf; i++) {
+    sessionBars.push({
+      ts: c.timestamps[i], high: c.highs[i], low: c.lows[i],
+      close: c.closes[i], open: c.opens[i], volume: vols[i] ?? 0,
+    });
+  }
+  // Needs real volume: vwap() divides by the volume sum, so a zero-volume series
+  // yields 0/0 and the line vanishes from the reveal without any error. Drills
+  // issued before volumes were stored fall into that case and simply omit VWAP.
+  const hasVolume = sessionBars.some((b) => b.volume > 0);
+  const vw = sessionBars.length > 1 && hasVolume ? vwap(sessionBars as any) : null;
+  if (vw != null && vw > 0) {
+    const above = price > vw;
+    const dist = ((price - vw) / vw) * 100;
+    out.push({
+      label: "VWAP (session)", value: `$${f(vw)}`, level: vw, kind: "vwap",
+      meant: `Price was ${Math.abs(dist).toFixed(1)}% ${above ? "above" : "below"} the session's volume-weighted average, so ${above ? "buyers" : "sellers"} held the session.`,
+      plan: entry == null ? "No entry to compare."
+        : Math.abs((entry - vw) / vw) * 100 < 0.2 ? "You entered right at VWAP, which is where the session is fairly priced."
+          : `You entered ${entry > vw ? "above" : "below"} it — ${((long && entry > vw) || (!long && entry < vw)) ? "paying up rather than waiting for a retest" : "on the favourable side of the session average"}.`,
+    });
+  }
+
+  out.push({
+    label: "ATR", value: `$${f(atrValue)}`,
+    meant: "The typical distance one bar travels. It is what makes a stop 'too tight' or 'too wide' measurable instead of a feeling.",
+    plan: entry == null || stop == null ? "No stop distance to judge."
+      : `Your stop was ${(Math.abs(entry - stop) / atrValue).toFixed(2)}x ATR from entry.`,
+  });
+
+  return out;
 }
 
 // ── stats ───────────────────────────────────────────────────────────────────
@@ -318,11 +531,37 @@ export interface PracticeStats {
   enough: boolean;              // false while under MIN_N
 }
 
-export async function practiceStats(userId: number): Promise<PracticeStats> {
+// Reset is an archive, not a delete: it moves a marker forward and stats count
+// only drills taken after it. Nothing is destroyed, so the confirmation can stay
+// proportionate and a record can be brought back if it was cleared by mistake.
+const RESET_KEY = "practice_reset_at";
+
+export async function resetPractice(userId: number): Promise<{ archived: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const n = await db.query(
+    `SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ? AND status = 'graded' AND ts > ?`
+  ).get(userId, await resetAt(userId)) as { n: number };
+  await setSettingFor(userId, RESET_KEY, String(now));
+  return { archived: n?.n ?? 0 };
+}
+
+export async function resetAt(userId: number): Promise<number> {
+  const raw = Number(await getSettingFor(userId, RESET_KEY, "0"));
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+export async function practiceStats(userId: number, cohort: Cohort = CURRENT_COHORT): Promise<PracticeStats> {
+  // Scoped to one cohort AND to drills after the last reset. A 26-bar intraday
+  // drill and a 40-day daily one are not the same measurement, so averaging them
+  // into a single "Avg R" would produce a number that means nothing.
   const rows = await db.query(
     `SELECT direction, outcome, r_multiple, process_score
-     FROM practice_attempts WHERE user_id = ? AND status = 'graded'`
-  ).all(userId) as { direction: string; outcome: string; r_multiple: number | null; process_score: number | null }[];
+     FROM practice_attempts
+     WHERE user_id = ? AND status = 'graded' AND ts > ?
+       AND interval = ? AND visible_bars = ? AND horizon = ? AND grading_version = ?`
+  ).all(userId, await resetAt(userId),
+    cohort.interval, cohort.visibleBars, cohort.horizon, cohort.gradingVersion,
+  ) as { direction: string; outcome: string; r_multiple: number | null; process_score: number | null }[];
 
   const attempts = rows.length;
   const passes = rows.filter((r) => r.direction === "no_trade");
