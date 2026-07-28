@@ -43,6 +43,55 @@ async function applyOverlays(userId: number, snap: BrokerSnapshot): Promise<Brok
   return snap;
 }
 
+// ── SHARP-28: durable last-good snapshot ─────────────────────────────────────
+// `cached` above is process memory, so killing the port used to throw away every
+// account's positions. These two helpers give the in-memory stale-fallback below
+// something to fall back TO after a restart.
+//
+// Only a real provider is ever written. "manual" is the portfolio.yaml
+// fallback: persisting it would mean the first failed Robinhood refresh after a
+// restart overwrites the good snapshot with a near-empty one — destroying
+// exactly what this exists to protect.
+async function persistSnapshot(userId: number, snap: BrokerSnapshot): Promise<void> {
+  if (snap.source === "manual") return;
+  try {
+    await db.query(
+      `INSERT INTO broker_snapshots (user_id, snapshot, source, as_of, updated_at)
+       VALUES (?, ?, ?, ?, extract(epoch from now())::int)
+       ON CONFLICT(user_id) DO UPDATE SET snapshot = excluded.snapshot, source = excluded.source,
+         as_of = excluded.as_of, updated_at = excluded.updated_at`
+    ).run(userId, JSON.stringify(snap), snap.source, snap.asOf);
+  } catch (err) {
+    // Never let a bookkeeping write fail a refresh the caller already succeeded at.
+    console.error(`[broker] persist failed for user ${userId}:`, err);
+  }
+}
+
+async function loadPersisted(userId: number): Promise<BrokerSnapshot | null> {
+  try {
+    const row = await db.query(`SELECT snapshot FROM broker_snapshots WHERE user_id = ?`)
+      .get(userId) as { snapshot: string } | null;
+    if (!row) return null;
+    const snap = JSON.parse(row.snapshot) as BrokerSnapshot;
+    // A corrupt row must degrade to the yaml path, not throw on a boot request.
+    return Array.isArray(snap?.holdings) ? snap : null;
+  } catch (err) {
+    console.error(`[broker] persisted snapshot unreadable for user ${userId}:`, err);
+    return null;
+  }
+}
+
+// Unlinking a broker must also retire its durable copy, or a later failed
+// refresh would restore positions from an account the user just disconnected.
+export async function retirePersistedSnapshot(userId: number): Promise<void> {
+  try {
+    await db.query(`DELETE FROM broker_snapshots WHERE user_id = ?`).run(userId);
+    cached.delete(userId);
+  } catch (err) {
+    console.error(`[broker] failed to retire persisted snapshot for user ${userId}:`, err);
+  }
+}
+
 async function doRefresh(userId: number): Promise<BrokerSnapshot> {
   for (const p of providers) {
     if (!(await p.available(userId))) continue;
@@ -64,6 +113,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
       }
       await applyOverlays(userId, snap);
       cached.set(userId, snap);
+      await persistSnapshot(userId, snap);
       console.log(
         `[broker] snapshot via ${snap.source} (user ${userId}): ${snap.holdings.length} positions, ${snap.watchlist.length} watched, ` +
         `${snap.openOrders.length} open orders${snap.account.equity != null ? `, equity $${snap.account.equity.toLocaleString()}` : ""}`
@@ -82,7 +132,20 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
       // snapshot to a lower-priority source — options/positions would silently
       // vanish from the dashboard until the next successful poll. Serve the
       // last good snapshot instead; stale beats wrong-source.
-      const prev = cached.get(userId);
+      //
+      // On a cold boot `cached` is empty by definition, which is why the
+      // durable copy is consulted here: without it, one failed refresh at
+      // startup falls through to an empty portfolio.yaml and the dashboard
+      // shows nothing until the next tick minutes later (SHARP-28).
+      let prev = cached.get(userId);
+      if (!prev) {
+        const restored = await loadPersisted(userId);
+        if (restored) {
+          prev = restored;
+          cached.set(userId, restored);
+          console.warn(`[broker] restored persisted ${restored.source} snapshot for user ${userId} after a failed refresh`);
+        }
+      }
       if (prev) {
         await applyOverlays(userId, prev); // reapply in case Settings/watchlist changed since prev was cached
         console.warn(`[broker] keeping previous ${prev.source} snapshot (as of ${new Date(prev.asOf * 1000).toISOString().slice(0, 16)})`);
