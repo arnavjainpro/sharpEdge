@@ -52,7 +52,7 @@ async function applyOverlays(userId: number, snap: BrokerSnapshot): Promise<Brok
 // fallback: persisting it would mean the first failed Robinhood refresh after a
 // restart overwrites the good snapshot with a near-empty one — destroying
 // exactly what this exists to protect.
-async function persistSnapshot(userId: number, snap: BrokerSnapshot): Promise<void> {
+export async function persistSnapshot(userId: number, snap: BrokerSnapshot): Promise<void> {
   if (snap.source === "manual") return;
   try {
     await db.query(
@@ -67,7 +67,7 @@ async function persistSnapshot(userId: number, snap: BrokerSnapshot): Promise<vo
   }
 }
 
-async function loadPersisted(userId: number): Promise<BrokerSnapshot | null> {
+export async function loadPersisted(userId: number): Promise<BrokerSnapshot | null> {
   try {
     const row = await db.query(`SELECT snapshot FROM broker_snapshots WHERE user_id = ?`)
       .get(userId) as { snapshot: string } | null;
