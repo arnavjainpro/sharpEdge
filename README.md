@@ -56,7 +56,8 @@ Notes specific to a hosted instance:
 
 - **Keep `numReplicas = 1`.** `src/index.ts` owns every `setInterval` in the app, so a second replica runs a second copy of every detector, sweep, briefing and triage pass — duplicate Finnhub calls and duplicate AI spend against the same database.
 - **`config/portfolio.yaml` is gitignored**, so a deployed instance boots without one. That is fine — it degrades to an empty portfolio, and positions come from the Robinhood link or the Import panel instead. `config/screener.yaml` *is* committed, so universe filters carry over.
-- **Every account with holdings generates background AI spend.** On a public instance that is a real cost; the "Live AI updates" toggle and the circuit breaker in `src/ai/breaker.ts` are the controls.
+- **Lock signup down with `SIGNUP_ALLOWLIST`** — comma-separated emails, e.g. `you@example.com,teammate@example.com`. Leave it unset and anyone with the URL can create an account. It gates **signup only**: existing accounts can always log in, so you cannot lock yourself out by getting the list wrong.
+- **Every account with holdings generates background AI spend.** On a public instance that is a real cost; the allowlist above, the "Live AI updates" toggle and the circuit breaker in `src/ai/breaker.ts` are the controls.
 - The Robinhood link stores tokens in the database, so it survives a redeploy, but the container filesystem does not — nothing else is written to disk.
 
 ## Architecture

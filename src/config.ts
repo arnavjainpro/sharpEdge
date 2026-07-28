@@ -145,6 +145,28 @@ if (import.meta.main) {
     if (asRiskAppetite(junk) !== "balanced") throw new Error(`asRiskAppetite let junk through: ${JSON.stringify(junk)}`);
   }
   console.log("asRiskAppetite self-check ok");
+
+  // Signup allowlist: an empty result means OPEN, so every parse that should yield
+  // "no list" must actually yield [] — and every populated one must survive the
+  // whitespace and casing people really type into a hosting dashboard.
+  for (const empty of [undefined, "", "   ", ",", " , , "]) {
+    const got = parseSignupAllowlist(empty);
+    if (got.length !== 0) throw new Error(`allowlist should be open for ${JSON.stringify(empty)}, got ${JSON.stringify(got)}`);
+  }
+  const list = parseSignupAllowlist(" Owner@Example.com , second@example.com ,");
+  if (JSON.stringify(list) !== JSON.stringify(["owner@example.com", "second@example.com"])) {
+    throw new Error(`allowlist normalization failed: ${JSON.stringify(list)}`);
+  }
+  if (!list.includes("owner@example.com")) throw new Error("allowlist rejected the address it was given");
+  if (list.includes("stranger@example.com")) throw new Error("allowlist admitted an address it was not given");
+  console.log("signupAllowlist self-check ok:", list);
+}
+
+// Signup gate. Emails arrive from the form already trimmed+lowercased, so the list
+// is normalized the same way — otherwise a stray space or capital in the env var
+// silently locks the owner out of their own instance.
+export function parseSignupAllowlist(raw: string | undefined): string[] {
+  return (raw ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
 }
 
 export const config = {
@@ -152,6 +174,11 @@ export const config = {
   port: Number(process.env.PORT ?? 3000),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
+  // Comma-separated emails allowed to create an account. EMPTY MEANS OPEN — fine on
+  // localhost, but a public instance must set it: every account with holdings runs
+  // its own triage and briefings, so an open signup is an open invitation to spend
+  // your Anthropic credits. Matched against the lowercased, trimmed email.
+  signupAllowlist: parseSignupAllowlist(process.env.SIGNUP_ALLOWLIST),
   // Supabase Postgres connection string. Required — the app has no local fallback.
   databaseUrl: process.env.DATABASE_URL ?? "",
   // Legacy SQLite path, retained only for the one-time migration script.
