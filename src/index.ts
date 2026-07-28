@@ -455,12 +455,19 @@ setBriefingHandler(async (userId) => {
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
+// Listen before the slow part. refreshUniverse walks ~12k NASDAQ symbols and
+// loadCikMap resolves ~3k CIKs against EDGAR, which together can run for minutes
+// on a cold container — long enough that a hosting platform's healthcheck gives up
+// and marks the deploy failed while the process is in fact healthy. Serving first
+// costs nothing: routes read the database per request, and the only things warming
+// up behind this are search coverage and EDGAR lookups.
+startServer();
+
 // Universe first (sector metadata + scan list), then CIK map so EDGAR lookups
 // work for any promoted mover across the whole universe.
 const universeList = await refreshUniverse(unionPortfolio(await monitoredUsers()));
 await seedFutures(); // futures contracts join the universe (searchable/scorable/chartable)
 await loadCikMap(universeList);
-startServer();
 // One websocket subscription list covering every account's tickers — trades are
 // public, so a shared stream is both correct and the only affordable option.
 startTradeStream([...bootWatch.keys()]);

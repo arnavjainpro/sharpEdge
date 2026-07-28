@@ -129,6 +129,11 @@ export function startServer() {
           const password = String(body.password ?? "");
           if (!email || !email.includes("@")) return Response.json({ ok: false, error: "invalid email" }, { status: 400 });
           if (password.length < 8) return Response.json({ ok: false, error: "password must be at least 8 characters" }, { status: 400 });
+          // Gate before the existence check, so a rejected address can't be used to
+          // probe which emails already have accounts.
+          if (config.signupAllowlist.length && !config.signupAllowlist.includes(email)) {
+            return Response.json({ ok: false, error: "this instance is invite-only — ask the owner to add your email" }, { status: 403 });
+          }
           if (await findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
           const passwordHash = await hashPassword(password);
 
