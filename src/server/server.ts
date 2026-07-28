@@ -10,15 +10,15 @@ import { analyzeIntraday, manageTrade, type IntradayRequest, type FollowupReques
 import { parseStrategy } from "../ai/strategy";
 import { runBacktest, stressBacktest, walkForward, type StrategySpec } from "../engine/backtest";
 import { fetchDailyCandles, fetchIntradayBars } from "../ingest/yahoo";
-import { getScreenerRows, sectorBoards } from "../engine/screener";
+import { getScreenerRows, sectorBoards, getSparkTimestamps } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";
 import { getMarketSnapshot, sectorHeatmap } from "../engine/market";
 import { canaryStatus, runCanaries } from "../engine/canary";
-import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist } from "../broker";
+import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist, retirePersistedSnapshot } from "../broker";
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
-import { createDrill, gradeDrill, practiceStats, type Plan as PracticePlan } from "../engine/practice";
+import { createDrill, gradeDrill, practiceStats, resetPractice, CURRENT_COHORT, type Plan as PracticePlan } from "../engine/practice";
 import { lessonViews, markComplete } from "../engine/learn";
 import { LEVELS, CRITERION_LESSON } from "../content/lessons";
 import { getRiskPrefs, setRiskPrefs, spendByDay, getSettingFor, setSettingFor } from "../db";
@@ -274,7 +274,12 @@ export function startServer() {
 
       // Ranked screener results (pure quant — no AI cost to view)
       if (url.pathname === "/api/screener") {
-        return Response.json({ rows: await getScreenerRows(currentPortfolio(userId)) });
+        // sparkTs is sent once, not per row: this endpoint returns the whole
+        // screener table and the dashboard re-polls it every 10 minutes.
+        return Response.json({
+          rows: await getScreenerRows(currentPortfolio(userId)),
+          sparkTs: await getSparkTimestamps(),
+        });
       }
 
       // On-demand score + news for ANY ticker (search / ⌘K detail panel).
@@ -442,8 +447,23 @@ export function startServer() {
 
       if (url.pathname === "/api/practice/stats") {
         try {
-          return Response.json({ ok: true, ...(await practiceStats(userId)) });
+          // The cohort travels with the numbers: "avg R" only means something
+          // next to the kind of drill that produced it.
+          return Response.json({ ok: true, ...(await practiceStats(userId)), cohort: CURRENT_COHORT });
         } catch (err) {
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      // Archive the practice record: moves a per-user marker forward so stats
+      // start fresh. Deliberately not a DELETE — nothing the trader did is
+      // destroyed, which is why a plain confirmation is proportionate.
+      if (url.pathname === "/api/practice/reset" && req.method === "POST") {
+        try {
+          const { archived } = await resetPractice(userId);
+          return Response.json({ ok: true, archived });
+        } catch (err) {
+          console.error("[practice] reset failed:", err);
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
         }
       }
@@ -674,6 +694,9 @@ export function startServer() {
       if (url.pathname === "/api/broker/unlink" && req.method === "POST") {
         await clearAuth(userId);
         clearLinkState(userId);
+        // Drop the durable copy too — otherwise a later failed refresh would
+        // restore positions from the account just disconnected.
+        await retirePersistedSnapshot(userId);
         const snap = await refreshBroker(userId);
         return Response.json({ ok: true, source: snap.source });
       }
