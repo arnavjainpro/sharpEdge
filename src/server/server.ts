@@ -80,6 +80,10 @@ let generateInFlight = false;
 // Per-user, unlike generateInFlight: portfolio scoring is a per-account action.
 const scoreInFlight = new Set<number>();
 
+const safeJson = (s: unknown) => {
+  try { return JSON.parse(String(s)); } catch { return null; }
+};
+
 // ── HTTP server ──────────────────────────────────────────────────────────────
 export function startServer() {
   const server = Bun.serve({
@@ -1098,7 +1102,9 @@ export function startServer() {
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;
         return Response.json({
           ok: true, ticker, meta, quote, spark, ohlc, news, held,
-          screener: row ? { ...row, indicators: JSON.parse(row.indicators) } : null,
+          // Guarded like every other stored-JSON read here: one poison screener
+          // row must degrade this panel, not 500 the whole stock page.
+          screener: row ? { ...row, indicators: safeJson(row.indicators) } : null,
           ideas: ideaRows.flatMap((r) => {
             try {
               // `id` rides along so the card's ✕ can delete the stored row, not
@@ -1176,6 +1182,13 @@ export function startServer() {
       }
 
       return new Response("not found", { status: 404 });
+    },
+    // fetch() is one long if-chain, so a single unguarded await anywhere in it
+    // takes the whole response down. Without this, that surfaced as a bare 500
+    // with nothing in the log to say which route threw or why.
+    error(err) {
+      console.error("[server] unhandled route error:", err);
+      return Response.json({ ok: false, error: "internal error" }, { status: 500 });
     },
   });
   console.log(`[server] dashboard at http://localhost:${server.port}`);

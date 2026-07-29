@@ -28,6 +28,26 @@ if (!config.finnhubKey) {
   process.exit(1);
 }
 
+// This process is a long-running monitor: detectors on a 90s–30m cadence, the
+// 15-minute sweep, briefings pinned to 9:00 and 16:15 ET. It has to outlive a
+// dropped database connection.
+//
+// Supabase closes pooled connections that have gone idle, and Bun's SQL client
+// surfaces that from its socket-close handler rather than at a query `await` —
+// so it arrives as an UNHANDLED rejection that no call site can catch, and the
+// whole process exits. Observed repeatedly: `PostgresError: Connection closed`,
+// exit 1, overnight, taking the alerts and the morning briefing with it. The
+// pool reconnects on the next query, so the correct response is to log loudly
+// and keep running.
+//
+// Deliberately scoped to rejections. `uncaughtException` is left alone so a
+// genuine synchronous crash still surfaces instead of being papered over.
+process.on("unhandledRejection", (reason) => {
+  const msg = reason instanceof Error ? `${reason.name}: ${reason.message}` : String(reason);
+  console.error(`[resilience] unhandled rejection (process kept alive): ${msg}`);
+  if (reason instanceof Error && reason.stack) console.error(reason.stack);
+});
+
 // SHARP-29: background monitoring covers EVERY account, not just the first
 // signup. The split that makes that affordable:
 //
