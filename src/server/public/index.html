@@ -5531,7 +5531,22 @@
       b.setAttribute("aria-label", b.title);
     });
     window.addEventListener("hashchange", () => { const { name, param } = parseHash(); showPane(name, param); });
-    { const { name, param } = parseHash(); showPane(name || "portfolio", param); }
+    /* Deferred by one microtask, deliberately.
+       showPane() dispatches into per-pane loaders, and those loaders read consts
+       declared much further down this script — HIST_FEEDS is ~2,000 lines below
+       this line. Calling showPane() synchronously here means a cold load on
+       #history or #learn-progress reaches those consts while they are still in
+       the temporal dead zone, throws ReferenceError inside an async loader, and
+       leaves the pane rendered but permanently empty: right title, no filter
+       chips, no rows, and nothing in the console because the rejection is
+       swallowed by the loader's own catch.
+       It only ever reproduced on a real document load. Navigating by hash fires
+       hashchange after the script has finished evaluating, which is why every
+       in-app route looked fine and only a bookmark, a refresh or a pasted link
+       was broken.
+       A microtask runs after this script finishes but before paint, so nothing
+       flashes and every declaration is initialised. */
+    { const { name, param } = parseHash(); queueMicrotask(() => showPane(name || "portfolio", param)); }
 
     /* ── sidebar collapse: persisted, opacity/max-width transitions (never display:none) ── */
     function applySidebarCollapsed(collapsed) {
