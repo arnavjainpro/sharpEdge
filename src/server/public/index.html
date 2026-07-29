@@ -520,6 +520,16 @@
       gap: 9px;
       padding: 8px 10px 4px;
       transition: gap .22s ease, padding .22s ease;
+      /* Now a <button>: reset the UA styling it brings, keep the layout. */
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      border-radius: var(--radius-xs);
+    }
+
+    .side-user:hover {
+      background: var(--gray-soft);
     }
 
     #sidebar.collapsed .side-user {
@@ -724,6 +734,24 @@
       gap: 8px;
       font-size: 13px;
       color: var(--dim);
+    }
+
+    #settings-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xs);
+      background: var(--surface);
+      color: var(--dim);
+    }
+
+    #settings-btn:hover,
+    #settings-btn.active {
+      color: var(--fg);
+      background: var(--gray-soft);
     }
 
     .switch {
@@ -4446,7 +4474,6 @@
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
             class="badge"></span></button>
         <button data-tab="history"><span class="ndot"></span><span class="nlabel">History</span></button>
-        <button data-tab="settings"><span class="ndot"></span><span class="nlabel">Settings</span></button>
       </nav>
       <span class="spacer"></span>
       <div class="side-toggle-row">
@@ -4457,13 +4484,15 @@
             <path d="m18 17-5-5 5-5" />
           </svg></button>
       </div>
-      <div class="side-user">
+      <!-- The account row is the other honest way into Settings: it names the
+           account whose profile, brokerage link and appearance live there. -->
+      <button class="side-user" id="side-user-btn" title="Account settings" aria-label="Account settings">
         <span class="av" id="user-av">·</span>
         <div class="who">
           <div class="nm" id="user-name">Your account</div>
           <div class="sub">Primary account</div>
         </div>
-      </div>
+      </button>
     </aside>
 
     <div class="main-col">
@@ -4492,6 +4521,9 @@
           <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
             aria-label="Toggle live AI updates"><i></i></button>
         </span>
+        <!-- Settings is not a tab: it belongs to the account, not to any one
+             view, so it lives in the global header rather than in the nav list. -->
+        <button id="settings-btn" title="Settings" aria-label="Settings"></button>
       </header>
       <div id="banner">AI was halted after unusually high activity to protect your API spend.<button
           id="breaker-reset">Resume</button></div>
@@ -5263,6 +5295,8 @@
       document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       $("#tab-title").textContent = TAB_TITLES[name] || "sharpEdge";
       $("#tab-sub").textContent = TAB_SUBS[name] || "";
+      // Settings has no nav button to carry the active state, so the gear does.
+      $("#settings-btn").classList.toggle("active", name === "settings");
       const badge = document.querySelector(`#nav button[data-tab="${name}"] .badge`);
       if (badge) { badge.classList.remove("show"); badge.textContent = ""; }
       if (name === "portfolio") loadConcentration();
@@ -8881,6 +8915,14 @@
         chatScroll();
       }
     }
+
+    /* Settings: reachable from the header gear and from the account row, not
+       from the nav list. Both route through showPane so the #settings hash,
+       the existing deep link from the Portfolio hint, and the browser back
+       button all keep working unchanged. */
+    $("#settings-btn").innerHTML = icon("settings", 16);
+    $("#settings-btn").addEventListener("click", () => showPane("settings"));
+    $("#side-user-btn").addEventListener("click", () => showPane("settings"));
 
     $("#chat-fab").querySelector(".fab-open").innerHTML = icon("chat", 22);
     $("#chat-list-btn").innerHTML = icon("history", 15);
