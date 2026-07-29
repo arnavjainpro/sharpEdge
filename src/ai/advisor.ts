@@ -52,6 +52,41 @@ function tickersInQuestion(question: string, portfolio: Portfolio): string[] {
   return allTickers(portfolio).filter((t) => new RegExp(`\\b${t}\\b`).test(q));
 }
 
+// The two account-scoped reads behind the chat context, exported so the
+// isolation suite can pin them directly. They used to be inline SQL that
+// drifted out of sync with /api/state and started serving one account's private
+// analysis to every other account — a copy of the query in the test would have
+// been free to drift the same way, so both callers share these.
+//
+// Same projection as /api/state (server.ts): the event row is public market
+// fact, but the severity is THIS user's triage and the attached signal is THIS
+// user's analysis. `position_close`/`option_expiry` events belong to one
+// portfolio and must not surface elsewhere. COALESCE keeps events recorded
+// before the fan-out existed from going blank.
+export async function advisorEvents(userId: number, since: number): Promise<any[]> {
+  return await db
+    .query(
+      `SELECT e.ts, e.ticker, e.kind, e.title,
+              COALESCE(t.severity, e.severity) AS severity,
+              s.action, s.conviction, s.thesis
+       FROM events e
+       LEFT JOIN event_triage t ON t.event_id = e.id AND t.user_id = ?
+       LEFT JOIN signals s ON s.event_id = e.id AND s.user_id = ?
+       WHERE e.ts > ? AND (e.user_id IS NULL OR e.user_id = ?)
+         AND COALESCE(t.severity, e.severity) IN ('critical','high')
+       ORDER BY e.ts DESC LIMIT 20`
+    )
+    .all(userId, userId, since, userId) as any[];
+}
+
+// briefings.user_id scopes private per-portfolio analysis. Unfiltered, the
+// newest briefing anywhere on the instance was quoted into every account's chat.
+export async function advisorBriefing(userId: number) {
+  return (await db
+    .query(`SELECT ts, kind, content FROM briefings WHERE user_id = ? ORDER BY ts DESC LIMIT 1`)
+    .get(userId)) as { ts: number; kind: string; content: string } | null;
+}
+
 async function buildMarketContext(userId: number, portfolio: Portfolio, question: string): Promise<string> {
   const lines: string[] = [];
 
@@ -97,13 +132,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
   }
 
   const since = Math.floor(Date.now() / 1000) - 72 * 3600;
-  const events = await db
-    .query(
-      `SELECT e.ts, e.ticker, e.kind, e.title, e.severity, s.action, s.conviction, s.thesis
-       FROM events e LEFT JOIN signals s ON s.event_id = e.id
-       WHERE e.ts > ? AND e.severity IN ('critical','high') ORDER BY e.ts DESC LIMIT 20`
-    )
-    .all(since) as any[];
+  const events = await advisorEvents(userId, since);
   lines.push("", "SIGNIFICANT EVENTS + SIGNALS (last 72h):");
   if (events.length === 0) lines.push("(none)");
   for (const e of events) {
@@ -112,9 +141,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
     lines.push(line);
   }
 
-  const briefing = await db.query(`SELECT ts, kind, content FROM briefings ORDER BY ts DESC LIMIT 1`).get() as
-    | { ts: number; kind: string; content: string }
-    | null;
+  const briefing = await advisorBriefing(userId);
   if (briefing) {
     lines.push("", `LATEST BRIEFING (${briefing.kind}, ${new Date(briefing.ts * 1000).toISOString().slice(0, 16)}):`, briefing.content.slice(0, 2000));
   }

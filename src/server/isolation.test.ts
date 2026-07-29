@@ -1,6 +1,7 @@
 import { expect, test, afterAll } from "bun:test";
 import { db, insertEvent, insertSignal, setTriageFor } from "../db";
 import { createUser, hashPassword } from "../auth";
+import { advisorEvents, advisorBriefing } from "../ai/advisor";
 import {
   practiceStats, resetPractice, INTERVAL, VISIBLE, HORIZON, GRADING_VERSION,
 } from "../engine/practice";
@@ -42,21 +43,33 @@ const stateEvents = (userId: number) => db.query(
 
 // Order matters: event_triage and signals reference both users and events, so
 // they go first, then the events, then the accounts.
+//
+// One statement per table, not one per row. This runs against a remote Postgres,
+// and the original per-id loop cost two round trips per event plus five per
+// throwaway account — past a dozen accounts that overran the 5s hook budget, the
+// hook was killed half-done, and the accounts it had not reached yet stayed in
+// the live database. They are not inert there: the running app treats every row
+// in `users` as a real account, so it kept fetching broker snapshots and paying
+// to triage events for each one. 74 of them had accumulated before this was
+// caught. The generous timeout is a second belt: a slow cleanup must fail loudly
+// rather than silently leave accounts behind.
 afterAll(async () => {
-  const ids = await db.query(`SELECT id FROM events WHERE dedupe_key LIKE ?`).all<{ id: number }>(`${TAG}%`);
-  for (const { id } of ids) {
-    await db.query(`DELETE FROM event_triage WHERE event_id = ?`).run(id);
-    await db.query(`DELETE FROM signals WHERE event_id = ?`).run(id);
+  const tagged = `${TAG}%`;
+  await db.query(`DELETE FROM event_triage WHERE event_id IN (SELECT id FROM events WHERE dedupe_key LIKE ?)`).run(tagged);
+  await db.query(`DELETE FROM signals WHERE event_id IN (SELECT id FROM events WHERE dedupe_key LIKE ?)`).run(tagged);
+  await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(tagged);
+  if (!made.length) return;
+  // Ints straight from createUser, never user input — safe to inline, and it
+  // keeps this to one statement per table instead of one per account.
+  const ids = `(${made.map((n) => Number(n)).filter(Number.isInteger).join(",")})`;
+  // event_triage/signals again: a throwaway account can own rows against events
+  // this file never tagged, and those FKs would block the DELETE below.
+  for (const t of ["event_triage", "signals", "briefings", "practice_attempts", "settings", "broker_snapshots", "sessions"]) {
+    await db.query(`DELETE FROM ${t} WHERE user_id IN ${ids}`).run();
   }
-  await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(`${TAG}%`);
-  for (const id of made) {
-    await db.query(`DELETE FROM briefings WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM practice_attempts WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM settings WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM broker_snapshots WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM users WHERE id = ?`).run(id);
-  }
-});
+  await db.query(`DELETE FROM events WHERE user_id IN ${ids}`).run();
+  await db.query(`DELETE FROM users WHERE id IN ${ids}`).run();
+}, 60_000);
 
 // ── SHARP-32: resetting a practice record is scoped to one account ────────────
 // Reset archives rather than deletes, but it still has to be per-account: one
@@ -192,4 +205,71 @@ test("re-triage corrects rather than duplicating", async () => {
   const rows = await db.query(`SELECT severity FROM event_triage WHERE event_id = ? AND user_id = ?`).all(eventId, a) as any[];
   expect(rows).toHaveLength(1);
   expect(rows[0].severity).toBe("high");
+});
+
+// ── The AI advisor's chat context is account-scoped ───────────────────────────
+// /api/state was always scoped correctly; the advisor's context builder was a
+// second, older copy of the same projection that never got the fan-out
+// treatment. It read the global events.severity column, joined signals with no
+// owner predicate, and took the newest briefing on the instance — so every
+// account's chat prompt carried whichever other account had most recently been
+// analysed. These pin the real exported queries, not a restatement of the SQL.
+
+test("the advisor sees its own account's triage severity, not another's", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const since = Math.floor(Date.now() / 1000) - 3600;
+  // One shared, public market event. A considers it critical; B shrugs.
+  const eventId = (await testEvent("AMD", "news", "AMD test headline"))!;
+  await setTriageFor(eventId, a, "critical", "A cares");
+  await setTriageFor(eventId, b, "info", "B does not");
+
+  expect((await advisorEvents(a, since)).some((r) => r.title === "AMD test headline")).toBe(true);
+  // B rated it info, so it must fall below B's critical/high cut — even though
+  // A's triage is the one sitting in the shared events.severity column.
+  expect((await advisorEvents(b, since)).some((r) => r.title === "AMD test headline")).toBe(false);
+});
+
+test("the advisor never quotes another account's signal", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const since = Math.floor(Date.now() / 1000) - 3600;
+  const eventId = (await testEvent("AMD", "news", "AMD shared headline"))!;
+  for (const u of [a, b]) await setTriageFor(eventId, u, "high", "both care");
+  await insertSignal({
+    event_id: eventId, user_id: a, ticker: "AMD", action: "buy", conviction: "high",
+    plain_headline: "A's call", thesis: "A_PRIVATE_THESIS", invalidation: "", portfolio_impact: "",
+  });
+
+  const forA = (await advisorEvents(a, since)).find((r) => r.title === "AMD shared headline");
+  const forB = (await advisorEvents(b, since)).find((r) => r.title === "AMD shared headline");
+  expect(forA?.thesis).toBe("A_PRIVATE_THESIS");
+  // B sees the public event, but none of A's reasoning attached to it.
+  expect(forB).toBeTruthy();
+  expect(forB?.thesis).toBeNull();
+  expect(forB?.action).toBeNull();
+});
+
+test("a private event stays out of the advisor context too", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const since = Math.floor(Date.now() / 1000) - 3600;
+  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA — journal it?", a))!;
+  await setTriageFor(eventId, a, "high", "A's position");
+  await setTriageFor(eventId, b, "high", "B should still never see it");
+
+  expect((await advisorEvents(a, since)).some((r) => r.title === "Closed NVDA — journal it?")).toBe(true);
+  expect((await advisorEvents(b, since)).some((r) => r.title === "Closed NVDA — journal it?")).toBe(false);
+});
+
+test("the advisor reads its own account's briefing, or none at all", async () => {
+  const a = await throwawayUser();
+  const b = await throwawayUser();
+  const now = Math.floor(Date.now() / 1000);
+  await db.query(`INSERT INTO briefings (user_id, ts, kind, content) VALUES (?, ?, 'close', ?)`)
+    .run(a, now, "A_PRIVATE_BRIEFING");
+
+  expect((await advisorBriefing(a))?.content).toBe("A_PRIVATE_BRIEFING");
+  // B has no briefing of their own — the right answer is nothing, not A's.
+  expect(await advisorBriefing(b)).toBeNull();
 });
