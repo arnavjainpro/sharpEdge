@@ -514,6 +514,108 @@
       display: none !important;
     }
 
+    /* Workspace switcher. Deliberately NOT the .tabbar segmented control used
+       in Settings: that one is built for a content row, and at 74px the rail has
+       no horizontal budget for two labelled segments (~28px each, under the 44px
+       touch minimum). Stacks vertically instead, matching how #nav already
+       stacks, with a divider and a filled active pill so it never reads as just
+       two more nav items. */
+    #section-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 0 10px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #section-tabs button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      /* 44px is the touch-target floor; the rail is 74px wide so these are the
+         only controls up here that could fall under it. */
+      min-height: 44px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--radius-xs);
+      background: none;
+      color: var(--dim);
+      font: 600 12px var(--sans);
+      letter-spacing: var(--tracking-label);
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    #section-tabs button:hover {
+      background: var(--gray-soft);
+      color: var(--fg);
+    }
+
+    /* Filled, not --brand-soft: that already means "active tab" in #nav, and the
+       section and the tab inside it must not look like the same kind of thing. */
+    #section-tabs button[aria-current="true"] {
+      background: var(--brand);
+      color: var(--on-brand);
+    }
+
+    #section-tabs .sdot {
+      display: flex;
+      flex-shrink: 0;
+    }
+
+    /* Aggregate: a badge fired on a tab hidden inside the other section. Badges
+       are display:none on the rail at <=720px, so this dot is the only signal
+       there. */
+    #section-tabs .sdot-badge {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--red);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    #sidebar.collapsed #section-tabs button {
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    #sidebar.collapsed #section-tabs .slabel {
+      opacity: 0;
+      max-width: 0;
+      overflow: hidden;
+    }
+
+    @media (max-width: 720px) {
+      #sidebar:not(.collapsed) #section-tabs button {
+        justify-content: center;
+        padding: 8px 0;
+      }
+
+      #sidebar:not(.collapsed) #section-tabs .slabel {
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+      }
+    }
+
+    .prog-track {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--gray-soft);
+      overflow: hidden;
+    }
+
+    .prog-fill {
+      height: 100%;
+      background: var(--brand);
+      border-radius: 999px;
+      transition: width .3s ease;
+    }
+
     .side-user {
       display: flex;
       align-items: center;
@@ -4461,6 +4563,20 @@
           <img class="side-lockup logo-dark" src="/assets/logo-sidebar-dark.png" alt="sharpEdge">
         </a>
       </div>
+      <!-- Workspace switcher. Trading is live money and live data; Learning is
+           training against past charts. Both sections' buttons stay in the DOM
+           and are toggled with `hidden` rather than re-rendered — bumpBadge()
+           reads its count out of the button's own textContent, so a button that
+           is absent drops the notification silently instead of deferring it. -->
+      <div id="section-tabs" role="tablist" aria-label="Workspace">
+        <button role="tab" data-section="trading" aria-current="true">
+          <span class="sdot"></span><span class="slabel">Trading</span><span class="sdot-badge" hidden></span>
+        </button>
+        <button role="tab" data-section="learning">
+          <span class="sdot"></span><span class="slabel">Learning</span><span class="sdot-badge" hidden></span>
+        </button>
+      </div>
+
       <nav id="nav">
         <button data-tab="portfolio" class="active"><span class="ndot"></span><span
             class="nlabel">Portfolio</span></button>
@@ -4474,6 +4590,7 @@
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
             class="badge"></span></button>
         <button data-tab="history"><span class="ndot"></span><span class="nlabel">History</span></button>
+        <button data-tab="learn-progress"><span class="ndot"></span><span class="nlabel">Progress</span></button>
       </nav>
       <span class="spacer"></span>
       <div class="side-toggle-row">
@@ -5032,9 +5149,9 @@
         <!-- The feed comes FIRST: it's what you open History for. The journal form,
              calibration, and the scoreboard are input/reference and sit below, so
              they stop pushing the actual history under the fold. -->
-        <section data-pane="history">
+        <section data-pane="history" id="feed-trading" data-hist-feed="trading">
           <h2>History</h2>
-          <div id="history-kinds" class="filter-bar" style="margin:0 0 10px"></div>
+          <div class="hist-chips filter-bar" style="margin:0 0 10px"></div>
           <div id="history-ideas">
             <div class="skel-rows">
               <div class="skel" style="height:44px"></div>
@@ -5043,7 +5160,20 @@
             </div>
           </div>
           <div style="display:flex;justify-content:center;margin-top:10px">
-            <button class="refresh-btn" id="history-more" hidden>Load more</button>
+            <button class="refresh-btn hist-more" hidden>Load more</button>
+          </div>
+        </section>
+
+        <!-- Learning ▸ Progress. Deliberately not called History: lessons have no
+             completion timestamp, so this is a checklist over a drills timeline,
+             which is a different thing from the trading History feed. -->
+        <section data-pane="learn-progress" id="feed-progress" data-hist-feed="progress">
+          <h2>Progress</h2>
+          <div id="progress-lessons" style="margin-bottom:18px"></div>
+          <div class="hist-chips filter-bar" style="margin:0 0 10px"></div>
+          <div id="progress-drills"></div>
+          <div style="display:flex;justify-content:center;margin-top:10px">
+            <button class="refresh-btn hist-more" hidden>Load more</button>
           </div>
         </section>
 
@@ -5180,6 +5310,7 @@
       "check": '<polyline points="20 6 9 17 4 12"/>',
       "alert-triangle": '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
       "maximize": '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+      "learn-progress": '<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="4" width="3" height="14" rx="1"/>',
       "minimize": '<path d="M3 8h3a2 2 0 0 0 2-2V3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/>',
     };
     function icon(name, size = 16) {
@@ -5254,10 +5385,11 @@
        Flat tabs use #name; the stock detail page is a synthetic pane at
        #stock/TICKER (reached via search, not a tab). Stock navigations use
        pushState so the browser back button walks out of them naturally. */
-    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "activity", "history", "settings"];
+    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "learn-progress", "activity", "history", "settings"];
     const TAB_TITLES = {
       portfolio: "Portfolio", market: "Market", ideas: "Trade Ideas", analyze: "Analyzer",
-      backtest: "Backtest", learn: "Learn", practice: "Practice", activity: "Activity", history: "History", settings: "Settings"
+      backtest: "Backtest", learn: "Learn", practice: "Practice", "learn-progress": "Progress",
+      activity: "Activity", history: "History", settings: "Settings"
     };
     const TAB_SUBS = {
       portfolio: "Live positions & advice", market: "Regime, indices & sector rotation",
@@ -5265,8 +5397,56 @@
       backtest: "Plain-English strategy → out-of-sample results",
       learn: "Twelve lessons, wired to your own numbers",
       practice: "Blind chart drills — graded on process, not P&L",
+      "learn-progress": "Lessons done & every drill you've graded",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
     };
+
+    /* ── workspace sections ───────────────────────────────────────────────
+       Two modes of use, not two menus: Trading is live money against live data,
+       Learning is training against past charts. Settings belongs to neither and
+       lives in the header.
+
+       The section is always DERIVED from the tab (TAB_SECTION), never the other
+       way round, and the derivation happens inside showPane(). That matters
+       because showPane has eleven call sites — search results, watchlist rows,
+       event rows, heatmap cells, the drill-to-lesson link, the journal save —
+       and syncing the switcher in the #nav click handler instead would leave
+       every one of those showing the wrong section. ── */
+    const SECTIONS = {
+      trading: ["portfolio", "market", "ideas", "analyze", "backtest", "activity", "history"],
+      learning: ["learn", "practice", "learn-progress"],
+    };
+    const TAB_SECTION = Object.fromEntries(
+      Object.entries(SECTIONS).flatMap(([s, tabs]) => tabs.map((t) => [t, s]))
+    );
+    const SECTION_ICON = { trading: "market", learning: "learn" };
+    const lastTabKey = (s) => `lastTab:${s}`;
+
+    function applySection(section) {
+      document.querySelectorAll("#section-tabs button").forEach((b) => {
+        const on = b.dataset.section === section;
+        // aria-current, not just a class: title/aria-label name the buttons but
+        // never say which one you are in.
+        b.setAttribute("aria-current", String(on));
+      });
+      document.querySelectorAll("#nav button[data-tab]").forEach((b) => {
+        b.hidden = TAB_SECTION[b.dataset.tab] !== section;
+      });
+      syncSectionBadges();
+    }
+
+    // Roll hidden tabs' badges up to their section button, so a notification
+    // fired while you are in the other workspace is still visible.
+    function syncSectionBadges() {
+      for (const [section, tabs] of Object.entries(SECTIONS)) {
+        const pending = tabs.some((t) => {
+          const b = document.querySelector(`#nav button[data-tab="${t}"]`);
+          return b?.hidden && b.querySelector(".badge")?.classList.contains("show");
+        });
+        const dot = document.querySelector(`#section-tabs button[data-section="${section}"] .sdot-badge`);
+        if (dot) dot.hidden = !pending;
+      }
+    }
     function parseHash() {
       const raw = location.hash.slice(1);
       const [name, ...rest] = raw.split("/");
@@ -5282,6 +5462,9 @@
       }
       if (name === "stock" && param) {
         const ticker = decodeURIComponent(param).toUpperCase();
+        // A ticker page is reached from search and from watchlist rows, both of
+        // which are Trading, so the rail keeps that section with no tab active.
+        applySection("trading");
         document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== "stock"; });
         document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
         $("#tab-title").textContent = ticker;
@@ -5291,6 +5474,14 @@
         return;
       }
       if (!PANES.includes(name)) name = "portfolio";
+      // Settings belongs to no section, so it leaves the rail on whichever one
+      // you came from — the same treatment #stock/TICKER gets — rather than
+      // claiming a workspace it isn't part of.
+      if (name !== "settings") {
+        const section = TAB_SECTION[name] ?? "trading";
+        applySection(section);
+        localStorage.setItem(lastTabKey(section), name);
+      }
       document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== name; });
       document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       $("#tab-title").textContent = TAB_TITLES[name] || "sharpEdge";
@@ -5308,6 +5499,7 @@
       // lesson explaining it, and that link is silently absent if Learn was
       // never opened first.
       if (name === "practice") { loadPracticeStats(); if (!lessons.length) loadLessons(); }
+      if (name === "learn-progress") loadProgress();
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
     }
     function bumpBadge(name) {
@@ -5316,8 +5508,28 @@
       if (!b) return;
       b.textContent = String((+b.textContent || 0) + 1);
       b.classList.add("show");
+      // The badge may have landed on a tab hidden in the other workspace.
+      syncSectionBadges();
     }
     $("#nav").addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) showPane(b.dataset.tab); });
+
+    // Switching workspace is not a hash navigation, so it restores that
+    // section's last-visited tab. A hash always wins over this: showPane derives
+    // the section from the tab, so a #learn link lands in Learning regardless of
+    // what was remembered.
+    $("#section-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-section]");
+      if (!b) return;
+      const section = b.dataset.section;
+      const remembered = localStorage.getItem(lastTabKey(section));
+      const target = SECTIONS[section].includes(remembered) ? remembered : SECTIONS[section][0];
+      showPane(target);
+    });
+    document.querySelectorAll("#section-tabs [data-section]").forEach((b) => {
+      b.querySelector(".sdot").innerHTML = icon(SECTION_ICON[b.dataset.section], 15);
+      b.title = b.dataset.section === "trading" ? "Trading — live positions and market research" : "Learning — lessons and blind drills";
+      b.setAttribute("aria-label", b.title);
+    });
     window.addEventListener("hashchange", () => { const { name, param } = parseHash(); showPane(name, param); });
     { const { name, param } = parseHash(); showPane(name || "portfolio", param); }
 
@@ -7465,8 +7677,17 @@
       portfolio_score: "No portfolio scores yet — score your portfolio from the Portfolio tab.",
       backtest: "No backtests yet — run one from the Backtest tab.",
     };
-    let histKind = "all";
-    let histCursor = null;
+    // Progress shows drills only. Lessons cannot join this feed: completion is
+    // stored as a bare array of lesson ids in a settings row (engine/learn.ts)
+    // with no timestamp anywhere, so there is nothing to order a chronological
+    // list by. The pane renders a lesson progress block above the feed instead,
+    // which is why this tab is "Progress" and not a second "History".
+    const PROGRESS_KINDS = {
+      practice: { label: "Drills", param: "practice" },
+    };
+    const PROGRESS_EMPTY = {
+      practice: "No graded drills yet — start one from the Practice tab.",
+    };
 
     function relTime(ts) {
       const s = Math.floor(Date.now() / 1000) - ts;
@@ -7481,7 +7702,11 @@
       const time = `<span class="hist-time">${relTime(it.ts)}</span>`;
       const open = it.ticker
         ? `<button class="hist-open" data-tkr="${esc(it.ticker)}" title="Open ${esc(it.ticker)} in full view">Open →</button>` : "";
-      const del = it.deletable
+      // A graded drill is a record of how you decided, and the stats card on
+      // Practice is computed from practice_attempts, not from this row. Deleting
+      // one here would silently disagree with your own scoreboard, so it isn't
+      // offered — unlike an idea or a backtest, which are outputs you can redo.
+      const del = it.deletable && it.kind !== "practice"
         ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry">${icon("close", 12)}</button>` : "";
       let label, metric;
       if (it.kind === "portfolio_score") {
@@ -7490,6 +7715,16 @@
       } else if (it.kind === "backtest") {
         label = esc(it.ticker ?? "—");
         metric = `<span class="chip calm sm">${esc(it.summary ?? "backtest")}</span>`;
+      } else if (it.kind === "practice") {
+        // historyFeed returns NULL direction/rating for every artifact row, so
+        // without this branch a drill fell through to the idea renderer below
+        // and rendered an em-dash chip and an empty rating badge. It looked
+        // broken rather than throwing, which is worse.
+        label = esc(it.ticker ?? "—");
+        // No separate score chip: server.ts writes the summary as
+        // "NVDA long · +1.4R · process 72", so it already carries the score and
+        // adding one printed "process 72" twice in the same row.
+        metric = `<span class="chip calm sm">${esc(it.summary ?? "drill")}</span>`;
       } else {
         const dirTone = it.direction === "long" ? "buy" : it.direction === "short" ? "sell" : "calm";
         label = esc(it.ticker ?? "—");
@@ -7524,37 +7759,93 @@
           <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Saved metrics from the original run. Re-running now would use candles through today and give different numbers.</p>
         </div>`;
       }
+      if (it.kind === "practice") {
+        const p = it.payload;
+        const pl = p.plan ?? {};
+        const pr = p.process ?? {};
+        const num = (v, d = 2) => (v == null ? "—" : Number(v).toFixed(d));
+        const outcomeTone = p.outcome === "win" || p.outcome === "pass_correct" ? "buy"
+          : p.outcome === "loss" || p.outcome === "pass_missed" ? "sell" : "calm";
+        return `<div style="font-size:13px">
+          <div class="klabel">Your plan</div>
+          <div class="stats">
+            <div><b>${esc(pl.direction ?? p.direction ?? "—").replace("_", " ")}</b><span>direction</span></div>
+            <div><b>${num(pl.entry)}</b><span>entry</span></div>
+            <div><b>${num(pl.stop)}</b><span>stop</span></div>
+            <div><b>${num(pl.target)}</b><span>target</span></div>
+          </div>
+          <div class="klabel" style="margin-top:10px">Graded</div>
+          <div class="stats">
+            <div><b>${p.process?.score ?? it.score ?? "—"}</b><span>process</span></div>
+            <div><b><span class="chip ${outcomeTone} sm">${esc(p.outcome ?? "—").replace("_", " ")}</span></b><span>outcome</span></div>
+            <div><b>${p.rMultiple != null ? num(p.rMultiple, 2) + "R" : "—"}</b><span>planned R</span></div>
+          </div>
+          ${Array.isArray(pr.criteria) && pr.criteria.length ? `
+            <div class="klabel" style="margin-top:10px">Per-criterion</div>
+            <ul style="margin:4px 0 0;padding-left:18px;color:var(--dim)">
+              ${pr.criteria.map((c) => `<li>${esc(c.label ?? c.key ?? "criterion")} — ${c.passed ? "met" : "missed"}</li>`).join("")}
+            </ul>` : ""}
+          <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Process and outcome are scored separately: a good plan can still lose. Your running record lives on the Practice tab.</p>
+        </div>`;
+      }
       // ideas + intraday plans: same table, different shape, different renderer.
       const body = it.kind === "intraday" ? planCardHtml(it.payload) : reportCardHtml(it.payload);
       return body;
     }
 
-    function renderHistKinds() {
-      $("#history-kinds").innerHTML = Object.entries(HIST_KINDS)
-        .map(([k, v]) => `<button class="filter-chip${k === histKind ? " on" : ""}" data-hkind="${k}">${v.label}</button>`)
+    /* ── history feeds ────────────────────────────────────────────────────
+       Two feeds now share this code: the trading History tab and the Learning
+       Progress tab. They must not share STATE, and the trap is not the module
+       variables — it is that the chips, the Load-more button and the retry link
+       were matched on `document` and addressed by id. Duplicating `#history-more`
+       in a second pane would make $() return whichever came first in document
+       order, so the Progress pane's button would silently drive the trading feed.
+       Each feed therefore lives under a [data-hist-feed] root, and every handler
+       resolves its config from that root instead of from an id. ── */
+    const HIST_FEEDS = {
+      trading: {
+        root: "#feed-trading", box: "#history-ideas",
+        kinds: HIST_KINDS, empty: HIST_EMPTY,
+        state: { kind: "all", cursor: null },
+      },
+      progress: {
+        root: "#feed-progress", box: "#progress-drills",
+        kinds: PROGRESS_KINDS, empty: PROGRESS_EMPTY,
+        state: { kind: "practice", cursor: null },
+      },
+    };
+    const feedFrom = (el) => HIST_FEEDS[el?.closest("[data-hist-feed]")?.dataset.histFeed] ?? null;
+    const feedEl = (cfg, sel) => document.querySelector(`${cfg.root} ${sel}`);
+
+    function renderHistKinds(cfg) {
+      const bar = feedEl(cfg, ".hist-chips");
+      if (!bar) return;
+      bar.innerHTML = Object.entries(cfg.kinds)
+        .map(([k, v]) => `<button class="filter-chip${k === cfg.state.kind ? " on" : ""}" data-hkind="${k}">${v.label}</button>`)
         .join("");
     }
 
-    async function loadHistory(append = false) {
-      const box = $("#history-ideas");
-      const more = $("#history-more");
+    async function loadHistory(cfg, append = false) {
+      const box = $(cfg.box);
+      const more = feedEl(cfg, ".hist-more");
+      if (!box || !more) return;
       if (!append) {
-        histCursor = null;
-        box.innerHTML = `<div class="skel-rows"><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div></div>`;
+        cfg.state.cursor = null;
+        box.innerHTML = skelRows(3, 44);
         more.hidden = true;
       } else {
         more.disabled = true; more.textContent = "Loading…";
       }
-      const kindParam = HIST_KINDS[histKind]?.param ?? "";
+      const kindParam = cfg.kinds[cfg.state.kind]?.param ?? "";
       const qs = new URLSearchParams({ limit: "30" });
       if (kindParam) qs.set("kind", kindParam);
-      if (append && histCursor) qs.set("before", histCursor);
+      if (append && cfg.state.cursor) qs.set("before", cfg.state.cursor);
       try {
         const res = await (await fetch(`/api/history?${qs}`)).json();
         if (!res.ok) throw new Error(res.error || "failed");
         if (!append) box.innerHTML = "";
         if (!res.items.length && !append) {
-          box.innerHTML = `<div class="empty">${HIST_EMPTY[histKind] ?? HIST_EMPTY.all}</div>`;
+          box.innerHTML = `<div class="empty">${cfg.empty[cfg.state.kind] ?? cfg.empty.all ?? "Nothing here yet."}</div>`;
           more.hidden = true;
           return;
         }
@@ -7565,10 +7856,10 @@
           det.querySelector(".close-report")?.remove();
           box.appendChild(det);
         }
-        histCursor = res.items.at(-1)?.cursor ?? null;
+        cfg.state.cursor = res.items.at(-1)?.cursor ?? null;
         more.hidden = !res.more;         // exhausted -> no dead button
       } catch {
-        const msg = `<div class="empty">Couldn't load history. <button class="refresh-btn" id="hist-retry">Retry</button></div>`;
+        const msg = `<div class="empty">Couldn't load this list. <button class="refresh-btn hist-retry">Retry</button></div>`;
         if (append) more.insertAdjacentHTML("afterend", msg); else box.innerHTML = msg;
         more.hidden = true;
       } finally {
@@ -7578,9 +7869,15 @@
 
     document.addEventListener("click", (e) => {
       const chip = e.target.closest("[data-hkind]");
-      if (chip) { histKind = chip.dataset.hkind; renderHistKinds(); loadHistory(); return; }
-      if (e.target.closest("#history-more")) { loadHistory(true); return; }
-      if (e.target.closest("#hist-retry")) { loadHistory(); return; }
+      if (chip) {
+        const cfg = feedFrom(chip);
+        if (cfg) { cfg.state.kind = chip.dataset.hkind; renderHistKinds(cfg); loadHistory(cfg); }
+        return;
+      }
+      const moreBtn = e.target.closest(".hist-more");
+      if (moreBtn) { const cfg = feedFrom(moreBtn); if (cfg) loadHistory(cfg, true); return; }
+      const retry = e.target.closest(".hist-retry");
+      if (retry) { const cfg = feedFrom(retry); if (cfg) loadHistory(cfg); return; }
       const del = e.target.closest(".hist-del");
       if (del) {
         e.preventDefault(); e.stopPropagation();
@@ -7599,8 +7896,32 @@
 
     // Kept as a thin alias: showPane("history") calls this by name.
     async function loadPastIdeas() {
-      renderHistKinds();
-      await loadHistory();
+      renderHistKinds(HIST_FEEDS.trading);
+      await loadHistory(HIST_FEEDS.trading);
+    }
+
+    // Learning ▸ Progress. The lesson block is a checklist, not a feed — see the
+    // note on PROGRESS_KINDS — and the running score stays on Practice so there
+    // is one place, not two, that answers "how am I doing".
+    async function loadProgress() {
+      const box = $("#progress-lessons");
+      if (box) {
+        if (!lessons.length) await loadLessons();
+        const done = lessons.filter((l) => l.done).length;
+        const pct = lessons.length ? Math.round((done / lessons.length) * 100) : 0;
+        box.innerHTML = `
+          <div class="widget-head" style="padding:0 0 8px"><h3>Lessons</h3>
+            <span class="act">${done} of ${lessons.length} complete</span></div>
+          <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <div class="widget-note" style="margin-top:10px">
+            ${done === lessons.length && lessons.length
+              ? "All of them done. The drills below are where it sticks."
+              : "Lessons don't record when you finished them, so they're a checklist here rather than part of the timeline below."}
+            <a href="#learn" style="margin-left:6px">Open Learn →</a>
+          </div>`;
+      }
+      renderHistKinds(HIST_FEEDS.progress);
+      await loadHistory(HIST_FEEDS.progress);
     }
 
     /* ── settings: profile ── */
