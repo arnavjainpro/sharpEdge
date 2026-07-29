@@ -55,7 +55,17 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts`, `src/server/isolation.test.ts`, `src/broker/index.test.ts` and `src/ai/advisor.isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+
+Because they all end by deleting their throwaway account, **every `user_id` foreign key to `users(id)` carries `ON DELETE CASCADE`** — a `DO` block near the end of `schema.sql` enforces this on every boot and rewrites any constraint that drifts, scoped to the `public` schema (this database also hosts Supabase's `auth` schema, whose FKs are not ours). So `DELETE FROM users WHERE id = ?` is sufficient cleanup for anything user-owned; a new table needs no bespoke teardown.
+
+`DELETE FROM users WHERE id = ?` is now sufficient for **every** user-owned table, verified against all of them at once. `ideas` and `alerts` had no FK at all and got one (their `NOT NULL DEFAULT 1` is vestigial — every insert passes `user_id` explicitly). `settings` cannot take one, because its `user_id` doubles as a namespace where `0` means "global" and is part of the composite primary key, so an `AFTER DELETE` trigger on `users` covers it instead; the trigger guards on `id <> 0` so the global namespace can never be wiped.
+
+The one thing still needing an explicit delete is anything keyed by something other than the owner — public `events` are deliberately unowned, so key those on the `dedupe_key` prefix.
+
+Keep cleanup hooks to a handful of set-based statements rather than a loop per row, and pass an explicit timeout (`afterAll(fn, 60_000)`). Dozens of sequential round trips against the 15-connection pool blew bun's 5s default, and a hook that times out midway has already deleted the children but not the account — which is how 74 throwaway accounts ended up stranded in the live database. They are not inert there: the running app treats every row in `users` as a real account, so it kept fetching broker snapshots and paying to triage events for each one.
+
+The cascade rule and the explicit deletes are belt and braces, deliberately. Cascade makes a new user-owned table correct without anyone remembering it; the explicit per-table deletes in the cleanup hooks cover the tables cascade cannot reach.
 
 ## Task tracking
 

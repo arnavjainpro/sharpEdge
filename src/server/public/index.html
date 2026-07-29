@@ -514,12 +514,124 @@
       display: none !important;
     }
 
+    /* Workspace switcher. Deliberately NOT the .tabbar segmented control used
+       in Settings: that one is built for a content row, and at 74px the rail has
+       no horizontal budget for two labelled segments (~28px each, under the 44px
+       touch minimum). Stacks vertically instead, matching how #nav already
+       stacks, with a divider and a filled active pill so it never reads as just
+       two more nav items. */
+    #section-tabs {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 0 10px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #section-tabs button {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      /* 44px is the touch-target floor; the rail is 74px wide so these are the
+         only controls up here that could fall under it. */
+      min-height: 44px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--radius-xs);
+      background: none;
+      color: var(--dim);
+      font: 600 12px var(--sans);
+      letter-spacing: var(--tracking-label);
+      text-transform: uppercase;
+      text-align: left;
+    }
+
+    #section-tabs button:hover {
+      background: var(--gray-soft);
+      color: var(--fg);
+    }
+
+    /* Filled, not --brand-soft: that already means "active tab" in #nav, and the
+       section and the tab inside it must not look like the same kind of thing. */
+    #section-tabs button[aria-current="true"] {
+      background: var(--brand);
+      color: var(--on-brand);
+    }
+
+    #section-tabs .sdot {
+      display: flex;
+      flex-shrink: 0;
+    }
+
+    /* Aggregate: a badge fired on a tab hidden inside the other section. Badges
+       are display:none on the rail at <=720px, so this dot is the only signal
+       there. */
+    #section-tabs .sdot-badge {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--red);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    #sidebar.collapsed #section-tabs button {
+      justify-content: center;
+      padding: 8px 0;
+    }
+
+    #sidebar.collapsed #section-tabs .slabel {
+      opacity: 0;
+      max-width: 0;
+      overflow: hidden;
+    }
+
+    @media (max-width: 720px) {
+      #sidebar:not(.collapsed) #section-tabs button {
+        justify-content: center;
+        padding: 8px 0;
+      }
+
+      #sidebar:not(.collapsed) #section-tabs .slabel {
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+      }
+    }
+
+    .prog-track {
+      height: 8px;
+      border-radius: 999px;
+      background: var(--gray-soft);
+      overflow: hidden;
+    }
+
+    .prog-fill {
+      height: 100%;
+      background: var(--brand);
+      border-radius: 999px;
+      transition: width .3s ease;
+    }
+
     .side-user {
       display: flex;
       align-items: center;
       gap: 9px;
       padding: 8px 10px 4px;
       transition: gap .22s ease, padding .22s ease;
+      /* Now a <button>: reset the UA styling it brings, keep the layout. */
+      width: 100%;
+      background: none;
+      border: none;
+      text-align: left;
+      border-radius: var(--radius-xs);
+    }
+
+    .side-user:hover {
+      background: var(--gray-soft);
     }
 
     #sidebar.collapsed .side-user {
@@ -724,6 +836,24 @@
       gap: 8px;
       font-size: 13px;
       color: var(--dim);
+    }
+
+    #settings-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-xs);
+      background: var(--surface);
+      color: var(--dim);
+    }
+
+    #settings-btn:hover,
+    #settings-btn.active {
+      color: var(--fg);
+      background: var(--gray-soft);
     }
 
     .switch {
@@ -1052,7 +1182,9 @@
       max-width: 1440px;
       width: 100%;
       margin-inline: auto;
-      padding: 28px;
+      /* Extra bottom room so the fixed chat launcher never sits on top of the
+         last row of a pane — on Portfolio and Ideas that row is real data. */
+      padding: 28px 28px 104px;
       display: flex;
       flex-direction: column;
       gap: 28px;
@@ -2114,7 +2246,6 @@
     #ideas-filters,
     #intraday-form,
     #backtest-form,
-    #chat-card,
     details.block,
     .report,
     .advice {
@@ -3679,12 +3810,232 @@
       font-weight: 600;
     }
 
-    /* chat */
-    #chat-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+    /* ── chat widget ──────────────────────────────────────────────────────
+       Anchored bottom-right, which #toast-stack used to own outright. That
+       collision is spatial, not a stacking order — no z-index makes two things
+       share a rectangle — so the toast stack moves up by the height of the
+       launcher (see its rule below) and the launcher keeps the corner.
+
+       z-index ladder in this file, in full: header 20, chat 40, ⌘K modal 50,
+       toasts 100. Chat sits above the sticky header and below the modal, so
+       search never opens behind the panel. #filters-modal is a native <dialog>
+       opened with showModal(), which puts it in the top layer above all of
+       these regardless. */
+    /* Clearing the launcher is not enough once the panel is open: toasts are
+       z-100 and the panel is z-40, so a toast would draw straight over the
+       composer. The panel's height is dynamic (70vh cap, and larger again when
+       expanded), so rather than chase it with a calc, toasts move to the top
+       on the one occasion the bottom-right is occupied. */
+    body.chat-open #toast-stack {
+      top: 76px;
+      bottom: auto;
+    }
+
+    #chat-fab {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 56px;
+      height: 56px;
+      border: none;
+      border-radius: 50%;
+      background: var(--brand);
+      color: var(--on-brand);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+
+    #chat-fab:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, .22);
+    }
+
+    #chat-fab:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 3px;
+    }
+
+    /* Unread: an answer landed while the panel was closed. */
+    #chat-fab .fab-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--red);
+      border: 2px solid var(--brand);
+    }
+
+    #chat-panel {
+      position: fixed;
+      right: 24px;
+      bottom: 92px;
+      z-index: 40;
+      width: 380px;
+      max-height: min(560px, 70vh);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+    }
+
+    /* The advisor answers with tables and multi-paragraph markdown. 380px is a
+       reach affordance, not a reading one, so the panel can take over the
+       screen when the answer earns it. */
+    #chat-panel.expanded {
+      width: min(920px, 92vw);
+      max-height: min(80vh, 900px);
+    }
+
+    #chat-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 10px 10px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #chat-title {
+      flex: 1;
+      min-width: 0;
+      font-weight: 650;
+      font-size: 13.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-ghost {
+      background: none;
+      border: none;
+      color: var(--dim);
+      padding: 5px;
+      border-radius: var(--radius-xs);
+      display: flex;
+      align-items: center;
+    }
+
+    .chat-ghost:hover {
+      background: var(--gray-soft);
+      color: var(--fg);
+    }
+
+    #chat-body {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      flex: 1;
+    }
+
+    /* Saved conversations, in the same panel rather than a second surface. */
+    #chat-threads {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .thr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--radius-xs);
+      background: none;
+      border: none;
+      text-align: left;
+    }
+
+    .thr:hover {
+      background: var(--gray-soft);
+    }
+
+    .thr .thr-t {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thr .thr-w {
+      font-size: var(--fs-micro);
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .thr-del {
+      background: none;
+      border: none;
+      color: var(--faint);
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .thr-del:hover {
+      color: var(--red);
+      background: var(--gray-soft);
+    }
+
+    /* Suggestion chips replace the seeded example message: three sentences of
+       prose read as clutter in a 380px card, but they were the only onboarding
+       this feature had, so they become tappable instead of deleted. */
+    .chat-suggest {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 4px 0;
+    }
+
+    .chat-suggest button {
+      text-align: left;
+      background: var(--gray-soft);
+      border: none;
+      border-radius: var(--radius-xs);
+      padding: 9px 12px;
+      font: 13px var(--sans);
+      color: var(--fg);
+    }
+
+    .chat-suggest button:hover {
+      background: var(--brand-soft);
+    }
+
+    @media (max-width: 720px) {
+
+      /* At this width the sidebar is already a 64px icon rail — the app has
+         admitted it is in a narrow layout, so a 380px "floating" panel would
+         cover most of the viewport while pretending not to. Full sheet. */
+      #chat-panel {
+        right: 0;
+        bottom: 0;
+        left: 0;
+        top: 0;
+        width: auto;
+        max-height: none;
+        border-radius: 0;
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+
+      #chat-panel.expanded {
+        width: auto;
+        max-height: none;
+      }
+
+      #chat-fab {
+        width: 48px;
+        height: 48px;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+      }
     }
 
     #chat-log {
@@ -3692,7 +4043,8 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: 480px;
+      flex: 1;
+      min-height: 0;
       overflow-y: auto;
     }
 
@@ -4047,8 +4399,11 @@
     #toast-stack {
       position: fixed;
       right: 24px;
-      bottom: 24px;
+      /* Clears the chat launcher, which owns the bottom-right corner and is
+         permanent chrome; toasts are transient and few, so they yield. */
+      bottom: calc(24px + 64px);
       z-index: 100;
+      transition: bottom .16s ease, top .16s ease;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -4208,6 +4563,20 @@
           <img class="side-lockup logo-dark" src="/assets/logo-sidebar-dark.png" alt="sharpEdge">
         </a>
       </div>
+      <!-- Workspace switcher. Trading is live money and live data; Learning is
+           training against past charts. Both sections' buttons stay in the DOM
+           and are toggled with `hidden` rather than re-rendered — bumpBadge()
+           reads its count out of the button's own textContent, so a button that
+           is absent drops the notification silently instead of deferring it. -->
+      <div id="section-tabs" role="tablist" aria-label="Workspace">
+        <button role="tab" data-section="trading" aria-current="true">
+          <span class="sdot"></span><span class="slabel">Trading</span><span class="sdot-badge" hidden></span>
+        </button>
+        <button role="tab" data-section="learning">
+          <span class="sdot"></span><span class="slabel">Learning</span><span class="sdot-badge" hidden></span>
+        </button>
+      </div>
+
       <nav id="nav">
         <button data-tab="portfolio" class="active"><span class="ndot"></span><span
             class="nlabel">Portfolio</span></button>
@@ -4218,11 +4587,10 @@
         <button data-tab="backtest"><span class="ndot"></span><span class="nlabel">Backtest</span></button>
         <button data-tab="learn"><span class="ndot"></span><span class="nlabel">Learn</span></button>
         <button data-tab="practice"><span class="ndot"></span><span class="nlabel">Practice</span></button>
-        <button data-tab="chat"><span class="ndot"></span><span class="nlabel">Chat</span></button>
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
             class="badge"></span></button>
         <button data-tab="history"><span class="ndot"></span><span class="nlabel">History</span></button>
-        <button data-tab="settings"><span class="ndot"></span><span class="nlabel">Settings</span></button>
+        <button data-tab="learn-progress"><span class="ndot"></span><span class="nlabel">Progress</span></button>
       </nav>
       <span class="spacer"></span>
       <div class="side-toggle-row">
@@ -4233,13 +4601,15 @@
             <path d="m18 17-5-5 5-5" />
           </svg></button>
       </div>
-      <div class="side-user">
+      <!-- The account row is the other honest way into Settings: it names the
+           account whose profile, brokerage link and appearance live there. -->
+      <button class="side-user" id="side-user-btn" title="Account settings" aria-label="Account settings">
         <span class="av" id="user-av">·</span>
         <div class="who">
           <div class="nm" id="user-name">Your account</div>
           <div class="sub">Primary account</div>
         </div>
-      </div>
+      </button>
     </aside>
 
     <div class="main-col">
@@ -4268,6 +4638,9 @@
           <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
             aria-label="Toggle live AI updates"><i></i></button>
         </span>
+        <!-- Settings is not a tab: it belongs to the account, not to any one
+             view, so it lives in the global header rather than in the nav list. -->
+        <button id="settings-btn" title="Settings" aria-label="Settings"></button>
       </header>
       <div id="banner">AI was halted after unusually high activity to protect your API spend.<button
           id="breaker-reset">Resume</button></div>
@@ -4667,20 +5040,6 @@
           </div>
         </section>
 
-        <section data-pane="chat">
-          <h2>Ask sharpEdge</h2>
-          <div id="chat-card">
-            <div id="chat-log">
-              <div class="msg ai">Ask me anything about your money — “should I sell HPE?”, “what looks worth buying
-                today?”, “which sectors are leading right now?”</div>
-            </div>
-            <form id="chat-form">
-              <input id="chat-input" placeholder="Ask a question…" autocomplete="off" aria-label="Ask sharpEdge">
-              <button id="chat-send" type="submit">Ask</button>
-            </form>
-          </div>
-        </section>
-
         <details class="block" id="brief-block" data-pane="activity">
           <summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2.5">
@@ -4790,9 +5149,9 @@
         <!-- The feed comes FIRST: it's what you open History for. The journal form,
              calibration, and the scoreboard are input/reference and sit below, so
              they stop pushing the actual history under the fold. -->
-        <section data-pane="history">
+        <section data-pane="history" id="feed-trading" data-hist-feed="trading">
           <h2>History</h2>
-          <div id="history-kinds" class="filter-bar" style="margin:0 0 10px"></div>
+          <div class="hist-chips filter-bar" style="margin:0 0 10px"></div>
           <div id="history-ideas">
             <div class="skel-rows">
               <div class="skel" style="height:44px"></div>
@@ -4801,7 +5160,20 @@
             </div>
           </div>
           <div style="display:flex;justify-content:center;margin-top:10px">
-            <button class="refresh-btn" id="history-more" hidden>Load more</button>
+            <button class="refresh-btn hist-more" hidden>Load more</button>
+          </div>
+        </section>
+
+        <!-- Learning ▸ Progress. Deliberately not called History: lessons have no
+             completion timestamp, so this is a checklist over a drills timeline,
+             which is a different thing from the trading History feed. -->
+        <section data-pane="learn-progress" id="feed-progress" data-hist-feed="progress">
+          <h2>Progress</h2>
+          <div id="progress-lessons" style="margin-bottom:18px"></div>
+          <div class="hist-chips filter-bar" style="margin:0 0 10px"></div>
+          <div id="progress-drills"></div>
+          <div style="display:flex;justify-content:center;margin-top:10px">
+            <button class="refresh-btn hist-more" hidden>Load more</button>
           </div>
         </section>
 
@@ -4870,6 +5242,40 @@
     </div>
   </div>
 
+  <!-- Chat widget. Deliberately a direct child of <body>, outside #app-shell
+       and outside every [data-pane]: showPane() hides by the data-pane
+       attribute, so anything mounted inside a pane would vanish on tab switch.
+       Ids are the ones the old Chat pane used, and that pane is gone — two
+       copies of #chat-log would make $() return whichever came first. -->
+  <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel"
+    aria-label="Ask sharpEdge" title="Ask sharpEdge (Ctrl+J)">
+    <span class="fab-open"></span>
+    <span class="fab-dot" hidden></span>
+  </button>
+
+  <div id="chat-panel" role="dialog" aria-label="Ask sharpEdge" hidden>
+    <header id="chat-head">
+      <button id="chat-list-btn" type="button" class="chat-ghost" title="Saved conversations"
+        aria-label="Saved conversations"></button>
+      <div id="chat-title">New conversation</div>
+      <button id="chat-new" type="button" class="chat-ghost" title="New conversation"
+        aria-label="New conversation"></button>
+      <button id="chat-expand" type="button" class="chat-ghost" title="Expand" aria-label="Expand"></button>
+      <button id="chat-close" type="button" class="chat-ghost" title="Close" aria-label="Close"></button>
+    </header>
+
+    <div id="chat-threads" hidden></div>
+
+    <div id="chat-body">
+      <div id="chat-log" aria-live="polite"></div>
+      <form id="chat-form">
+        <input id="chat-input" placeholder="Ask a question…" autocomplete="off" maxlength="4000"
+          aria-label="Ask sharpEdge">
+        <button id="chat-send" type="submit">Ask</button>
+      </form>
+    </div>
+  </div>
+
   <script>
     const $ = (s) => document.querySelector(s);
     const chevSvg = `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>`;
@@ -4903,6 +5309,9 @@
       "trash": '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
       "check": '<polyline points="20 6 9 17 4 12"/>',
       "alert-triangle": '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      "maximize": '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+      "learn-progress": '<path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6" rx="1"/><rect x="12" y="8" width="3" height="10" rx="1"/><rect x="17" y="4" width="3" height="14" rx="1"/>',
+      "minimize": '<path d="M3 8h3a2 2 0 0 0 2-2V3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/>',
     };
     function icon(name, size = 16) {
       return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
@@ -4976,10 +5385,11 @@
        Flat tabs use #name; the stock detail page is a synthetic pane at
        #stock/TICKER (reached via search, not a tab). Stock navigations use
        pushState so the browser back button walks out of them naturally. */
-    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "chat", "activity", "history", "settings"];
+    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "learn-progress", "activity", "history", "settings"];
     const TAB_TITLES = {
       portfolio: "Portfolio", market: "Market", ideas: "Trade Ideas", analyze: "Analyzer",
-      backtest: "Backtest", learn: "Learn", practice: "Practice", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
+      backtest: "Backtest", learn: "Learn", practice: "Practice", "learn-progress": "Progress",
+      activity: "Activity", history: "History", settings: "Settings"
     };
     const TAB_SUBS = {
       portfolio: "Live positions & advice", market: "Regime, indices & sector rotation",
@@ -4987,17 +5397,74 @@
       backtest: "Plain-English strategy → out-of-sample results",
       learn: "Twelve lessons, wired to your own numbers",
       practice: "Blind chart drills — graded on process, not P&L",
-      chat: "Portfolio-aware financial advisor",
+      "learn-progress": "Lessons done & every drill you've graded",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
     };
+
+    /* ── workspace sections ───────────────────────────────────────────────
+       Two modes of use, not two menus: Trading is live money against live data,
+       Learning is training against past charts. Settings belongs to neither and
+       lives in the header.
+
+       The section is always DERIVED from the tab (TAB_SECTION), never the other
+       way round, and the derivation happens inside showPane(). That matters
+       because showPane has eleven call sites — search results, watchlist rows,
+       event rows, heatmap cells, the drill-to-lesson link, the journal save —
+       and syncing the switcher in the #nav click handler instead would leave
+       every one of those showing the wrong section. ── */
+    const SECTIONS = {
+      trading: ["portfolio", "market", "ideas", "analyze", "backtest", "activity", "history"],
+      learning: ["learn", "practice", "learn-progress"],
+    };
+    const TAB_SECTION = Object.fromEntries(
+      Object.entries(SECTIONS).flatMap(([s, tabs]) => tabs.map((t) => [t, s]))
+    );
+    const SECTION_ICON = { trading: "market", learning: "learn" };
+    const lastTabKey = (s) => `lastTab:${s}`;
+
+    function applySection(section) {
+      document.querySelectorAll("#section-tabs button").forEach((b) => {
+        const on = b.dataset.section === section;
+        // aria-current, not just a class: title/aria-label name the buttons but
+        // never say which one you are in.
+        b.setAttribute("aria-current", String(on));
+      });
+      document.querySelectorAll("#nav button[data-tab]").forEach((b) => {
+        b.hidden = TAB_SECTION[b.dataset.tab] !== section;
+      });
+      syncSectionBadges();
+    }
+
+    // Roll hidden tabs' badges up to their section button, so a notification
+    // fired while you are in the other workspace is still visible.
+    function syncSectionBadges() {
+      for (const [section, tabs] of Object.entries(SECTIONS)) {
+        const pending = tabs.some((t) => {
+          const b = document.querySelector(`#nav button[data-tab="${t}"]`);
+          return b?.hidden && b.querySelector(".badge")?.classList.contains("show");
+        });
+        const dot = document.querySelector(`#section-tabs button[data-section="${section}"] .sdot-badge`);
+        if (dot) dot.hidden = !pending;
+      }
+    }
     function parseHash() {
       const raw = location.hash.slice(1);
       const [name, ...rest] = raw.split("/");
       return { name, param: rest.join("/") || null };
     }
     function showPane(name, param) {
+      // Chat stopped being a destination. A bookmark or an old link to #chat
+      // opens the widget over the dashboard instead of resolving to nothing.
+      if (name === "chat") {
+        history.replaceState(null, "", "#portfolio");
+        name = "portfolio";
+        queueMicrotask(() => chatOpen());
+      }
       if (name === "stock" && param) {
         const ticker = decodeURIComponent(param).toUpperCase();
+        // A ticker page is reached from search and from watchlist rows, both of
+        // which are Trading, so the rail keeps that section with no tab active.
+        applySection("trading");
         document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== "stock"; });
         document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
         $("#tab-title").textContent = ticker;
@@ -5007,10 +5474,20 @@
         return;
       }
       if (!PANES.includes(name)) name = "portfolio";
+      // Settings belongs to no section, so it leaves the rail on whichever one
+      // you came from — the same treatment #stock/TICKER gets — rather than
+      // claiming a workspace it isn't part of.
+      if (name !== "settings") {
+        const section = TAB_SECTION[name] ?? "trading";
+        applySection(section);
+        localStorage.setItem(lastTabKey(section), name);
+      }
       document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== name; });
       document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       $("#tab-title").textContent = TAB_TITLES[name] || "sharpEdge";
       $("#tab-sub").textContent = TAB_SUBS[name] || "";
+      // Settings has no nav button to carry the active state, so the gear does.
+      $("#settings-btn").classList.toggle("active", name === "settings");
       const badge = document.querySelector(`#nav button[data-tab="${name}"] .badge`);
       if (badge) { badge.classList.remove("show"); badge.textContent = ""; }
       if (name === "portfolio") loadConcentration();
@@ -5022,6 +5499,7 @@
       // lesson explaining it, and that link is silently absent if Learn was
       // never opened first.
       if (name === "practice") { loadPracticeStats(); if (!lessons.length) loadLessons(); }
+      if (name === "learn-progress") loadProgress();
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
     }
     function bumpBadge(name) {
@@ -5030,10 +5508,45 @@
       if (!b) return;
       b.textContent = String((+b.textContent || 0) + 1);
       b.classList.add("show");
+      // The badge may have landed on a tab hidden in the other workspace.
+      syncSectionBadges();
     }
     $("#nav").addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (b) showPane(b.dataset.tab); });
+
+    // Switching workspace is not a hash navigation, so it restores that
+    // section's last-visited tab. A hash always wins over this: showPane derives
+    // the section from the tab, so a #learn link lands in Learning regardless of
+    // what was remembered.
+    $("#section-tabs").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-section]");
+      if (!b) return;
+      const section = b.dataset.section;
+      const remembered = localStorage.getItem(lastTabKey(section));
+      const target = SECTIONS[section].includes(remembered) ? remembered : SECTIONS[section][0];
+      showPane(target);
+    });
+    document.querySelectorAll("#section-tabs [data-section]").forEach((b) => {
+      b.querySelector(".sdot").innerHTML = icon(SECTION_ICON[b.dataset.section], 15);
+      b.title = b.dataset.section === "trading" ? "Trading — live positions and market research" : "Learning — lessons and blind drills";
+      b.setAttribute("aria-label", b.title);
+    });
     window.addEventListener("hashchange", () => { const { name, param } = parseHash(); showPane(name, param); });
-    { const { name, param } = parseHash(); showPane(name || "portfolio", param); }
+    /* Deferred by one microtask, deliberately.
+       showPane() dispatches into per-pane loaders, and those loaders read consts
+       declared much further down this script — HIST_FEEDS is ~2,000 lines below
+       this line. Calling showPane() synchronously here means a cold load on
+       #history or #learn-progress reaches those consts while they are still in
+       the temporal dead zone, throws ReferenceError inside an async loader, and
+       leaves the pane rendered but permanently empty: right title, no filter
+       chips, no rows, and nothing in the console because the rejection is
+       swallowed by the loader's own catch.
+       It only ever reproduced on a real document load. Navigating by hash fires
+       hashchange after the script has finished evaluating, which is why every
+       in-app route looked fine and only a bookmark, a refresh or a pasted link
+       was broken.
+       A microtask runs after this script finishes but before paint, so nothing
+       flashes and every declaration is initialised. */
+    { const { name, param } = parseHash(); queueMicrotask(() => showPane(name || "portfolio", param)); }
 
     /* ── sidebar collapse: persisted, opacity/max-width transitions (never display:none) ── */
     function applySidebarCollapsed(collapsed) {
@@ -5084,7 +5597,13 @@
     $("#search-open").addEventListener("click", openTickerModal);
     document.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openTickerModal(); }
+      // ⌘K is taken, so chat gets J. The FAB is last in DOM order — without a
+      // shortcut, reaching a global control means tabbing the whole page.
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") { e.preventDefault(); chatToggle(); }
+      // Escape order matters: the search modal is checked first, so one press
+      // never closes both it and the chat panel.
       else if (e.key === "Escape" && !tickerModal.hidden) closeTickerModal();
+      else if (e.key === "Escape" && !$("#chat-panel").hidden) chatClose();
     });
     tickerModal.addEventListener("click", (e) => { if (e.target === tickerModal) closeTickerModal(); });
 
@@ -7173,8 +7692,17 @@
       portfolio_score: "No portfolio scores yet — score your portfolio from the Portfolio tab.",
       backtest: "No backtests yet — run one from the Backtest tab.",
     };
-    let histKind = "all";
-    let histCursor = null;
+    // Progress shows drills only. Lessons cannot join this feed: completion is
+    // stored as a bare array of lesson ids in a settings row (engine/learn.ts)
+    // with no timestamp anywhere, so there is nothing to order a chronological
+    // list by. The pane renders a lesson progress block above the feed instead,
+    // which is why this tab is "Progress" and not a second "History".
+    const PROGRESS_KINDS = {
+      practice: { label: "Drills", param: "practice" },
+    };
+    const PROGRESS_EMPTY = {
+      practice: "No graded drills yet — start one from the Practice tab.",
+    };
 
     function relTime(ts) {
       const s = Math.floor(Date.now() / 1000) - ts;
@@ -7189,7 +7717,11 @@
       const time = `<span class="hist-time">${relTime(it.ts)}</span>`;
       const open = it.ticker
         ? `<button class="hist-open" data-tkr="${esc(it.ticker)}" title="Open ${esc(it.ticker)} in full view">Open →</button>` : "";
-      const del = it.deletable
+      // A graded drill is a record of how you decided, and the stats card on
+      // Practice is computed from practice_attempts, not from this row. Deleting
+      // one here would silently disagree with your own scoreboard, so it isn't
+      // offered — unlike an idea or a backtest, which are outputs you can redo.
+      const del = it.deletable && it.kind !== "practice"
         ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry">${icon("close", 12)}</button>` : "";
       let label, metric;
       if (it.kind === "portfolio_score") {
@@ -7198,6 +7730,16 @@
       } else if (it.kind === "backtest") {
         label = esc(it.ticker ?? "—");
         metric = `<span class="chip calm sm">${esc(it.summary ?? "backtest")}</span>`;
+      } else if (it.kind === "practice") {
+        // historyFeed returns NULL direction/rating for every artifact row, so
+        // without this branch a drill fell through to the idea renderer below
+        // and rendered an em-dash chip and an empty rating badge. It looked
+        // broken rather than throwing, which is worse.
+        label = esc(it.ticker ?? "—");
+        // No separate score chip: server.ts writes the summary as
+        // "NVDA long · +1.4R · process 72", so it already carries the score and
+        // adding one printed "process 72" twice in the same row.
+        metric = `<span class="chip calm sm">${esc(it.summary ?? "drill")}</span>`;
       } else {
         const dirTone = it.direction === "long" ? "buy" : it.direction === "short" ? "sell" : "calm";
         label = esc(it.ticker ?? "—");
@@ -7232,37 +7774,93 @@
           <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Saved metrics from the original run. Re-running now would use candles through today and give different numbers.</p>
         </div>`;
       }
+      if (it.kind === "practice") {
+        const p = it.payload;
+        const pl = p.plan ?? {};
+        const pr = p.process ?? {};
+        const num = (v, d = 2) => (v == null ? "—" : Number(v).toFixed(d));
+        const outcomeTone = p.outcome === "win" || p.outcome === "pass_correct" ? "buy"
+          : p.outcome === "loss" || p.outcome === "pass_missed" ? "sell" : "calm";
+        return `<div style="font-size:13px">
+          <div class="klabel">Your plan</div>
+          <div class="stats">
+            <div><b>${esc(pl.direction ?? p.direction ?? "—").replace("_", " ")}</b><span>direction</span></div>
+            <div><b>${num(pl.entry)}</b><span>entry</span></div>
+            <div><b>${num(pl.stop)}</b><span>stop</span></div>
+            <div><b>${num(pl.target)}</b><span>target</span></div>
+          </div>
+          <div class="klabel" style="margin-top:10px">Graded</div>
+          <div class="stats">
+            <div><b>${p.process?.score ?? it.score ?? "—"}</b><span>process</span></div>
+            <div><b><span class="chip ${outcomeTone} sm">${esc(p.outcome ?? "—").replace("_", " ")}</span></b><span>outcome</span></div>
+            <div><b>${p.rMultiple != null ? num(p.rMultiple, 2) + "R" : "—"}</b><span>planned R</span></div>
+          </div>
+          ${Array.isArray(pr.criteria) && pr.criteria.length ? `
+            <div class="klabel" style="margin-top:10px">Per-criterion</div>
+            <ul style="margin:4px 0 0;padding-left:18px;color:var(--dim)">
+              ${pr.criteria.map((c) => `<li>${esc(c.label ?? c.key ?? "criterion")} — ${c.passed ? "met" : "missed"}</li>`).join("")}
+            </ul>` : ""}
+          <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Process and outcome are scored separately: a good plan can still lose. Your running record lives on the Practice tab.</p>
+        </div>`;
+      }
       // ideas + intraday plans: same table, different shape, different renderer.
       const body = it.kind === "intraday" ? planCardHtml(it.payload) : reportCardHtml(it.payload);
       return body;
     }
 
-    function renderHistKinds() {
-      $("#history-kinds").innerHTML = Object.entries(HIST_KINDS)
-        .map(([k, v]) => `<button class="filter-chip${k === histKind ? " on" : ""}" data-hkind="${k}">${v.label}</button>`)
+    /* ── history feeds ────────────────────────────────────────────────────
+       Two feeds now share this code: the trading History tab and the Learning
+       Progress tab. They must not share STATE, and the trap is not the module
+       variables — it is that the chips, the Load-more button and the retry link
+       were matched on `document` and addressed by id. Duplicating `#history-more`
+       in a second pane would make $() return whichever came first in document
+       order, so the Progress pane's button would silently drive the trading feed.
+       Each feed therefore lives under a [data-hist-feed] root, and every handler
+       resolves its config from that root instead of from an id. ── */
+    const HIST_FEEDS = {
+      trading: {
+        root: "#feed-trading", box: "#history-ideas",
+        kinds: HIST_KINDS, empty: HIST_EMPTY,
+        state: { kind: "all", cursor: null },
+      },
+      progress: {
+        root: "#feed-progress", box: "#progress-drills",
+        kinds: PROGRESS_KINDS, empty: PROGRESS_EMPTY,
+        state: { kind: "practice", cursor: null },
+      },
+    };
+    const feedFrom = (el) => HIST_FEEDS[el?.closest("[data-hist-feed]")?.dataset.histFeed] ?? null;
+    const feedEl = (cfg, sel) => document.querySelector(`${cfg.root} ${sel}`);
+
+    function renderHistKinds(cfg) {
+      const bar = feedEl(cfg, ".hist-chips");
+      if (!bar) return;
+      bar.innerHTML = Object.entries(cfg.kinds)
+        .map(([k, v]) => `<button class="filter-chip${k === cfg.state.kind ? " on" : ""}" data-hkind="${k}">${v.label}</button>`)
         .join("");
     }
 
-    async function loadHistory(append = false) {
-      const box = $("#history-ideas");
-      const more = $("#history-more");
+    async function loadHistory(cfg, append = false) {
+      const box = $(cfg.box);
+      const more = feedEl(cfg, ".hist-more");
+      if (!box || !more) return;
       if (!append) {
-        histCursor = null;
-        box.innerHTML = `<div class="skel-rows"><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div><div class="skel" style="height:44px"></div></div>`;
+        cfg.state.cursor = null;
+        box.innerHTML = skelRows(3, 44);
         more.hidden = true;
       } else {
         more.disabled = true; more.textContent = "Loading…";
       }
-      const kindParam = HIST_KINDS[histKind]?.param ?? "";
+      const kindParam = cfg.kinds[cfg.state.kind]?.param ?? "";
       const qs = new URLSearchParams({ limit: "30" });
       if (kindParam) qs.set("kind", kindParam);
-      if (append && histCursor) qs.set("before", histCursor);
+      if (append && cfg.state.cursor) qs.set("before", cfg.state.cursor);
       try {
         const res = await (await fetch(`/api/history?${qs}`)).json();
         if (!res.ok) throw new Error(res.error || "failed");
         if (!append) box.innerHTML = "";
         if (!res.items.length && !append) {
-          box.innerHTML = `<div class="empty">${HIST_EMPTY[histKind] ?? HIST_EMPTY.all}</div>`;
+          box.innerHTML = `<div class="empty">${cfg.empty[cfg.state.kind] ?? cfg.empty.all ?? "Nothing here yet."}</div>`;
           more.hidden = true;
           return;
         }
@@ -7273,10 +7871,10 @@
           det.querySelector(".close-report")?.remove();
           box.appendChild(det);
         }
-        histCursor = res.items.at(-1)?.cursor ?? null;
+        cfg.state.cursor = res.items.at(-1)?.cursor ?? null;
         more.hidden = !res.more;         // exhausted -> no dead button
       } catch {
-        const msg = `<div class="empty">Couldn't load history. <button class="refresh-btn" id="hist-retry">Retry</button></div>`;
+        const msg = `<div class="empty">Couldn't load this list. <button class="refresh-btn hist-retry">Retry</button></div>`;
         if (append) more.insertAdjacentHTML("afterend", msg); else box.innerHTML = msg;
         more.hidden = true;
       } finally {
@@ -7286,9 +7884,15 @@
 
     document.addEventListener("click", (e) => {
       const chip = e.target.closest("[data-hkind]");
-      if (chip) { histKind = chip.dataset.hkind; renderHistKinds(); loadHistory(); return; }
-      if (e.target.closest("#history-more")) { loadHistory(true); return; }
-      if (e.target.closest("#hist-retry")) { loadHistory(); return; }
+      if (chip) {
+        const cfg = feedFrom(chip);
+        if (cfg) { cfg.state.kind = chip.dataset.hkind; renderHistKinds(cfg); loadHistory(cfg); }
+        return;
+      }
+      const moreBtn = e.target.closest(".hist-more");
+      if (moreBtn) { const cfg = feedFrom(moreBtn); if (cfg) loadHistory(cfg, true); return; }
+      const retry = e.target.closest(".hist-retry");
+      if (retry) { const cfg = feedFrom(retry); if (cfg) loadHistory(cfg); return; }
       const del = e.target.closest(".hist-del");
       if (del) {
         e.preventDefault(); e.stopPropagation();
@@ -7307,8 +7911,32 @@
 
     // Kept as a thin alias: showPane("history") calls this by name.
     async function loadPastIdeas() {
-      renderHistKinds();
-      await loadHistory();
+      renderHistKinds(HIST_FEEDS.trading);
+      await loadHistory(HIST_FEEDS.trading);
+    }
+
+    // Learning ▸ Progress. The lesson block is a checklist, not a feed — see the
+    // note on PROGRESS_KINDS — and the running score stays on Practice so there
+    // is one place, not two, that answers "how am I doing".
+    async function loadProgress() {
+      const box = $("#progress-lessons");
+      if (box) {
+        if (!lessons.length) await loadLessons();
+        const done = lessons.filter((l) => l.done).length;
+        const pct = lessons.length ? Math.round((done / lessons.length) * 100) : 0;
+        box.innerHTML = `
+          <div class="widget-head" style="padding:0 0 8px"><h3>Lessons</h3>
+            <span class="act">${done} of ${lessons.length} complete</span></div>
+          <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+          <div class="widget-note" style="margin-top:10px">
+            ${done === lessons.length && lessons.length
+              ? "All of them done. The drills below are where it sticks."
+              : "Lessons don't record when you finished them, so they're a checklist here rather than part of the timeline below."}
+            <a href="#learn" style="margin-left:6px">Open Learn →</a>
+          </div>`;
+      }
+      renderHistKinds(HIST_FEEDS.progress);
+      await loadHistory(HIST_FEEDS.progress);
     }
 
     /* ── settings: profile ── */
@@ -7846,6 +8474,10 @@
     document.addEventListener("paste", (e) => {
       const f = imageFromEvent(e);
       if (!f) return;
+      // The chat input is focusable on every tab now, so without this an image
+      // pasted while typing a question would silently load into the Backtest
+      // chart slot behind the panel.
+      if (e.target instanceof Node && $("#chat-panel").contains(e.target)) return;
       e.preventDefault();
       if (paneVisible("backtest")) setBtImage(f);
       else if (paneVisible("analyze")) acceptIntradayFile(f);
@@ -8408,49 +9040,245 @@
     }
     renderActFilters();
 
-    /* ── chat ── */
-    function chatAppendUser(text) {
+    /* ── chat widget ──────────────────────────────────────────────────────
+       Conversation history lives on the server now. The client holds only
+       which thread is open, so a refresh, a restart or a different device all
+       resume the same conversation.
+
+       The thread is always reloaded from the database on open rather than
+       restored from anything cached here: an answer can land while the panel
+       is closed (the server writes it regardless), and re-reading is what
+       makes that case correct instead of special. ── */
+    const SUGGESTIONS = [
+      "What's my biggest risk right now?",
+      "What looks worth buying today?",
+      "Which sectors are leading?",
+    ];
+    let chatThreadId = Number(localStorage.getItem("chatThreadId")) || null;
+    let chatInFlight = false;
+
+    const chatSetThread = (id) => {
+      chatThreadId = id || null;
+      if (id) localStorage.setItem("chatThreadId", String(id));
+      else localStorage.removeItem("chatThreadId");
+    };
+    const chatScroll = () => { const l = $("#chat-log"); l.scrollTop = l.scrollHeight; };
+
+    function chatBubble(role, content) {
+      const el = document.createElement("div");
+      el.className = role === "user" ? "msg user" : "msg ai";
+      // User text is set as text, never markdown. renderMd() pipes through
+      // marked into innerHTML with no sanitizer, so replaying a stored message
+      // through it would turn the user's own words into live markup.
+      if (role === "user") el.textContent = content;
+      else renderMd(el, content);
+      return el;
+    }
+
+    // One container, so sending clears the greeting AND the chips together.
+    // Removing only the chips left "Ask me anything…" pinned above the
+    // conversation for the rest of the session — and gone after a reload,
+    // since a reload renders from the database, which was the tell.
+    function chatEmptyState() {
+      const wrap = document.createElement("div");
+      wrap.className = "chat-empty";
+      const hello = document.createElement("div");
+      hello.className = "msg ai";
+      hello.textContent = "Ask me anything about your money.";
+      const chips = document.createElement("div");
+      chips.className = "chat-suggest";
+      for (const s of SUGGESTIONS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = s;
+        b.addEventListener("click", () => { $("#chat-input").value = s; chatSend(); });
+        chips.appendChild(b);
+      }
+      wrap.append(hello, chips);
+      return wrap;
+    }
+
+    async function chatLoadThread() {
       const log = $("#chat-log");
-      const u = document.createElement("div");
-      u.className = "msg user";
-      u.textContent = text;
-      log.appendChild(u);
+      if (!chatThreadId) {
+        $("#chat-title").textContent = "New conversation";
+        log.innerHTML = "";
+        log.appendChild(chatEmptyState());
+        return;
+      }
+      log.innerHTML = skelRows(3, 40);
+      try {
+        const res = await (await fetch(`/api/chat/threads/${chatThreadId}`)).json();
+        if (!res.ok) throw new Error(res.error || "failed");
+        $("#chat-title").textContent = res.thread.title;
+        log.innerHTML = "";
+        for (const m of res.messages) log.appendChild(chatBubble(m.role, m.content));
+        if (!res.messages.length) log.appendChild(chatEmptyState());
+        chatScroll();
+      } catch {
+        // A thread that 404s was deleted elsewhere — fall back to a new one
+        // rather than leaving a dead panel pointing at nothing.
+        chatSetThread(null);
+        $("#chat-title").textContent = "New conversation";
+        log.innerHTML = "";
+        log.appendChild(chatEmptyState());
+      }
+    }
+
+    async function chatLoadList() {
+      const box = $("#chat-threads");
+      box.innerHTML = skelRows(4, 40);
+      try {
+        const res = await (await fetch("/api/chat/threads")).json();
+        if (!res.ok) throw new Error(res.error || "failed");
+        if (!res.threads.length) {
+          box.innerHTML = `<div class="empty">No saved conversations yet. Ask something and it'll show up here.</div>`;
+          return;
+        }
+        box.innerHTML = "";
+        for (const t of res.threads) {
+          const row = document.createElement("div");
+          row.className = "thr";
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "thr-t";
+          open.textContent = t.title;
+          open.addEventListener("click", () => { chatSetThread(t.id); chatShowLog(); chatLoadThread(); });
+          const when = document.createElement("span");
+          when.className = "thr-w";
+          when.textContent = relTime(t.updated_ts);
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "thr-del";
+          del.title = "Delete conversation";
+          del.setAttribute("aria-label", `Delete conversation: ${t.title}`);
+          del.innerHTML = icon("trash", 13);
+          del.addEventListener("click", async () => {
+            del.disabled = true;
+            try {
+              const r = await (await fetch(`/api/chat/threads/${t.id}`, { method: "DELETE" })).json();
+              if (!r.ok) throw new Error(r.error || "failed");
+              row.remove();
+              // Deleting the open conversation has to reset the panel too,
+              // or closing the list drops you into a transcript that is gone.
+              if (chatThreadId === t.id) { chatSetThread(null); chatLoadThread(); }
+              if (!$("#chat-threads").querySelector(".thr")) chatLoadList();
+            } catch { del.disabled = false; toast("Couldn't delete that conversation", "err"); }
+          });
+          row.append(open, when, del);
+          box.appendChild(row);
+        }
+      } catch {
+        // An empty list and a failed fetch look identical to the user unless
+        // the error says so — "no conversations" when the server is down is a
+        // silent failure.
+        box.innerHTML = `<div class="empty">Couldn't load your conversations. <button class="refresh-btn" id="thr-retry">Retry</button></div>`;
+        box.querySelector("#thr-retry").addEventListener("click", chatLoadList);
+      }
+    }
+
+    const chatShowList = () => { $("#chat-threads").hidden = false; $("#chat-body").hidden = true; chatLoadList(); };
+    const chatShowLog = () => { $("#chat-threads").hidden = true; $("#chat-body").hidden = false; };
+
+    function chatOpen() {
+      $("#chat-panel").hidden = false;
+      document.body.classList.add("chat-open");
+      $("#chat-fab").setAttribute("aria-expanded", "true");
+      $("#chat-fab").querySelector(".fab-dot").hidden = true;
+      chatShowLog();
+      chatLoadThread();
+      $("#chat-input").focus();
+      localStorage.setItem("chatOpen", "1");
+    }
+    function chatClose() {
+      $("#chat-panel").hidden = true;
+      document.body.classList.remove("chat-open");
+      $("#chat-fab").setAttribute("aria-expanded", "false");
+      localStorage.setItem("chatOpen", "0");
+      $("#chat-fab").focus();
+    }
+    const chatToggle = () => ($("#chat-panel").hidden ? chatOpen() : chatClose());
+
+    async function chatSend() {
+      const input = $("#chat-input");
+      const question = input.value.trim();
+      if (!question || chatInFlight) return;
+      input.value = "";
+      chatInFlight = true;
+      $("#chat-send").disabled = true;
+
+      const log = $("#chat-log");
+      log.querySelector(".chat-empty")?.remove();
+      log.appendChild(chatBubble("user", question));
       const pending = document.createElement("div");
       pending.className = "msg ai pending";
       pending.textContent = "Thinking…";
       log.appendChild(pending);
-      log.scrollTop = log.scrollHeight;
-      return pending;
-    }
+      chatScroll();
 
-    const chatHistory = [];
-    $("#chat-form").addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const input = $("#chat-input");
-      const question = input.value.trim();
-      if (!question) return;
-      input.value = "";
-      $("#chat-send").disabled = true;
-      const pending = chatAppendUser(question);
+      // The thread this answer belongs to, captured now: switching threads
+      // mid-flight must not paint the answer into whichever one is open when
+      // it lands.
+      const askedIn = chatThreadId;
       try {
         const res = await (await fetch("/api/ask", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, history: chatHistory }),
+          body: JSON.stringify({ question, threadId: chatThreadId ?? undefined }),
         })).json();
-        pending.classList.remove("pending");
         if (res.ok) {
+          if (!chatThreadId) { chatSetThread(res.threadId); $("#chat-title").textContent = res.title || "Conversation"; }
+          if (askedIn !== chatThreadId && askedIn !== null) { pending.remove(); return; }
+          pending.classList.remove("pending");
           renderMd(pending, res.answer);
-          chatHistory.push({ role: "user", content: question }, { role: "assistant", content: res.answer });
-          while (chatHistory.length > 10) chatHistory.shift();
-        } else pending.textContent = `Something went wrong: ${res.error}`;
+          if ($("#chat-panel").hidden) $("#chat-fab").querySelector(".fab-dot").hidden = false;
+        } else if (res.breaker) {
+          // Not an answer, so the server didn't store it. The banner already
+          // owns this state and carries the Resume button.
+          pending.remove();
+          if (res.threadId && !chatThreadId) chatSetThread(res.threadId);
+          $("#banner").style.display = "block";
+          toast("AI is paused — resume it from the banner", "err");
+        } else {
+          pending.classList.remove("pending");
+          pending.textContent = `Something went wrong: ${res.error}`;
+        }
       } catch (e) {
         pending.classList.remove("pending");
         pending.textContent = `Something went wrong: ${e}`;
       } finally {
+        chatInFlight = false;
         $("#chat-send").disabled = false;
-        $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
+        chatScroll();
       }
+    }
+
+    /* Settings: reachable from the header gear and from the account row, not
+       from the nav list. Both route through showPane so the #settings hash,
+       the existing deep link from the Portfolio hint, and the browser back
+       button all keep working unchanged. */
+    $("#settings-btn").innerHTML = icon("settings", 16);
+    $("#settings-btn").addEventListener("click", () => showPane("settings"));
+    $("#side-user-btn").addEventListener("click", () => showPane("settings"));
+
+    $("#chat-fab").querySelector(".fab-open").innerHTML = icon("chat", 22);
+    $("#chat-list-btn").innerHTML = icon("history", 15);
+    $("#chat-new").innerHTML = icon("plus", 15);
+    $("#chat-expand").innerHTML = icon("maximize", 15);
+    $("#chat-close").innerHTML = icon("close", 15);
+
+    $("#chat-fab").addEventListener("click", chatToggle);
+    $("#chat-close").addEventListener("click", chatClose);
+    $("#chat-list-btn").addEventListener("click", () => ($("#chat-threads").hidden ? chatShowList() : chatShowLog()));
+    $("#chat-new").addEventListener("click", () => { chatSetThread(null); chatShowLog(); chatLoadThread(); $("#chat-input").focus(); });
+    $("#chat-expand").addEventListener("click", () => {
+      const p = $("#chat-panel");
+      p.classList.toggle("expanded");
+      $("#chat-expand").title = p.classList.contains("expanded") ? "Shrink" : "Expand";
+      $("#chat-expand").innerHTML = icon(p.classList.contains("expanded") ? "minimize" : "maximize", 15);
     });
+    $("#chat-form").addEventListener("submit", (ev) => { ev.preventDefault(); chatSend(); });
+
+    if (localStorage.getItem("chatOpen") === "1") chatOpen();
 
     /* ── header controls ── */
     function renderAiToggle() {

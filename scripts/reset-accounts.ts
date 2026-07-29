@@ -5,7 +5,8 @@
 //   users, sessions, risk_prefs, broker_links (a linked Robinhood must be
 //   re-linked from scratch, device auth and all), per-user settings, alerts,
 //   ideas, artifacts, trade_outcomes, tracked_trades, broker_positions,
-//   signals, briefings, event_triage, and the handful of owned events.
+//   signals, briefings, event_triage, saved chat threads and their messages,
+//   and the handful of owned events.
 //
 // What survives, because none of it belongs to an account:
 //   events (public market facts), screener, universe, bars, sector_history,
@@ -28,7 +29,7 @@ if (!users.length) {
 const OWNED = [
   "sessions", "risk_prefs", "broker_links", "alerts", "artifacts",
   "trade_outcomes", "tracked_trades", "broker_positions",
-  "signals", "briefings", "event_triage",
+  "signals", "briefings", "event_triage", "chat_messages", "chat_threads",
 ] as const;
 
 console.log("Accounts to delete:");
@@ -62,8 +63,12 @@ await db.transaction(async () => {
   await db.query(`DELETE FROM event_triage`).run();
   await db.query(`DELETE FROM signals`).run();
   // Everything else owned by a user.
+  // chat_messages before chat_threads: both carry ON DELETE CASCADE, so the
+  // FK would resolve either way, but this script reports what it deleted and
+  // the counts only line up if it deletes them itself.
   for (const t of ["sessions", "risk_prefs", "broker_links", "alerts", "artifacts",
-                   "trade_outcomes", "tracked_trades", "broker_positions", "briefings", "ideas"]) {
+                   "trade_outcomes", "tracked_trades", "broker_positions", "briefings", "ideas",
+                   "chat_messages", "chat_threads"]) {
     await db.query(`DELETE FROM ${t}`).run();
   }
   // Per-user settings only — user_id 0 is the global namespace (ai_live etc).

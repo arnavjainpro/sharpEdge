@@ -149,17 +149,49 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
   return lines.join("\n");
 }
 
+// Replay window for a saved thread. Two separate limits, because they guard
+// different things:
+//
+// - the age cut guards ANSWER QUALITY. buildMarketContext is rebuilt from live
+//   data on every turn, but history is prepended verbatim, so a three-week-old
+//   "hold HPE, stop at 19.40" would replay into today's context as current
+//   fact. For a trading advisor that is a wrong-answer generator. The only
+//   thing old turns still buy is pronoun resolution inside one sitting.
+// - the turn cap guards COST. /api/ask is the most expensive path in the app
+//   (modelDeep, adaptive thinking, full market context per turn), and until
+//   now a page refresh capped it for free by throwing history away.
+export const CHAT_REPLAY_TURNS = 4;
+export const CHAT_REPLAY_MAX_AGE_SEC = 6 * 3600;
+
+// Pure so it can be tested without a database or a model call.
+export function replayWindow(
+  messages: { ts: number; role: "user" | "assistant"; content: string }[],
+  nowSec: number = Math.floor(Date.now() / 1000)
+): ChatTurn[] {
+  const fresh = messages.filter((m) => nowSec - m.ts <= CHAT_REPLAY_MAX_AGE_SEC);
+  // A trailing user turn has no answer — the model call that would have
+  // answered it failed. Replaying it would ask the model to respond to two
+  // questions at once.
+  while (fresh.length && fresh[fresh.length - 1]!.role === "user") fresh.pop();
+  return fresh.slice(-CHAT_REPLAY_TURNS).map((m) => ({ role: m.role, content: m.content }));
+}
+
+// Discriminated rather than a plain string: the breaker message used to come
+// back as a normal answer, which meant a persisted thread would store it as an
+// assistant turn and replay it to the model as if it were analysis.
+export type AdvisorResult =
+  | { ok: true; answer: string }
+  | { ok: false; reason: "breaker" };
+
 export async function askAdvisor(
   userId: number,
   question: string,
   history: ChatTurn[],
   portfolio: Portfolio
-): Promise<string> {
-  if (!opusBreaker.allow()) {
-    return "⚠️ The AI circuit breaker is tripped (unusually high call volume was detected). Reset it from the dashboard status bar or restart the app.";
-  }
+): Promise<AdvisorResult> {
+  if (!opusBreaker.allow()) return { ok: false, reason: "breaker" };
 
-  const trimmedHistory = history.slice(-10); // cap context growth
+  const trimmedHistory = history.slice(-CHAT_REPLAY_TURNS);
   const marketContext = await buildMarketContext(userId, portfolio, question);
   const response = await claudeQueue(() =>
     client.messages.create({
@@ -183,7 +215,7 @@ export async function askAdvisor(
     })
   );
 
-  return response.content.find((b) => b.type === "text")?.text ?? "(no answer)";
+  return { ok: true, answer: response.content.find((b) => b.type === "text")?.text ?? "(no answer)" };
 }
 
 // One-tap news digest for a ticker: last 7 days of headlines → a few plain-

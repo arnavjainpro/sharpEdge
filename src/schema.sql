@@ -397,6 +397,163 @@ UPDATE signals   SET user_id = (SELECT min(id) FROM users)
 UPDATE briefings SET user_id = (SELECT min(id) FROM users)
   WHERE user_id IS NULL AND EXISTS (SELECT 1 FROM users);
 
+-- Saved advisor conversations. Chat was the only AI surface whose output did
+-- not survive a refresh — ideas, intraday plans, portfolio scores, backtests
+-- and practice drills all persist, chat lived in a JS array.
+--
+-- Two tables rather than one artifacts row per thread: a conversation is
+-- append-heavy, and an artifacts payload is a snapshot blob that would be
+-- rewritten in full on every turn. It would also have to join ARTIFACT_KINDS
+-- to be stored there, which would make chats returnable from /api/history and
+-- leak them into the trading history feed.
+--
+-- ON DELETE CASCADE is load-bearing, not decoration: scripts/reset-accounts.ts
+-- deletes a hard-coded table list and then DELETE FROM users inside ONE
+-- transaction, and the afterAll of every real-database test deletes its
+-- throwaway account the same way. A plain REFERENCES here fails that FK and
+-- takes the whole reset down with it. Same reasoning as broker_snapshots.
+CREATE TABLE IF NOT EXISTS chat_threads (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ts integer NOT NULL,               -- created
+  updated_ts integer NOT NULL,       -- last message; drives list order
+  title text NOT NULL                -- first user message, truncated
+);
+CREATE INDEX IF NOT EXISTS idx_chat_threads_user ON chat_threads(user_id, updated_ts DESC);
+
+-- role is CHECKed at the database rather than trusted from the caller: a bad
+-- value here does not surface as a bad row, it surfaces as an Anthropic 400
+-- on the next replay of the thread, a long way from the write that caused it.
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id serial PRIMARY KEY,
+  thread_id integer NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ts integer NOT NULL,
+  role text NOT NULL CHECK (role IN ('user','assistant')),
+  content text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
+
+-- Every user-owned foreign key cascades from users(id).
+--
+-- Without this, deleting an account is only possible if the caller happens to
+-- delete every child table first, in the right order, by hand.
+-- scripts/reset-accounts.ts does maintain such a list, but the list is the bug:
+-- it silently goes stale every time a table is added, and the failure lands as
+-- an FK violation that aborts the whole reset transaction.
+--
+-- The observable symptom was worse than a broken script. The self-cleaning
+-- real-database tests end by deleting their throwaway account, and their
+-- cleanup hooks were timing out partway through the manual child deletes —
+-- leaving @example.invalid accounts stranded in the live database. Cascading
+-- makes "delete the user" sufficient and correct by construction, so cleanup
+-- is one statement that cannot half-succeed.
+--
+-- Scoped deliberately to relnamespace = 'public'. This database also hosts
+-- Supabase's auth schema, which has its own auth.users and its own FKs
+-- (identities, mfa_factors, oauth_*, webauthn_*); those are not ours to alter.
+--
+-- Idempotent: re-checks confdeltype on every boot and only rewrites a
+-- constraint that is not already CASCADE.
+DO $$
+DECLARE
+  t text;
+  con text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'artifacts', 'briefings', 'broker_links', 'broker_positions', 'event_triage',
+    'events', 'practice_attempts', 'risk_prefs', 'sessions', 'signals',
+    'tracked_trades', 'trade_outcomes'
+  ] LOOP
+    SELECT c.conname INTO con
+    FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid = c.conrelid AND cl.relnamespace = 'public'::regnamespace
+    JOIN pg_class rf ON rf.oid = c.confrelid AND rf.relnamespace = 'public'::regnamespace
+    WHERE c.contype = 'f' AND cl.relname = t AND rf.relname = 'users'
+      AND c.confdeltype <> 'c'
+      AND (SELECT a.attname FROM pg_attribute a
+           WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1]) = 'user_id'
+    LIMIT 1;
+
+    IF con IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', t, con);
+      EXECUTE format(
+        'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE',
+        t, con);
+      RAISE NOTICE 'cascade: rewrote %.%', t, con;
+    END IF;
+    con := NULL;
+  END LOOP;
+END $$;
+
+-- ideas and alerts carry a user_id with no foreign key at all, so the block
+-- above (which only rewrites an existing constraint) never reached them: a
+-- deleted account left its ideas and alerts behind as orphans pointing at an id
+-- that no longer exists. Both columns are NOT NULL DEFAULT 1, and that default
+-- is vestigial — every insert in the app passes user_id explicitly
+-- (ai/validator.ts, ai/intraday.ts, engine/alerts.ts) — so constraining them
+-- costs nothing at write time.
+--
+-- Guarded on there being no orphans right now. Adding a foreign key validates
+-- existing rows, so on a database that already has orphans this would throw
+-- from db.exec() and take the boot down with it. Skipping loudly is strictly
+-- better than refusing to start; clean the orphans and the next boot adds it.
+--
+-- settings is deliberately NOT in this list. Its user_id doubles as a namespace
+-- where 0 means "global, not per-user" (see the table definition), and 0 is part
+-- of the composite primary key so it cannot be NULL instead. A plain foreign key
+-- would reject those rows. settings therefore stays on explicit cleanup.
+DO $$
+DECLARE
+  t text;
+  orphans bigint;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['ideas', 'alerts'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint c
+      JOIN pg_class cl ON cl.oid = c.conrelid AND cl.relnamespace = 'public'::regnamespace
+      JOIN pg_class rf ON rf.oid = c.confrelid AND rf.relnamespace = 'public'::regnamespace
+      WHERE c.contype = 'f' AND cl.relname = t AND rf.relname = 'users'
+    ) THEN
+      EXECUTE format('SELECT count(*) FROM public.%I WHERE user_id NOT IN (SELECT id FROM public.users)', t)
+        INTO orphans;
+      IF orphans = 0 THEN
+        EXECUTE format(
+          'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE',
+          t, t || '_user_id_fkey');
+        RAISE NOTICE 'cascade: added FK on %', t;
+      ELSE
+        RAISE WARNING 'cascade: % has % orphaned row(s); FK not added. Clean them and reboot.', t, orphans;
+      END IF;
+    END IF;
+  END LOOP;
+END $$;
+
+-- settings is the one user-owned table that cannot carry a foreign key: its
+-- user_id doubles as a namespace where 0 means "global, not per-user", and 0 is
+-- part of the composite primary key, so it can be neither NULL nor a real
+-- users.id. A trigger closes the same gap the cascades close everywhere else.
+--
+-- Worth the extra machinery because the alternative is a convention — "remember
+-- to delete settings too" — and a forgotten convention is precisely the bug this
+-- whole block exists to retire. reset-accounts.ts and the test hooks already do
+-- it by hand; this makes them belt rather than the only line of defence.
+CREATE OR REPLACE FUNCTION public.settings_cleanup_on_user_delete() RETURNS trigger AS $$
+BEGIN
+  -- Guard on 0 so a hypothetical account with id 0 could never wipe the global
+  -- namespace (ai_live and friends live there).
+  IF OLD.id <> 0 THEN
+    DELETE FROM public.settings WHERE user_id = OLD.id;
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_settings_cleanup ON public.users;
+CREATE TRIGGER trg_settings_cleanup
+  AFTER DELETE ON public.users
+  FOR EACH ROW EXECUTE FUNCTION public.settings_cleanup_on_user_delete();
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);
