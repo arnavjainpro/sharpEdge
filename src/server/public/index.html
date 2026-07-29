@@ -5219,8 +5219,32 @@
       return ` · ${clock.kind === "open" ? "opens" : "closes"} ${fmtTime(clock.ts)}${day}`;
     }
 
+    // marked passes raw HTML straight through, and everything rendered here is
+    // model output built from third-party news headlines and chat input — so it
+    // must not reach innerHTML unfiltered. Parse into an inert <template>
+    // first: nothing inside a template fragment executes or fetches, so the
+    // scrub happens before the markup is ever live.
+    const MD_DROP_TAGS = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK", "META", "BASE", "FORM", "INPUT", "TEXTAREA", "SELECT", "BUTTON"]);
+    const MD_URL_ATTRS = new Set(["href", "src", "srcset", "action", "formaction", "xlink:href"]);
+    const MD_SAFE_URL = /^(https?:|mailto:|#|\/)/i;
+    function sanitizeMd(html) {
+      const tpl = document.createElement("template");
+      tpl.innerHTML = html;
+      for (const el of tpl.content.querySelectorAll("*")) {
+        if (MD_DROP_TAGS.has(el.tagName)) { el.remove(); continue; }
+        for (const { name, value } of [...el.attributes]) {
+          const n = name.toLowerCase();
+          // on* handlers, style (marked never emits one), and any URL attribute
+          // whose scheme we don't vouch for — javascript:, data:, vbscript:.
+          if (n.startsWith("on") || n === "style" || (MD_URL_ATTRS.has(n) && !MD_SAFE_URL.test(String(value).trim()))) {
+            el.removeAttribute(name);
+          }
+        }
+      }
+      return tpl.innerHTML;
+    }
     function renderMd(el, text) {
-      if (window.marked) { el.classList.add("md"); el.innerHTML = marked.parse(text, { breaks: true }); }
+      if (window.marked) { el.classList.add("md"); el.innerHTML = sanitizeMd(marked.parse(String(text ?? ""), { breaks: true })); }
       else { el.style.whiteSpace = "pre-wrap"; el.textContent = text; }
     }
 
