@@ -24,12 +24,15 @@ const freshUser = async (email: string) => {
 };
 const wrongCode = (code: string) => (code === "000000" ? "111111" : "000000");
 
+// Batched for the same reason as the other DB-writing suites: a per-row cleanup
+// loop against a remote Postgres can overrun the hook budget, and a half-done
+// cleanup leaves live accounts behind.
 afterAll(async () => {
-  for (const id of userIds) {
-    await db.query(`DELETE FROM sessions WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM users WHERE id = ?`).run(id);
-  }
-});
+  if (!userIds.length) return;
+  const ids = `(${userIds.map((n) => Number(n)).filter(Number.isInteger).join(",")})`;
+  await db.query(`DELETE FROM sessions WHERE user_id IN ${ids}`).run();
+  await db.query(`DELETE FROM users WHERE id IN ${ids}`).run();
+}, 60_000);
 
 test("staging a change does not move the login", async () => {
   const id = await freshUser(`emailchange-${crypto.randomUUID()}@example.invalid`);
