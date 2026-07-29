@@ -3691,6 +3691,16 @@
        search never opens behind the panel. #filters-modal is a native <dialog>
        opened with showModal(), which puts it in the top layer above all of
        these regardless. */
+    /* Clearing the launcher is not enough once the panel is open: toasts are
+       z-100 and the panel is z-40, so a toast would draw straight over the
+       composer. The panel's height is dynamic (70vh cap, and larger again when
+       expanded), so rather than chase it with a calc, toasts move to the top
+       on the one occasion the bottom-right is occupied. */
+    body.chat-open #toast-stack {
+      top: 76px;
+      bottom: auto;
+    }
+
     #chat-fab {
       position: fixed;
       right: 24px;
@@ -4263,6 +4273,7 @@
          permanent chrome; toasts are transient and few, so they yield. */
       bottom: calc(24px + 64px);
       z-index: 100;
+      transition: bottom .16s ease, top .16s ease;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -8694,10 +8705,16 @@
       return el;
     }
 
+    // One container, so sending clears the greeting AND the chips together.
+    // Removing only the chips left "Ask me anything…" pinned above the
+    // conversation for the rest of the session — and gone after a reload,
+    // since a reload renders from the database, which was the tell.
     function chatEmptyState() {
       const wrap = document.createElement("div");
-      wrap.className = "msg ai";
-      wrap.textContent = "Ask me anything about your money.";
+      wrap.className = "chat-empty";
+      const hello = document.createElement("div");
+      hello.className = "msg ai";
+      hello.textContent = "Ask me anything about your money.";
       const chips = document.createElement("div");
       chips.className = "chat-suggest";
       for (const s of SUGGESTIONS) {
@@ -8707,10 +8724,8 @@
         b.addEventListener("click", () => { $("#chat-input").value = s; chatSend(); });
         chips.appendChild(b);
       }
-      const frag = document.createDocumentFragment();
-      frag.appendChild(wrap);
-      frag.appendChild(chips);
-      return frag;
+      wrap.append(hello, chips);
+      return wrap;
     }
 
     async function chatLoadThread() {
@@ -8797,6 +8812,7 @@
 
     function chatOpen() {
       $("#chat-panel").hidden = false;
+      document.body.classList.add("chat-open");
       $("#chat-fab").setAttribute("aria-expanded", "true");
       $("#chat-fab").querySelector(".fab-dot").hidden = true;
       chatShowLog();
@@ -8806,6 +8822,7 @@
     }
     function chatClose() {
       $("#chat-panel").hidden = true;
+      document.body.classList.remove("chat-open");
       $("#chat-fab").setAttribute("aria-expanded", "false");
       localStorage.setItem("chatOpen", "0");
       $("#chat-fab").focus();
@@ -8821,7 +8838,7 @@
       $("#chat-send").disabled = true;
 
       const log = $("#chat-log");
-      log.querySelector(".chat-suggest")?.remove();
+      log.querySelector(".chat-empty")?.remove();
       log.appendChild(chatBubble("user", question));
       const pending = document.createElement("div");
       pending.className = "msg ai pending";
