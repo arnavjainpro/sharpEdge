@@ -27,6 +27,11 @@ import { saveImport, clearImport, type ImportPayload } from "../broker/manual";
 import { startLink, linkState, submitLinkCode, clearLinkState } from "../broker/link";
 import { clearAuth } from "../broker/robinhood";
 import { getBrokerLink, insertArtifact, deleteArtifact, deleteIdea, scoreHistory, historyFeed, ARTIFACT_KINDS, type HistoryCursor } from "../db";
+import {
+  createChatThread, listChatThreads, chatThread, chatMessages, appendChatMessage,
+  deleteChatThread, chatTitleFrom,
+} from "../db";
+import { replayWindow } from "../ai/advisor";
 import { allTickers, asRiskAppetite } from "../config";
 import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untrack, untrackByKey, trackedKeys } from "../ai/journal";
 import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, createSession, destroySession, startSignup, confirmSignup, pendingSignupExists, discardSignup, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail } from "../auth";
@@ -1003,14 +1008,92 @@ export function startServer() {
         return Response.json({ ok: src === "i" ? await deleteIdea(userId, id) : await deleteArtifact(userId, id) });
       }
 
+      // ── saved chat threads ────────────────────────────────────────────────
+      // Everything below the userId gate at the top of this handler is already
+      // authenticated, so these inherit auth. What they still have to do
+      // themselves is ownership: every query filters on user_id, and a thread
+      // that isn't yours is a 404 rather than a 403 so an id probe can't
+      // confirm that someone else's thread exists.
+      if (url.pathname === "/api/chat/threads" && req.method === "GET") {
+        try {
+          return Response.json({ ok: true, threads: await listChatThreads(userId) });
+        } catch (err) {
+          console.error("[chat] thread list failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
+      if (url.pathname.startsWith("/api/chat/threads/")) {
+        // Number("") is 0 and Number.isInteger(0) passes, so a trailing slash
+        // would sail through a bare isInteger check.
+        const id = Number(url.pathname.slice("/api/chat/threads/".length));
+        if (!Number.isInteger(id) || id <= 0) {
+          return Response.json({ ok: false, error: "bad id" }, { status: 400 });
+        }
+        try {
+          if (req.method === "GET") {
+            const thread = await chatThread(userId, id);
+            if (!thread) return Response.json({ ok: false, error: "not found" }, { status: 404 });
+            return Response.json({ ok: true, thread, messages: await chatMessages(userId, id) });
+          }
+          if (req.method === "DELETE") {
+            const gone = await deleteChatThread(userId, id);
+            if (!gone) return Response.json({ ok: false, error: "not found" }, { status: 404 });
+            return Response.json({ ok: true });
+          }
+        } catch (err) {
+          console.error("[chat] thread request failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
+        }
+      }
+
       // Conversational advisor
       if (url.pathname === "/api/ask" && req.method === "POST") {
         try {
-          const body = (await req.json()) as { question?: string; history?: ChatTurn[] };
+          // `history` is still accepted and deliberately ignored: a page cached
+          // from before this change still posts it, and 400-ing a live
+          // conversation to make a point would be the wrong trade. The server
+          // owns conversation history now — it reads it from the thread.
+          const body = (await req.json()) as { question?: string; threadId?: number; history?: ChatTurn[] };
           const question = String(body.question ?? "").trim();
           if (!question) return Response.json({ ok: false, error: "empty question" }, { status: 400 });
-          const answer = await askAdvisor(userId, question, body.history ?? [], currentPortfolio(userId));
-          return Response.json({ ok: true, answer });
+          // Bun accepts a 16MB body. Unbounded was harmless while chat was
+          // transient; persisted it is a 16MB row per message.
+          if (question.length > 4000) {
+            return Response.json({ ok: false, error: "question too long (4000 characters max)" }, { status: 400 });
+          }
+
+          let threadId: number | null = null;
+          if (body.threadId != null) {
+            const id = Number(body.threadId);
+            if (!Number.isInteger(id) || id <= 0) {
+              return Response.json({ ok: false, error: "bad threadId" }, { status: 400 });
+            }
+            if (!(await chatThread(userId, id))) {
+              return Response.json({ ok: false, error: "not found" }, { status: 404 });
+            }
+            threadId = id;
+          }
+
+          // Read history BEFORE writing this turn, so the window is the
+          // conversation up to now rather than one that includes the question
+          // being asked.
+          const history = threadId ? replayWindow(await chatMessages(userId, threadId)) : [];
+          if (threadId === null) threadId = await createChatThread(userId, chatTitleFrom(question));
+          // The question is persisted before the model call so a failure loses
+          // the answer, never the thing the user typed. A user turn left
+          // without an assistant turn is dropped from the replay window.
+          await appendChatMessage(userId, threadId, "user", question);
+
+          const result = await askAdvisor(userId, question, history, currentPortfolio(userId));
+          if (!result.ok) {
+            // Nothing that isn't an answer gets stored. The client renders the
+            // existing breaker banner, which already carries a Resume button.
+            return Response.json({ ok: false, breaker: true, threadId, error: "AI circuit breaker is tripped" }, { status: 503 });
+          }
+          await appendChatMessage(userId, threadId, "assistant", result.answer);
+          const thread = await chatThread(userId, threadId);
+          return Response.json({ ok: true, answer: result.answer, threadId, title: thread?.title ?? "" });
         } catch (err) {
           console.error("[server] /api/ask failed:", err);
           return Response.json({ ok: false, error: String(err) }, { status: 500 });
