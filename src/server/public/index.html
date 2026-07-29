@@ -1052,7 +1052,9 @@
       max-width: 1440px;
       width: 100%;
       margin-inline: auto;
-      padding: 28px;
+      /* Extra bottom room so the fixed chat launcher never sits on top of the
+         last row of a pane — on Portfolio and Ideas that row is real data. */
+      padding: 28px 28px 104px;
       display: flex;
       flex-direction: column;
       gap: 28px;
@@ -2114,7 +2116,6 @@
     #ideas-filters,
     #intraday-form,
     #backtest-form,
-    #chat-card,
     details.block,
     .report,
     .advice {
@@ -3679,12 +3680,222 @@
       font-weight: 600;
     }
 
-    /* chat */
-    #chat-card {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+    /* ── chat widget ──────────────────────────────────────────────────────
+       Anchored bottom-right, which #toast-stack used to own outright. That
+       collision is spatial, not a stacking order — no z-index makes two things
+       share a rectangle — so the toast stack moves up by the height of the
+       launcher (see its rule below) and the launcher keeps the corner.
+
+       z-index ladder in this file, in full: header 20, chat 40, ⌘K modal 50,
+       toasts 100. Chat sits above the sticky header and below the modal, so
+       search never opens behind the panel. #filters-modal is a native <dialog>
+       opened with showModal(), which puts it in the top layer above all of
+       these regardless. */
+    #chat-fab {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 40;
+      width: 56px;
+      height: 56px;
+      border: none;
+      border-radius: 50%;
+      background: var(--brand);
+      color: var(--on-brand);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform .16s ease, box-shadow .16s ease;
+    }
+
+    #chat-fab:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, .22);
+    }
+
+    #chat-fab:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 3px;
+    }
+
+    /* Unread: an answer landed while the panel was closed. */
+    #chat-fab .fab-dot {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--red);
+      border: 2px solid var(--brand);
+    }
+
+    #chat-panel {
+      position: fixed;
+      right: 24px;
+      bottom: 92px;
+      z-index: 40;
+      width: 380px;
+      max-height: min(560px, 70vh);
       display: flex;
       flex-direction: column;
+      overflow: hidden;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
+    }
+
+    /* The advisor answers with tables and multi-paragraph markdown. 380px is a
+       reach affordance, not a reading one, so the panel can take over the
+       screen when the answer earns it. */
+    #chat-panel.expanded {
+      width: min(920px, 92vw);
+      max-height: min(80vh, 900px);
+    }
+
+    #chat-head {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 10px 10px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    #chat-title {
+      flex: 1;
+      min-width: 0;
+      font-weight: 650;
+      font-size: 13.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-ghost {
+      background: none;
+      border: none;
+      color: var(--dim);
+      padding: 5px;
+      border-radius: var(--radius-xs);
+      display: flex;
+      align-items: center;
+    }
+
+    .chat-ghost:hover {
+      background: var(--gray-soft);
+      color: var(--fg);
+    }
+
+    #chat-body {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      flex: 1;
+    }
+
+    /* Saved conversations, in the same panel rather than a second surface. */
+    #chat-threads {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .thr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: var(--radius-xs);
+      background: none;
+      border: none;
+      text-align: left;
+    }
+
+    .thr:hover {
+      background: var(--gray-soft);
+    }
+
+    .thr .thr-t {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thr .thr-w {
+      font-size: var(--fs-micro);
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    .thr-del {
+      background: none;
+      border: none;
+      color: var(--faint);
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    .thr-del:hover {
+      color: var(--red);
+      background: var(--gray-soft);
+    }
+
+    /* Suggestion chips replace the seeded example message: three sentences of
+       prose read as clutter in a 380px card, but they were the only onboarding
+       this feature had, so they become tappable instead of deleted. */
+    .chat-suggest {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 4px 0;
+    }
+
+    .chat-suggest button {
+      text-align: left;
+      background: var(--gray-soft);
+      border: none;
+      border-radius: var(--radius-xs);
+      padding: 9px 12px;
+      font: 13px var(--sans);
+      color: var(--fg);
+    }
+
+    .chat-suggest button:hover {
+      background: var(--brand-soft);
+    }
+
+    @media (max-width: 720px) {
+
+      /* At this width the sidebar is already a 64px icon rail — the app has
+         admitted it is in a narrow layout, so a 380px "floating" panel would
+         cover most of the viewport while pretending not to. Full sheet. */
+      #chat-panel {
+        right: 0;
+        bottom: 0;
+        left: 0;
+        top: 0;
+        width: auto;
+        max-height: none;
+        border-radius: 0;
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+
+      #chat-panel.expanded {
+        width: auto;
+        max-height: none;
+      }
+
+      #chat-fab {
+        width: 48px;
+        height: 48px;
+        right: 16px;
+        bottom: calc(16px + env(safe-area-inset-bottom));
+      }
     }
 
     #chat-log {
@@ -3692,7 +3903,8 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
-      max-height: 480px;
+      flex: 1;
+      min-height: 0;
       overflow-y: auto;
     }
 
@@ -4047,7 +4259,9 @@
     #toast-stack {
       position: fixed;
       right: 24px;
-      bottom: 24px;
+      /* Clears the chat launcher, which owns the bottom-right corner and is
+         permanent chrome; toasts are transient and few, so they yield. */
+      bottom: calc(24px + 64px);
       z-index: 100;
       display: flex;
       flex-direction: column;
@@ -4218,7 +4432,6 @@
         <button data-tab="backtest"><span class="ndot"></span><span class="nlabel">Backtest</span></button>
         <button data-tab="learn"><span class="ndot"></span><span class="nlabel">Learn</span></button>
         <button data-tab="practice"><span class="ndot"></span><span class="nlabel">Practice</span></button>
-        <button data-tab="chat"><span class="ndot"></span><span class="nlabel">Chat</span></button>
         <button data-tab="activity"><span class="ndot"></span><span class="nlabel">Activity</span><span
             class="badge"></span></button>
         <button data-tab="history"><span class="ndot"></span><span class="nlabel">History</span></button>
@@ -4667,20 +4880,6 @@
           </div>
         </section>
 
-        <section data-pane="chat">
-          <h2>Ask sharpEdge</h2>
-          <div id="chat-card">
-            <div id="chat-log">
-              <div class="msg ai">Ask me anything about your money — “should I sell HPE?”, “what looks worth buying
-                today?”, “which sectors are leading right now?”</div>
-            </div>
-            <form id="chat-form">
-              <input id="chat-input" placeholder="Ask a question…" autocomplete="off" aria-label="Ask sharpEdge">
-              <button id="chat-send" type="submit">Ask</button>
-            </form>
-          </div>
-        </section>
-
         <details class="block" id="brief-block" data-pane="activity">
           <summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
               stroke-width="2.5">
@@ -4870,6 +5069,40 @@
     </div>
   </div>
 
+  <!-- Chat widget. Deliberately a direct child of <body>, outside #app-shell
+       and outside every [data-pane]: showPane() hides by the data-pane
+       attribute, so anything mounted inside a pane would vanish on tab switch.
+       Ids are the ones the old Chat pane used, and that pane is gone — two
+       copies of #chat-log would make $() return whichever came first. -->
+  <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel"
+    aria-label="Ask sharpEdge" title="Ask sharpEdge (Ctrl+J)">
+    <span class="fab-open"></span>
+    <span class="fab-dot" hidden></span>
+  </button>
+
+  <div id="chat-panel" role="dialog" aria-label="Ask sharpEdge" hidden>
+    <header id="chat-head">
+      <button id="chat-list-btn" type="button" class="chat-ghost" title="Saved conversations"
+        aria-label="Saved conversations"></button>
+      <div id="chat-title">New conversation</div>
+      <button id="chat-new" type="button" class="chat-ghost" title="New conversation"
+        aria-label="New conversation"></button>
+      <button id="chat-expand" type="button" class="chat-ghost" title="Expand" aria-label="Expand"></button>
+      <button id="chat-close" type="button" class="chat-ghost" title="Close" aria-label="Close"></button>
+    </header>
+
+    <div id="chat-threads" hidden></div>
+
+    <div id="chat-body">
+      <div id="chat-log" aria-live="polite"></div>
+      <form id="chat-form">
+        <input id="chat-input" placeholder="Ask a question…" autocomplete="off" maxlength="4000"
+          aria-label="Ask sharpEdge">
+        <button id="chat-send" type="submit">Ask</button>
+      </form>
+    </div>
+  </div>
+
   <script>
     const $ = (s) => document.querySelector(s);
     const chevSvg = `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>`;
@@ -4903,6 +5136,8 @@
       "trash": '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
       "check": '<polyline points="20 6 9 17 4 12"/>',
       "alert-triangle": '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+      "maximize": '<path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>',
+      "minimize": '<path d="M3 8h3a2 2 0 0 0 2-2V3"/><path d="M21 8h-3a2 2 0 0 1-2-2V3"/><path d="M3 16h3a2 2 0 0 1 2 2v3"/><path d="M21 16h-3a2 2 0 0 0-2 2v3"/>',
     };
     function icon(name, size = 16) {
       return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
@@ -4976,10 +5211,10 @@
        Flat tabs use #name; the stock detail page is a synthetic pane at
        #stock/TICKER (reached via search, not a tab). Stock navigations use
        pushState so the browser back button walks out of them naturally. */
-    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "chat", "activity", "history", "settings"];
+    const PANES = ["portfolio", "market", "ideas", "analyze", "backtest", "learn", "practice", "activity", "history", "settings"];
     const TAB_TITLES = {
       portfolio: "Portfolio", market: "Market", ideas: "Trade Ideas", analyze: "Analyzer",
-      backtest: "Backtest", learn: "Learn", practice: "Practice", chat: "Ask sharpEdge", activity: "Activity", history: "History", settings: "Settings"
+      backtest: "Backtest", learn: "Learn", practice: "Practice", activity: "Activity", history: "History", settings: "Settings"
     };
     const TAB_SUBS = {
       portfolio: "Live positions & advice", market: "Regime, indices & sector rotation",
@@ -4987,7 +5222,6 @@
       backtest: "Plain-English strategy → out-of-sample results",
       learn: "Twelve lessons, wired to your own numbers",
       practice: "Blind chart drills — graded on process, not P&L",
-      chat: "Portfolio-aware financial advisor",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
     };
     function parseHash() {
@@ -4996,6 +5230,13 @@
       return { name, param: rest.join("/") || null };
     }
     function showPane(name, param) {
+      // Chat stopped being a destination. A bookmark or an old link to #chat
+      // opens the widget over the dashboard instead of resolving to nothing.
+      if (name === "chat") {
+        history.replaceState(null, "", "#portfolio");
+        name = "portfolio";
+        queueMicrotask(() => chatOpen());
+      }
       if (name === "stock" && param) {
         const ticker = decodeURIComponent(param).toUpperCase();
         document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== "stock"; });
@@ -5084,7 +5325,13 @@
     $("#search-open").addEventListener("click", openTickerModal);
     document.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openTickerModal(); }
+      // ⌘K is taken, so chat gets J. The FAB is last in DOM order — without a
+      // shortcut, reaching a global control means tabbing the whole page.
+      else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") { e.preventDefault(); chatToggle(); }
+      // Escape order matters: the search modal is checked first, so one press
+      // never closes both it and the chat panel.
       else if (e.key === "Escape" && !tickerModal.hidden) closeTickerModal();
+      else if (e.key === "Escape" && !$("#chat-panel").hidden) chatClose();
     });
     tickerModal.addEventListener("click", (e) => { if (e.target === tickerModal) closeTickerModal(); });
 
@@ -7846,6 +8093,10 @@
     document.addEventListener("paste", (e) => {
       const f = imageFromEvent(e);
       if (!f) return;
+      // The chat input is focusable on every tab now, so without this an image
+      // pasted while typing a question would silently load into the Backtest
+      // chart slot behind the panel.
+      if (e.target instanceof Node && $("#chat-panel").contains(e.target)) return;
       e.preventDefault();
       if (paneVisible("backtest")) setBtImage(f);
       else if (paneVisible("analyze")) acceptIntradayFile(f);
@@ -8408,49 +8659,231 @@
     }
     renderActFilters();
 
-    /* ── chat ── */
-    function chatAppendUser(text) {
+    /* ── chat widget ──────────────────────────────────────────────────────
+       Conversation history lives on the server now. The client holds only
+       which thread is open, so a refresh, a restart or a different device all
+       resume the same conversation.
+
+       The thread is always reloaded from the database on open rather than
+       restored from anything cached here: an answer can land while the panel
+       is closed (the server writes it regardless), and re-reading is what
+       makes that case correct instead of special. ── */
+    const SUGGESTIONS = [
+      "What's my biggest risk right now?",
+      "What looks worth buying today?",
+      "Which sectors are leading?",
+    ];
+    let chatThreadId = Number(localStorage.getItem("chatThreadId")) || null;
+    let chatInFlight = false;
+
+    const chatSetThread = (id) => {
+      chatThreadId = id || null;
+      if (id) localStorage.setItem("chatThreadId", String(id));
+      else localStorage.removeItem("chatThreadId");
+    };
+    const chatScroll = () => { const l = $("#chat-log"); l.scrollTop = l.scrollHeight; };
+
+    function chatBubble(role, content) {
+      const el = document.createElement("div");
+      el.className = role === "user" ? "msg user" : "msg ai";
+      // User text is set as text, never markdown. renderMd() pipes through
+      // marked into innerHTML with no sanitizer, so replaying a stored message
+      // through it would turn the user's own words into live markup.
+      if (role === "user") el.textContent = content;
+      else renderMd(el, content);
+      return el;
+    }
+
+    function chatEmptyState() {
+      const wrap = document.createElement("div");
+      wrap.className = "msg ai";
+      wrap.textContent = "Ask me anything about your money.";
+      const chips = document.createElement("div");
+      chips.className = "chat-suggest";
+      for (const s of SUGGESTIONS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = s;
+        b.addEventListener("click", () => { $("#chat-input").value = s; chatSend(); });
+        chips.appendChild(b);
+      }
+      const frag = document.createDocumentFragment();
+      frag.appendChild(wrap);
+      frag.appendChild(chips);
+      return frag;
+    }
+
+    async function chatLoadThread() {
       const log = $("#chat-log");
-      const u = document.createElement("div");
-      u.className = "msg user";
-      u.textContent = text;
-      log.appendChild(u);
+      if (!chatThreadId) {
+        $("#chat-title").textContent = "New conversation";
+        log.innerHTML = "";
+        log.appendChild(chatEmptyState());
+        return;
+      }
+      log.innerHTML = skelRows(3, 40);
+      try {
+        const res = await (await fetch(`/api/chat/threads/${chatThreadId}`)).json();
+        if (!res.ok) throw new Error(res.error || "failed");
+        $("#chat-title").textContent = res.thread.title;
+        log.innerHTML = "";
+        for (const m of res.messages) log.appendChild(chatBubble(m.role, m.content));
+        if (!res.messages.length) log.appendChild(chatEmptyState());
+        chatScroll();
+      } catch {
+        // A thread that 404s was deleted elsewhere — fall back to a new one
+        // rather than leaving a dead panel pointing at nothing.
+        chatSetThread(null);
+        $("#chat-title").textContent = "New conversation";
+        log.innerHTML = "";
+        log.appendChild(chatEmptyState());
+      }
+    }
+
+    async function chatLoadList() {
+      const box = $("#chat-threads");
+      box.innerHTML = skelRows(4, 40);
+      try {
+        const res = await (await fetch("/api/chat/threads")).json();
+        if (!res.ok) throw new Error(res.error || "failed");
+        if (!res.threads.length) {
+          box.innerHTML = `<div class="empty">No saved conversations yet. Ask something and it'll show up here.</div>`;
+          return;
+        }
+        box.innerHTML = "";
+        for (const t of res.threads) {
+          const row = document.createElement("div");
+          row.className = "thr";
+          const open = document.createElement("button");
+          open.type = "button";
+          open.className = "thr-t";
+          open.textContent = t.title;
+          open.addEventListener("click", () => { chatSetThread(t.id); chatShowLog(); chatLoadThread(); });
+          const when = document.createElement("span");
+          when.className = "thr-w";
+          when.textContent = relTime(t.updated_ts);
+          const del = document.createElement("button");
+          del.type = "button";
+          del.className = "thr-del";
+          del.title = "Delete conversation";
+          del.setAttribute("aria-label", `Delete conversation: ${t.title}`);
+          del.innerHTML = icon("trash", 13);
+          del.addEventListener("click", async () => {
+            del.disabled = true;
+            try {
+              const r = await (await fetch(`/api/chat/threads/${t.id}`, { method: "DELETE" })).json();
+              if (!r.ok) throw new Error(r.error || "failed");
+              row.remove();
+              // Deleting the open conversation has to reset the panel too,
+              // or closing the list drops you into a transcript that is gone.
+              if (chatThreadId === t.id) { chatSetThread(null); chatLoadThread(); }
+              if (!$("#chat-threads").querySelector(".thr")) chatLoadList();
+            } catch { del.disabled = false; toast("Couldn't delete that conversation", "err"); }
+          });
+          row.append(open, when, del);
+          box.appendChild(row);
+        }
+      } catch {
+        // An empty list and a failed fetch look identical to the user unless
+        // the error says so — "no conversations" when the server is down is a
+        // silent failure.
+        box.innerHTML = `<div class="empty">Couldn't load your conversations. <button class="refresh-btn" id="thr-retry">Retry</button></div>`;
+        box.querySelector("#thr-retry").addEventListener("click", chatLoadList);
+      }
+    }
+
+    const chatShowList = () => { $("#chat-threads").hidden = false; $("#chat-body").hidden = true; chatLoadList(); };
+    const chatShowLog = () => { $("#chat-threads").hidden = true; $("#chat-body").hidden = false; };
+
+    function chatOpen() {
+      $("#chat-panel").hidden = false;
+      $("#chat-fab").setAttribute("aria-expanded", "true");
+      $("#chat-fab").querySelector(".fab-dot").hidden = true;
+      chatShowLog();
+      chatLoadThread();
+      $("#chat-input").focus();
+      localStorage.setItem("chatOpen", "1");
+    }
+    function chatClose() {
+      $("#chat-panel").hidden = true;
+      $("#chat-fab").setAttribute("aria-expanded", "false");
+      localStorage.setItem("chatOpen", "0");
+      $("#chat-fab").focus();
+    }
+    const chatToggle = () => ($("#chat-panel").hidden ? chatOpen() : chatClose());
+
+    async function chatSend() {
+      const input = $("#chat-input");
+      const question = input.value.trim();
+      if (!question || chatInFlight) return;
+      input.value = "";
+      chatInFlight = true;
+      $("#chat-send").disabled = true;
+
+      const log = $("#chat-log");
+      log.querySelector(".chat-suggest")?.remove();
+      log.appendChild(chatBubble("user", question));
       const pending = document.createElement("div");
       pending.className = "msg ai pending";
       pending.textContent = "Thinking…";
       log.appendChild(pending);
-      log.scrollTop = log.scrollHeight;
-      return pending;
-    }
+      chatScroll();
 
-    const chatHistory = [];
-    $("#chat-form").addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const input = $("#chat-input");
-      const question = input.value.trim();
-      if (!question) return;
-      input.value = "";
-      $("#chat-send").disabled = true;
-      const pending = chatAppendUser(question);
+      // The thread this answer belongs to, captured now: switching threads
+      // mid-flight must not paint the answer into whichever one is open when
+      // it lands.
+      const askedIn = chatThreadId;
       try {
         const res = await (await fetch("/api/ask", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ question, history: chatHistory }),
+          body: JSON.stringify({ question, threadId: chatThreadId ?? undefined }),
         })).json();
-        pending.classList.remove("pending");
         if (res.ok) {
+          if (!chatThreadId) { chatSetThread(res.threadId); $("#chat-title").textContent = res.title || "Conversation"; }
+          if (askedIn !== chatThreadId && askedIn !== null) { pending.remove(); return; }
+          pending.classList.remove("pending");
           renderMd(pending, res.answer);
-          chatHistory.push({ role: "user", content: question }, { role: "assistant", content: res.answer });
-          while (chatHistory.length > 10) chatHistory.shift();
-        } else pending.textContent = `Something went wrong: ${res.error}`;
+          if ($("#chat-panel").hidden) $("#chat-fab").querySelector(".fab-dot").hidden = false;
+        } else if (res.breaker) {
+          // Not an answer, so the server didn't store it. The banner already
+          // owns this state and carries the Resume button.
+          pending.remove();
+          if (res.threadId && !chatThreadId) chatSetThread(res.threadId);
+          $("#banner").style.display = "block";
+          toast("AI is paused — resume it from the banner", "err");
+        } else {
+          pending.classList.remove("pending");
+          pending.textContent = `Something went wrong: ${res.error}`;
+        }
       } catch (e) {
         pending.classList.remove("pending");
         pending.textContent = `Something went wrong: ${e}`;
       } finally {
+        chatInFlight = false;
         $("#chat-send").disabled = false;
-        $("#chat-log").scrollTop = $("#chat-log").scrollHeight;
+        chatScroll();
       }
+    }
+
+    $("#chat-fab").querySelector(".fab-open").innerHTML = icon("chat", 22);
+    $("#chat-list-btn").innerHTML = icon("history", 15);
+    $("#chat-new").innerHTML = icon("plus", 15);
+    $("#chat-expand").innerHTML = icon("maximize", 15);
+    $("#chat-close").innerHTML = icon("close", 15);
+
+    $("#chat-fab").addEventListener("click", chatToggle);
+    $("#chat-close").addEventListener("click", chatClose);
+    $("#chat-list-btn").addEventListener("click", () => ($("#chat-threads").hidden ? chatShowList() : chatShowLog()));
+    $("#chat-new").addEventListener("click", () => { chatSetThread(null); chatShowLog(); chatLoadThread(); $("#chat-input").focus(); });
+    $("#chat-expand").addEventListener("click", () => {
+      const p = $("#chat-panel");
+      p.classList.toggle("expanded");
+      $("#chat-expand").title = p.classList.contains("expanded") ? "Shrink" : "Expand";
+      $("#chat-expand").innerHTML = icon(p.classList.contains("expanded") ? "minimize" : "maximize", 15);
     });
+    $("#chat-form").addEventListener("submit", (ev) => { ev.preventDefault(); chatSend(); });
+
+    if (localStorage.getItem("chatOpen") === "1") chatOpen();
 
     /* ── header controls ── */
     function renderAiToggle() {
