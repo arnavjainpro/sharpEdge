@@ -397,6 +397,43 @@ UPDATE signals   SET user_id = (SELECT min(id) FROM users)
 UPDATE briefings SET user_id = (SELECT min(id) FROM users)
   WHERE user_id IS NULL AND EXISTS (SELECT 1 FROM users);
 
+-- Saved advisor conversations. Chat was the only AI surface whose output did
+-- not survive a refresh — ideas, intraday plans, portfolio scores, backtests
+-- and practice drills all persist, chat lived in a JS array.
+--
+-- Two tables rather than one artifacts row per thread: a conversation is
+-- append-heavy, and an artifacts payload is a snapshot blob that would be
+-- rewritten in full on every turn. It would also have to join ARTIFACT_KINDS
+-- to be stored there, which would make chats returnable from /api/history and
+-- leak them into the trading history feed.
+--
+-- ON DELETE CASCADE is load-bearing, not decoration: scripts/reset-accounts.ts
+-- deletes a hard-coded table list and then DELETE FROM users inside ONE
+-- transaction, and the afterAll of every real-database test deletes its
+-- throwaway account the same way. A plain REFERENCES here fails that FK and
+-- takes the whole reset down with it. Same reasoning as broker_snapshots.
+CREATE TABLE IF NOT EXISTS chat_threads (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ts integer NOT NULL,               -- created
+  updated_ts integer NOT NULL,       -- last message; drives list order
+  title text NOT NULL                -- first user message, truncated
+);
+CREATE INDEX IF NOT EXISTS idx_chat_threads_user ON chat_threads(user_id, updated_ts DESC);
+
+-- role is CHECKed at the database rather than trusted from the caller: a bad
+-- value here does not surface as a bad row, it surfaces as an Anthropic 400
+-- on the next replay of the thread, a long way from the write that caused it.
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id serial PRIMARY KEY,
+  thread_id integer NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+  user_id integer NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ts integer NOT NULL,
+  role text NOT NULL CHECK (role IN ('user','assistant')),
+  content text NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);

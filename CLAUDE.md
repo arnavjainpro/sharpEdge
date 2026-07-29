@@ -55,7 +55,9 @@ Several modules carry an inline self-check instead of a `*.test.ts` file, run vi
 
 Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `FINNHUB_API_KEY` are mandatory — the app throws on boot without them. Everything else (Anthropic auth, Telegram, model overrides) is optional; each unset key degrades one feature rather than failing the boot.
 
-`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts` and `src/server/isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+`src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts`, `src/server/isolation.test.ts`, `src/broker/index.test.ts` and `src/ai/advisor.isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
+
+Because they all end by deleting their throwaway account, **any new table with a `user_id` that references `users(id)` needs `ON DELETE CASCADE`** (see `chat_threads`/`broker_snapshots`) and needs adding to the hard-coded table list in `scripts/reset-accounts.ts`. Without it the FK refuses the delete and takes both the reset script and every one of those tests down with it.
 
 ## Task tracking
 

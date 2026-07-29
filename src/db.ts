@@ -144,6 +144,76 @@ export async function deleteArtifact(userId: number, id: number): Promise<boolea
   return rows.length > 0;
 }
 
+// ── chat threads: saved advisor conversations ────────────────────────────────
+// A title is derived, never asked for: the first user message, collapsed and
+// truncated. Deterministic and free — naming a thread with a model call would
+// double the cost of the cheapest turn in the conversation.
+export const CHAT_TITLE_MAX = 60;
+export const chatTitleFrom = (question: string) => {
+  const flat = question.replace(/\s+/g, " ").trim();
+  return flat.length <= CHAT_TITLE_MAX ? flat : flat.slice(0, CHAT_TITLE_MAX - 1) + "…";
+};
+
+export interface ChatThreadRow {
+  id: number; ts: number; updated_ts: number; title: string;
+}
+export interface ChatMessageRow {
+  id: number; ts: number; role: "user" | "assistant"; content: string;
+}
+
+export async function createChatThread(userId: number, title: string): Promise<number> {
+  const row = await db.query(
+    `INSERT INTO chat_threads (user_id, ts, updated_ts, title)
+     VALUES (?, extract(epoch from now())::int, extract(epoch from now())::int, ?) RETURNING id`
+  ).get(userId, title) as { id: number };
+  return row.id;
+}
+
+export async function listChatThreads(userId: number, limit = 30): Promise<ChatThreadRow[]> {
+  return await db.query(
+    `SELECT id, ts, updated_ts, title FROM chat_threads
+     WHERE user_id = ? ORDER BY updated_ts DESC, id DESC LIMIT ?`
+  ).all(userId, limit) as ChatThreadRow[];
+}
+
+// Returns null for "not yours" and for "does not exist" alike — the caller
+// turns both into a 404, so a probe can't confirm that someone else's thread id
+// is real.
+export async function chatThread(userId: number, id: number): Promise<ChatThreadRow | null> {
+  return await db.query(
+    `SELECT id, ts, updated_ts, title FROM chat_threads WHERE id = ? AND user_id = ?`
+  ).get(id, userId) as ChatThreadRow | null;
+}
+
+// Oldest-first, which is both display order and replay order. Capped: a long
+// thread is ~2KB of JSON per assistant turn and the whole thing is sent on open.
+export async function chatMessages(userId: number, threadId: number, limit = 200): Promise<ChatMessageRow[]> {
+  return await db.query(
+    `SELECT id, ts, role, content FROM chat_messages
+     WHERE thread_id = ? AND user_id = ? ORDER BY id LIMIT ?`
+  ).all(threadId, userId, limit) as ChatMessageRow[];
+}
+
+export async function appendChatMessage(
+  userId: number, threadId: number, role: "user" | "assistant", content: string
+): Promise<void> {
+  await db.query(
+    `INSERT INTO chat_messages (thread_id, user_id, ts, role, content)
+     VALUES (?, ?, extract(epoch from now())::int, ?, ?)`
+  ).run(threadId, userId, role, content);
+  await db.query(
+    `UPDATE chat_threads SET updated_ts = extract(epoch from now())::int WHERE id = ? AND user_id = ?`
+  ).run(threadId, userId);
+}
+
+export async function deleteChatThread(userId: number, id: number): Promise<boolean> {
+  // RETURNING id rather than the run() changes count, matching deleteArtifact:
+  // the shim derives `changes` from res.count ?? res.length ?? 0, and 404-vs-200
+  // shouldn't ride that less-exercised branch. Messages go via ON DELETE CASCADE.
+  const rows = await db.query(`DELETE FROM chat_threads WHERE user_id = ? AND id = ? RETURNING id`).all(userId, id);
+  return rows.length > 0;
+}
+
 // Validated ideas and intraday plans live in `ideas`, the other half of the
 // history feed. Without this they could only be dismissed from the DOM and came
 // straight back on reload — which is what "I can't delete it" meant.
