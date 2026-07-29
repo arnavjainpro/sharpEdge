@@ -630,7 +630,8 @@
       border-radius: var(--radius-xs);
     }
 
-    .side-user:hover {
+    .side-user:hover,
+    .side-user.active {
       background: var(--gray-soft);
     }
 
@@ -836,24 +837,6 @@
       gap: 8px;
       font-size: 13px;
       color: var(--dim);
-    }
-
-    #settings-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-xs);
-      background: var(--surface);
-      color: var(--dim);
-    }
-
-    #settings-btn:hover,
-    #settings-btn.active {
-      color: var(--fg);
-      background: var(--gray-soft);
     }
 
     .switch {
@@ -3894,6 +3877,36 @@
       max-height: min(80vh, 900px);
     }
 
+    /* Top-left, not the bottom-right that CSS `resize: both` would give us for
+       free: the panel is pinned to the bottom-right, so its own bottom-right
+       corner is the one corner that cannot move. Growing happens up and to the
+       left, so the grip lives where the growth does. */
+    #chat-grip {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 18px;
+      height: 18px;
+      cursor: nwse-resize;
+      z-index: 1;
+      touch-action: none;
+      border-top: 2px solid transparent;
+      border-left: 2px solid transparent;
+      border-top-left-radius: var(--radius-lg);
+    }
+
+    #chat-grip:hover {
+      border-top-color: var(--brand);
+      border-left-color: var(--brand);
+    }
+
+    /* Full-screen sheet on small viewports — nothing to resize. */
+    @media (max-width: 720px) {
+      #chat-grip {
+        display: none;
+      }
+    }
+
     #chat-head {
       display: flex;
       align-items: center;
@@ -4638,9 +4651,6 @@
           <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
             aria-label="Toggle live AI updates"><i></i></button>
         </span>
-        <!-- Settings is not a tab: it belongs to the account, not to any one
-             view, so it lives in the global header rather than in the nav list. -->
-        <button id="settings-btn" title="Settings" aria-label="Settings"></button>
       </header>
       <div id="banner">AI was halted after unusually high activity to protect your API spend.<button
           id="breaker-reset">Resume</button></div>
@@ -5248,12 +5258,13 @@
        Ids are the ones the old Chat pane used, and that pane is gone — two
        copies of #chat-log would make $() return whichever came first. -->
   <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel"
-    aria-label="Ask sharpEdge" title="Ask sharpEdge (Ctrl+J)">
+    aria-label="Ask Jawa" title="Ask Jawa (Ctrl+J)">
     <span class="fab-open"></span>
     <span class="fab-dot" hidden></span>
   </button>
 
-  <div id="chat-panel" role="dialog" aria-label="Ask sharpEdge" hidden>
+  <div id="chat-panel" role="dialog" aria-label="Ask Jawa" hidden>
+    <div id="chat-grip" title="Drag to resize"></div>
     <header id="chat-head">
       <button id="chat-list-btn" type="button" class="chat-ghost" title="Saved conversations"
         aria-label="Saved conversations"></button>
@@ -5269,8 +5280,8 @@
     <div id="chat-body">
       <div id="chat-log" aria-live="polite"></div>
       <form id="chat-form">
-        <input id="chat-input" placeholder="Ask a question…" autocomplete="off" maxlength="4000"
-          aria-label="Ask sharpEdge">
+        <input id="chat-input" placeholder="Ask Jawa…" autocomplete="off" maxlength="4000"
+          aria-label="Ask Jawa">
         <button id="chat-send" type="submit">Ask</button>
       </form>
     </div>
@@ -5486,8 +5497,8 @@
       document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
       $("#tab-title").textContent = TAB_TITLES[name] || "sharpEdge";
       $("#tab-sub").textContent = TAB_SUBS[name] || "";
-      // Settings has no nav button to carry the active state, so the gear does.
-      $("#settings-btn").classList.toggle("active", name === "settings");
+      // Settings has no nav button; the sidebar account row carries the state.
+      $("#side-user-btn").classList.toggle("active", name === "settings");
       const badge = document.querySelector(`#nav button[data-tab="${name}"] .badge`);
       if (badge) { badge.classList.remove("show"); badge.textContent = ""; }
       if (name === "portfolio") loadConcentration();
@@ -9084,7 +9095,7 @@
       wrap.className = "chat-empty";
       const hello = document.createElement("div");
       hello.className = "msg ai";
-      hello.textContent = "Ask me anything about your money.";
+      hello.textContent = "Hi, I'm Jawa. Ask me anything about your money — I'll give you the straight answer, not the comfortable one.";
       const chips = document.createElement("div");
       chips.className = "chat-suggest";
       for (const s of SUGGESTIONS) {
@@ -9185,6 +9196,7 @@
       document.body.classList.add("chat-open");
       $("#chat-fab").setAttribute("aria-expanded", "true");
       $("#chat-fab").querySelector(".fab-dot").hidden = true;
+      chatApplySize();
       chatShowLog();
       chatLoadThread();
       $("#chat-input").focus();
@@ -9256,8 +9268,6 @@
        from the nav list. Both route through showPane so the #settings hash,
        the existing deep link from the Portfolio hint, and the browser back
        button all keep working unchanged. */
-    $("#settings-btn").innerHTML = icon("settings", 16);
-    $("#settings-btn").addEventListener("click", () => showPane("settings"));
     $("#side-user-btn").addEventListener("click", () => showPane("settings"));
 
     $("#chat-fab").querySelector(".fab-open").innerHTML = icon("chat", 22);
@@ -9270,8 +9280,56 @@
     $("#chat-close").addEventListener("click", chatClose);
     $("#chat-list-btn").addEventListener("click", () => ($("#chat-threads").hidden ? chatShowList() : chatShowLog()));
     $("#chat-new").addEventListener("click", () => { chatSetThread(null); chatShowLog(); chatLoadThread(); $("#chat-input").focus(); });
+    /* Drag-resize to any size. Inline width/height beat the .expanded preset,
+       so a manual size wins until Expand is pressed, which clears it — two
+       controls, one predictable precedence, no third state to reason about.
+       Pointer events cover mouse, touch and pen in one path; setPointerCapture
+       keeps the drag alive when the cursor outruns the 18px grip. */
+    const CHAT_MIN_W = 320, CHAT_MIN_H = 280;
+    function chatApplySize() {
+      const p = $("#chat-panel");
+      let s = null;
+      try { s = JSON.parse(localStorage.getItem("chatSize") || "null"); } catch { /* corrupt entry: fall back to CSS */ }
+      if (!s) return;
+      // Re-clamp on every open: a size saved on a big monitor must not strand
+      // the panel off-screen on a laptop.
+      p.style.width = Math.min(Math.max(s.w, CHAT_MIN_W), window.innerWidth - 48) + "px";
+      p.style.height = Math.min(Math.max(s.h, CHAT_MIN_H), window.innerHeight - 120) + "px";
+      // The stylesheet caps the panel at min(560px, 70vh); an inline height
+      // loses to max-height, so dragging past 70vh would silently do nothing.
+      p.style.maxHeight = "none";
+    }
+    $("#chat-grip").addEventListener("pointerdown", (ev) => {
+      const p = $("#chat-panel");
+      const r = p.getBoundingClientRect();
+      const x0 = ev.clientX, y0 = ev.clientY, w0 = r.width, h0 = r.height;
+      ev.preventDefault();
+      // Capture is an optimisation, not a requirement: it keeps the drag alive
+      // when the cursor outruns the 18px grip. If it fails, the drag still
+      // works within the grip rather than not at all.
+      try { ev.target.setPointerCapture(ev.pointerId); } catch { /* not fatal */ }
+      const move = (e) => {
+        // Anchored bottom-right, so dragging up and left grows it.
+        const w = Math.min(Math.max(w0 + (x0 - e.clientX), CHAT_MIN_W), window.innerWidth - 48);
+        const h = Math.min(Math.max(h0 + (y0 - e.clientY), CHAT_MIN_H), window.innerHeight - 120);
+        p.style.width = w + "px";
+        p.style.height = h + "px";
+        p.style.maxHeight = "none";
+      };
+      const up = () => {
+        ev.target.removeEventListener("pointermove", move);
+        ev.target.removeEventListener("pointerup", up);
+        localStorage.setItem("chatSize", JSON.stringify({ w: parseInt(p.style.width, 10), h: parseInt(p.style.height, 10) }));
+      };
+      ev.target.addEventListener("pointermove", move);
+      ev.target.addEventListener("pointerup", up);
+    });
+
     $("#chat-expand").addEventListener("click", () => {
       const p = $("#chat-panel");
+      // A manual size would override the preset, so clear it and forget it.
+      p.style.width = ""; p.style.height = ""; p.style.maxHeight = "";
+      localStorage.removeItem("chatSize");
       p.classList.toggle("expanded");
       $("#chat-expand").title = p.classList.contains("expanded") ? "Shrink" : "Expand";
       $("#chat-expand").innerHTML = icon(p.classList.contains("expanded") ? "minimize" : "maximize", 15);
