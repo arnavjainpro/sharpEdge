@@ -11,7 +11,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config, loadRiskConfig, type Portfolio } from "../config";
 import { db } from "../db";
-import { fetchDailyCandles } from "../ingest/yahoo";
+import { fetchDailyCandles } from "../ingest/candles";
 import { fetchCompanyNews, fetchNextEarnings, cachedQuote } from "../ingest/finnhub";
 import { fetchOptionsSummary, optionsContextText, type OptionsSummary } from "../ingest/options";
 import { stressStructure, type Leg } from "../engine/optionsMath";

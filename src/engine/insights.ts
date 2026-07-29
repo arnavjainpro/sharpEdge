@@ -5,7 +5,7 @@
 //     to measure whether "strong" ratings actually win.
 import { db, insertEvent } from "../db";
 import { fetchEarningsCalendar } from "../ingest/finnhub";
-import { fetchDailyCandles } from "../ingest/yahoo";
+import { fetchDailyCandlesBulk } from "../ingest/candles";
 import { notifyTelegram, telegramEnabled } from "../notify/telegram";
 import { notifyMac } from "../notify/macos";
 import type { Portfolio, Holding } from "../config";
@@ -146,7 +146,7 @@ export async function replayUserIdeas(userId: number): Promise<{ ideas: IdeaRepl
 
   const out: IdeaReplay[] = [];
   let skipped = 0;
-  const candleCache = new Map<string, Awaited<ReturnType<typeof fetchDailyCandles>>>();
+  const candleCache = new Map<string, Awaited<ReturnType<typeof fetchDailyCandlesBulk>>>();
   for (const idea of ideas) {
     let rep: any; try { rep = JSON.parse(idea.report); } catch { skipped++; continue; }
     const levels = parseLevels({ ...rep, direction: idea.direction });
@@ -156,7 +156,7 @@ export async function replayUserIdeas(userId: number): Promise<{ ideas: IdeaRepl
       // — an unthrottled burst on a cold cache risks a 429 that then nulls out
       // every remaining ticker for the rest of this hour's cache window.
       if (candleCache.size) await Bun.sleep(180);
-      try { candleCache.set(idea.ticker, await fetchDailyCandles(idea.ticker, "1y", 30)); } catch { candleCache.set(idea.ticker, null); }
+      try { candleCache.set(idea.ticker, await fetchDailyCandlesBulk(idea.ticker, "1y", 30)); } catch { candleCache.set(idea.ticker, null); }
     }
     const c = candleCache.get(idea.ticker);
     if (!c) { skipped++; continue; }

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { checkDailyShape, checkIntradayShape, checkQuoteShape, checkNewsShape } from "./canary";
-import type { DailyCandles, IntradayBars } from "../ingest/yahoo";
+import type { DailyCandles, IntradayBars } from "../ingest/candles";
 
 // These validators ARE the canary — the probes around them are just plumbing.
 // What's being pinned is that each one still rejects the specific failure it

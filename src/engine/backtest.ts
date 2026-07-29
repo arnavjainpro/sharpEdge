@@ -4,7 +4,7 @@
 // lookahead). Includes historical-window + bootstrap stress and anchored
 // walk-forward with in-train grid search / out-of-sample testing.
 // Run `bun src/engine/backtest.ts` for the self-check.
-import type { DailyCandles } from "../ingest/yahoo";
+import type { DailyCandles } from "../ingest/candles";
 
 // ── Strategy spec ────────────────────────────────────────────────────────────
 // Tunable numeric parameter. `range` (optional) is what walk-forward grid-search
@@ -141,6 +141,27 @@ export interface BacktestResult { metrics: BacktestMetrics; tradeList: Trade[]; 
 const COST = 0.0005;      // per-side slippage + commission (5 bps)
 const dateOf = (c: DailyCandles, i: number) => new Date(c.timestamps[i] * 1000).toISOString().slice(0, 10);
 
+// Metrics derived purely from a trade list, shared by the single-pass result and
+// the concatenated walk-forward OOS curve. The walk-forward block used to
+// hard-code profitFactor/sharpe/avgHoldBars to 0, and since the UI renders
+// Sharpe for out-of-sample results, every walk-forward backtest reported
+// "Sharpe 0.00" as though it had been measured rather than skipped.
+function tradeMetrics(trades: Trade[], years: number) {
+  const wins = trades.filter((t) => t.retPct > 0);
+  const grossWin = wins.reduce((s, t) => s + t.retPct, 0);
+  const grossLoss = -trades.filter((t) => t.retPct <= 0).reduce((s, t) => s + t.retPct, 0);
+  const rets = trades.map((t) => t.retPct / 100);
+  const meanR = rets.reduce((a, x) => a + x, 0) / (rets.length || 1);
+  const sd = Math.sqrt(rets.reduce((a, x) => a + (x - meanR) ** 2, 0) / (rets.length || 1)) || 1e-9;
+  const tradesPerYear = trades.length / (years || 1);
+  return {
+    winRate: trades.length ? (wins.length / trades.length) * 100 : 0,
+    profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
+    sharpe: (meanR / sd) * Math.sqrt(tradesPerYear || 1),
+    avgHoldBars: trades.length ? trades.reduce((s, t) => s + t.bars, 0) / trades.length : 0,
+  };
+}
+
 // Run one concrete spec over a candle slice [from, to).
 export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = c.closes.length): BacktestResult {
   const b = buildBundle(spec, c);
@@ -148,6 +169,11 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
   const longSide = spec.direction === "long";
   const trades: Trade[] = [];
   const equity: number[] = [1];
+  // Equity marked to market at EVERY bar, used only for drawdown. `equity`
+  // above samples at trade exits, which is what the chart plots — but taking
+  // max drawdown from it hides the entire drawdown inside a losing trade, so a
+  // strategy that rode a 40% hole down and closed flat reported ~0% drawdown.
+  const marks: number[] = [1];
   let inTrade = false, entryPx = 0, entryIdx = 0, stop = 0, target = 0;
   let eq = 1;
   const warm = 210; // let the longest common indicators warm up
@@ -165,14 +191,27 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
         if (a && spec.target_atr) target = longSide ? entryPx + a * spec.target_atr.value : entryPx - a * spec.target_atr.value;
         else target = NaN;
       }
+      marks.push(eq);
       continue;
     }
     // In a trade at bar i (entered at i's open or earlier). Check stop/target
     // intrabar first (conservative: assume stop is touched before target), then
     // exit rules on close → fill next open.
     let exitPx: number | null = null, reason = "";
-    if (!Number.isNaN(stop) && ((longSide && c.lows[i] <= stop) || (!longSide && c.highs[i] >= stop))) { exitPx = stop; reason = "stop"; }
-    else if (!Number.isNaN(target) && ((longSide && c.highs[i] >= target) || (!longSide && c.lows[i] <= target))) { exitPx = target; reason = "target"; }
+    if (!Number.isNaN(stop) && ((longSide && c.lows[i] <= stop) || (!longSide && c.highs[i] >= stop))) {
+      // A bar that GAPS THROUGH the stop never offered the stop price — the
+      // first tradeable print is the open. Filling at `stop` regardless assumes
+      // a fill that could not have happened, which quietly flatters every
+      // strategy carrying one, and flatters it most in exactly the crash-gap
+      // conditions a stop exists to survive.
+      exitPx = longSide ? Math.min(stop, c.opens[i]) : Math.max(stop, c.opens[i]);
+      reason = "stop";
+    } else if (!Number.isNaN(target) && ((longSide && c.highs[i] >= target) || (!longSide && c.lows[i] <= target))) {
+      // Mirror image, and it cuts the other way: a gap through the target fills
+      // BETTER than the target.
+      exitPx = longSide ? Math.max(target, c.opens[i]) : Math.min(target, c.opens[i]);
+      reason = "target";
+    }
     else if (spec.exit.length && spec.exit.some((r) => ruleAt(r, b, i))) { exitPx = c.opens[i + 1]; reason = "signal"; }
     else if (i === to - 2) { exitPx = c.opens[i + 1]; reason = "end"; }
 
@@ -184,6 +223,14 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
       equity.push(eq);
       inTrade = false;
     }
+    // Mark to market on this bar's close. Only from entryIdx onward: `inTrade`
+    // flips on the SIGNAL bar, but the position isn't owned until the next
+    // bar's open, so marking earlier would price a trade that doesn't exist yet.
+    marks.push(
+      inTrade && i >= entryIdx
+        ? eq * (1 + (longSide ? c.closes[i] / entryPx - 1 : entryPx / c.closes[i] - 1) - 2 * COST)
+        : eq
+    );
   }
 
   // Buy & hold over the same slice.
@@ -191,16 +238,11 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
   const buyHold = bhStart ? bhEnd / bhStart - 1 : 0;
   const buyHoldCurve = [1, 1 + buyHold];
 
-  const wins = trades.filter((t) => t.retPct > 0);
-  const grossWin = wins.reduce((s, t) => s + t.retPct, 0);
-  const grossLoss = -trades.filter((t) => t.retPct <= 0).reduce((s, t) => s + t.retPct, 0);
   const years = (c.timestamps[to - 1] - c.timestamps[start]) / (365.25 * 86400) || 1;
-  let peak = equity[0], maxDD = 0;
-  for (const e of equity) { peak = Math.max(peak, e); maxDD = Math.max(maxDD, (peak - e) / peak); }
-  const rets = trades.map((t) => t.retPct / 100);
-  const meanR = rets.reduce((a, x) => a + x, 0) / (rets.length || 1);
-  const sd = Math.sqrt(rets.reduce((a, x) => a + (x - meanR) ** 2, 0) / (rets.length || 1)) || 1e-9;
-  const tradesPerYear = trades.length / years;
+  // Drawdown from the bar-level marks, not the trade-exit curve.
+  let peak = marks[0], maxDD = 0;
+  for (const e of marks) { peak = Math.max(peak, e); maxDD = Math.max(maxDD, (peak - e) / peak); }
+  const tm = tradeMetrics(trades, years);
 
   return {
     tradeList: trades,
@@ -208,14 +250,14 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
     buyHoldCurve,
     metrics: {
       trades: trades.length,
-      winRate: trades.length ? (wins.length / trades.length) * 100 : 0,
-      profitFactor: grossLoss > 0 ? grossWin / grossLoss : grossWin > 0 ? Infinity : 0,
+      winRate: tm.winRate,
+      profitFactor: tm.profitFactor,
       totalReturnPct: (eq - 1) * 100,
       annualizedPct: (Math.pow(eq, 1 / years) - 1) * 100,
       maxDrawdownPct: maxDD * 100,
-      sharpe: (meanR / sd) * Math.sqrt(tradesPerYear || 1),
+      sharpe: tm.sharpe,
       buyHoldPct: buyHold * 100,
-      avgHoldBars: trades.length ? trades.reduce((s, t) => s + t.bars, 0) / trades.length : 0,
+      avgHoldBars: tm.avgHoldBars,
     },
   };
 }
@@ -376,13 +418,26 @@ export function walkForward(spec: StrategySpec, c: DailyCandles, cfg: WalkForwar
   const isAnn = windows.length ? windows.reduce((s, w) => s + w.isReturnPct, 0) / windows.length : 0;
   let peak = 1, maxDD = 0;
   for (const e of oosEquity) { peak = Math.max(peak, e); maxDD = Math.max(maxDD, (peak - e) / peak); }
+  // Buy & hold over the out-of-sample span only — the like-for-like comparison
+  // for a curve that starts where training ended.
+  const oosFrom = trainBars;
+  const oosTo = Math.min(n - 1, trainBars + windows.length * testBars - 1);
+  const oosBH = windows.length && c.closes[oosFrom] ? c.closes[oosTo] / c.closes[oosFrom] - 1 : 0;
+  const otm = tradeMetrics(oosTrades, years);
   const oosResult: BacktestResult = {
-    tradeList: oosTrades, equityCurve: oosEquity, buyHoldCurve: [1, 1],
+    tradeList: oosTrades,
+    equityCurve: oosEquity,
+    buyHoldCurve: [1, 1 + oosBH],
     metrics: {
       trades: oosTrades.length,
-      winRate: oosTrades.length ? (oosTrades.filter((t) => t.retPct > 0).length / oosTrades.length) * 100 : 0,
-      profitFactor: 0, totalReturnPct: (eqAcc - 1) * 100, annualizedPct: oosAnn,
-      maxDrawdownPct: maxDD * 100, sharpe: 0, buyHoldPct: 0, avgHoldBars: 0,
+      winRate: otm.winRate,
+      profitFactor: otm.profitFactor,
+      totalReturnPct: (eqAcc - 1) * 100,
+      annualizedPct: oosAnn,
+      maxDrawdownPct: maxDD * 100,
+      sharpe: otm.sharpe,
+      buyHoldPct: oosBH * 100,
+      avgHoldBars: otm.avgHoldBars,
     },
   };
   const stability: Record<string, number> = {};
@@ -428,6 +483,58 @@ if (import.meta.main) {
 
   const wf = walkForward(spec, c, { trainYears: 2, testMonths: 6 });
   console.assert(wf.windows.length >= 1, "walk-forward should produce windows");
+
+  // The OOS block used to hard-code these to 0, and the UI renders Sharpe for
+  // out-of-sample results — so a fabricated 0 read as a measured risk figure.
+  if (wf.oosResult.metrics.trades > 1) {
+    const om = wf.oosResult.metrics;
+    console.assert(om.sharpe !== 0, "walk-forward OOS sharpe must be computed, not stubbed to 0");
+    console.assert(om.profitFactor !== 0, "walk-forward OOS profit factor must be computed, not stubbed to 0");
+    console.assert(om.avgHoldBars > 0, "walk-forward OOS avgHoldBars must be computed, not stubbed to 0");
+    console.assert(om.buyHoldPct !== 0, "walk-forward OOS buy & hold must cover the OOS span, not stubbed to 0");
+  }
+
+  // profitFactor is Infinity when nothing lost money. JSON.stringify turns that
+  // into null, so anything rendering it must survive a non-finite value — the
+  // dashboard used global isFinite(), which passes null straight into .toFixed().
+  const allWinners = runBacktest(spec, { ...c, ticker: "W" }, 0, 0).metrics.profitFactor;
+  console.assert(allWinners === 0 || Number.isFinite(allWinners) || allWinners === Infinity, "profitFactor must be a number or Infinity");
+
+  // A gap straight through the stop must fill at the OPEN, not at the stop: the
+  // stop price was never on offer. Smooth 240-bar rise (so ATR is tiny and the
+  // stop sits just under price), then one bar that gaps to 70.
+  const gN = 240;
+  const gp: number[] = [];
+  for (let i = 0; i < gN; i++) gp.push(100 + i * 0.05);
+  // The gap bar, plus one after it: the loop runs to `to - 1`, so a gap on the
+  // final bar would leave via the forced end-of-data exit and never test a stop.
+  gp.push(70, 70);
+  const gapped: DailyCandles = {
+    ticker: "GAP",
+    timestamps: gp.map((_, i) => 1_600_000_000 + i * 86400),
+    opens: gp.slice(), highs: gp.slice(), lows: gp.slice(), closes: gp.slice(),
+    volumes: gp.map(() => 1e6),
+  };
+  const gapSpec: StrategySpec = {
+    ticker: "GAP", direction: "long",
+    entry: [{ kind: "price_vs_sma", period: { value: 20 }, dir: "above" }],
+    exit: [],
+    stop_atr: { value: 1 },
+  };
+  const gapRes = runBacktest(gapSpec, gapped);
+  const stopped = gapRes.tradeList.find((t) => t.reason === "stop");
+  console.assert(stopped != null, "gap scenario should have stopped out");
+  if (stopped) {
+    console.assert(
+      Math.abs(stopped.exit - 70) < 1e-9,
+      `gap-through stop must fill at the open (70), got ${stopped.exit} — filling at the untouched stop price flatters every stopped strategy`
+    );
+  }
+
+  // Max drawdown must come from bar-level marks. A strategy that rides a deep
+  // hole and closes flat used to report ~0% because equity was only sampled at
+  // exits — the number people size positions with.
+  console.assert(r.metrics.maxDrawdownPct > 0, "max drawdown must be measured intra-trade, not only at exits");
 
   // Overfit detector: a strategy tuned to one training window should have WFE < 1.
   console.log(`backtest self-check OK — trades=${r.metrics.trades}, totalRet=${r.metrics.totalReturnPct.toFixed(1)}%, WF windows=${wf.windows.length}, WFE=${wf.wfEfficiency.toFixed(2)}, verdict="${wf.verdict}"`);

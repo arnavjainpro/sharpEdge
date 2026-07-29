@@ -9,7 +9,8 @@ import { isFuture } from "../ingest/futures";
 import { analyzeIntraday, manageTrade, type IntradayRequest, type FollowupRequest } from "../ai/intraday";
 import { parseStrategy } from "../ai/strategy";
 import { runBacktest, stressBacktest, walkForward, type StrategySpec } from "../engine/backtest";
-import { fetchDailyCandles, fetchIntradayBars } from "../ingest/yahoo";
+import { fetchDailyCandles, fetchIntradayBars } from "../ingest/candles";
+import { fetchLogo } from "../ingest/logos";
 import { getScreenerRows, sectorBoards, getSparkTimestamps } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";
@@ -78,6 +79,10 @@ const briefingInFlight = new Set<number>();
 let generateInFlight = false;
 // Per-user, unlike generateInFlight: portfolio scoring is a per-account action.
 const scoreInFlight = new Set<number>();
+
+const safeJson = (s: unknown) => {
+  try { return JSON.parse(String(s)); } catch { return null; }
+};
 
 // ── HTTP server ──────────────────────────────────────────────────────────────
 export function startServer() {
@@ -1097,7 +1102,9 @@ export function startServer() {
         const held = currentPortfolio(userId).holdings.find((h) => h.ticker === ticker) ?? null;
         return Response.json({
           ok: true, ticker, meta, quote, spark, ohlc, news, held,
-          screener: row ? { ...row, indicators: JSON.parse(row.indicators) } : null,
+          // Guarded like every other stored-JSON read here: one poison screener
+          // row must degrade this panel, not 500 the whole stock page.
+          screener: row ? { ...row, indicators: safeJson(row.indicators) } : null,
           ideas: ideaRows.flatMap((r) => {
             try {
               // `id` rides along so the card's ✕ can delete the stored row, not
@@ -1136,6 +1143,20 @@ export function startServer() {
         }
       }
 
+      // Company logo, proxied so the browser never talks to the image CDN
+      // directly — see ingest/logos.ts for why. Sits behind the auth gate above,
+      // which also stops the instance being an open image proxy.
+      if (url.pathname.startsWith("/api/logo/")) {
+        const ticker = decodeURIComponent(url.pathname.slice("/api/logo/".length)).toUpperCase().trim();
+        const logo = await fetchLogo(ticker);
+        // 404 is the expected answer for a symbol with no artwork (futures,
+        // recent listings). The frontend hides the <img> on error.
+        if (!logo) return new Response("no logo", { status: 404, headers: { "Cache-Control": "public, max-age=86400" } });
+        return new Response(logo.bytes, {
+          headers: { "Content-Type": logo.type, "Cache-Control": "public, max-age=604800" },
+        });
+      }
+
       // On-demand briefing (also generated automatically at 9:00 / 16:15 ET).
       if (url.pathname === "/api/briefing" && req.method === "POST") {
         if (!onBriefingRequest) return new Response("pipeline not ready", { status: 503 });
@@ -1161,6 +1182,13 @@ export function startServer() {
       }
 
       return new Response("not found", { status: 404 });
+    },
+    // fetch() is one long if-chain, so a single unguarded await anywhere in it
+    // takes the whole response down. Without this, that surfaced as a bare 500
+    // with nothing in the log to say which route threw or why.
+    error(err) {
+      console.error("[server] unhandled route error:", err);
+      return Response.json({ ok: false, error: "internal error" }, { status: 500 });
     },
   });
   console.log(`[server] dashboard at http://localhost:${server.port}`);

@@ -22,13 +22,17 @@ const freshEmail = () => {
 };
 const wrongCode = (code: string) => (code === "000000" ? "111111" : "000000");
 
+// One statement per table rather than three round trips per address: this runs
+// against a remote Postgres, and a cleanup that overruns the hook budget is
+// killed part-done, leaving throwaway accounts in the live database where the
+// app treats them as real. Timeout raised so a slow cleanup fails loudly.
 afterAll(async () => {
-  for (const e of emails) {
-    await db.query(`DELETE FROM pending_signups WHERE email = ?`).run(e);
-    await db.query(`DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email = ?)`).run(e);
-    await db.query(`DELETE FROM users WHERE email = ?`).run(e);
-  }
-});
+  if (!emails.length) return;
+  const ph = emails.map(() => "?").join(",");
+  await db.query(`DELETE FROM pending_signups WHERE email IN (${ph})`).run(...emails);
+  await db.query(`DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE email IN (${ph}))`).run(...emails);
+  await db.query(`DELETE FROM users WHERE email IN (${ph})`).run(...emails);
+}, 60_000);
 
 test("staging a signup creates no account", async () => {
   const email = freshEmail();
