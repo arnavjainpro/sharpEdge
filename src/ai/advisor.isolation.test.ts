@@ -36,18 +36,25 @@ async function loudEvent(ticker: string, kind: string, title: string, userId?: n
   return id!;
 }
 
+// Accounts first: every user_id foreign key cascades from users(id) now (see
+// the cascade block in schema.sql), so one statement clears the briefings, the
+// per-user triage rows and the owned events. The public events are deliberately
+// unowned, so those stay keyed on the dedupe prefix.
+//
+// Set-based, and with an explicit timeout. The loop-per-row version this
+// replaces made dozens of sequential round trips against a 15-connection pool
+// and regularly blew bun's 5s default hook timeout — and a hook that dies
+// midway has already deleted the children and not the account, which is how
+// throwaway accounts ended up stranded in the live database.
 afterAll(async () => {
-  const ids = await db.query(`SELECT id FROM events WHERE dedupe_key LIKE ?`).all<{ id: number }>(`${TAG}%`);
-  for (const { id } of ids) {
-    await db.query(`DELETE FROM event_triage WHERE event_id = ?`).run(id);
-    await db.query(`DELETE FROM signals WHERE event_id = ?`).run(id);
+  if (made.length) {
+    const holes = made.map(() => "?").join(",");
+    await db.query(`DELETE FROM users WHERE id IN (${holes})`).run(...made);
   }
+  await db.query(`DELETE FROM event_triage WHERE event_id IN (SELECT id FROM events WHERE dedupe_key LIKE ?)`).run(`${TAG}%`);
+  await db.query(`DELETE FROM signals WHERE event_id IN (SELECT id FROM events WHERE dedupe_key LIKE ?)`).run(`${TAG}%`);
   await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(`${TAG}%`);
-  for (const id of made) {
-    await db.query(`DELETE FROM briefings WHERE user_id = ?`).run(id);
-    await db.query(`DELETE FROM users WHERE id = ?`).run(id);
-  }
-});
+}, 30_000);
 
 test("a signal written for one account never reaches another account's advisor context", async () => {
   const a = await throwawayUser();

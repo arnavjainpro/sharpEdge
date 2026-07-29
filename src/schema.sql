@@ -434,6 +434,58 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id);
 
+-- Every user-owned foreign key cascades from users(id).
+--
+-- Without this, deleting an account is only possible if the caller happens to
+-- delete every child table first, in the right order, by hand.
+-- scripts/reset-accounts.ts does maintain such a list, but the list is the bug:
+-- it silently goes stale every time a table is added, and the failure lands as
+-- an FK violation that aborts the whole reset transaction.
+--
+-- The observable symptom was worse than a broken script. The self-cleaning
+-- real-database tests end by deleting their throwaway account, and their
+-- cleanup hooks were timing out partway through the manual child deletes —
+-- leaving @example.invalid accounts stranded in the live database. Cascading
+-- makes "delete the user" sufficient and correct by construction, so cleanup
+-- is one statement that cannot half-succeed.
+--
+-- Scoped deliberately to relnamespace = 'public'. This database also hosts
+-- Supabase's auth schema, which has its own auth.users and its own FKs
+-- (identities, mfa_factors, oauth_*, webauthn_*); those are not ours to alter.
+--
+-- Idempotent: re-checks confdeltype on every boot and only rewrites a
+-- constraint that is not already CASCADE.
+DO $$
+DECLARE
+  t text;
+  con text;
+BEGIN
+  FOREACH t IN ARRAY ARRAY[
+    'artifacts', 'briefings', 'broker_links', 'broker_positions', 'event_triage',
+    'events', 'practice_attempts', 'risk_prefs', 'sessions', 'signals',
+    'tracked_trades', 'trade_outcomes'
+  ] LOOP
+    SELECT c.conname INTO con
+    FROM pg_constraint c
+    JOIN pg_class cl ON cl.oid = c.conrelid AND cl.relnamespace = 'public'::regnamespace
+    JOIN pg_class rf ON rf.oid = c.confrelid AND rf.relnamespace = 'public'::regnamespace
+    WHERE c.contype = 'f' AND cl.relname = t AND rf.relname = 'users'
+      AND c.confdeltype <> 'c'
+      AND (SELECT a.attname FROM pg_attribute a
+           WHERE a.attrelid = c.conrelid AND a.attnum = c.conkey[1]) = 'user_id'
+    LIMIT 1;
+
+    IF con IS NOT NULL THEN
+      EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT %I', t, con);
+      EXECUTE format(
+        'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE',
+        t, con);
+      RAISE NOTICE 'cascade: rewrote %.%', t, con;
+    END IF;
+    con := NULL;
+  END LOOP;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);

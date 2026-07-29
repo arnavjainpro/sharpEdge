@@ -57,7 +57,13 @@ Requires `.env` (copy `.env.example`): `DATABASE_URL` (Supabase Postgres) and `F
 
 `src/deleteIdea.test.ts`, `src/engine/heatmap.test.ts`, `src/auth/signup.test.ts`, `src/auth/emailChange.test.ts`, `src/server/isolation.test.ts`, `src/broker/index.test.ts` and `src/ai/advisor.isolation.test.ts` talk to the **real** configured database — they create and delete throwaway rows (`@example.invalid` users, `__canary_test_sector%` sectors, `fanout-test:%` events). They're the only tests that write; keep them self-cleaning if you extend them, and note that a public test event has no `user_id`, so cleanup must key on the dedupe prefix rather than the owner.
 
-Because they all end by deleting their throwaway account, **any new table with a `user_id` that references `users(id)` needs `ON DELETE CASCADE`** (see `chat_threads`/`broker_snapshots`) and needs adding to the hard-coded table list in `scripts/reset-accounts.ts`. Without it the FK refuses the delete and takes both the reset script and every one of those tests down with it.
+Because they all end by deleting their throwaway account, **every `user_id` foreign key to `users(id)` carries `ON DELETE CASCADE`** — a `DO` block near the end of `schema.sql` enforces this on every boot and rewrites any constraint that drifts, scoped to the `public` schema (this database also hosts Supabase's `auth` schema, whose FKs are not ours). So `DELETE FROM users WHERE id = ?` is sufficient cleanup for anything user-owned; a new table needs no bespoke teardown.
+
+Two things cascade does **not** reach, so they still need explicit deletes: rows keyed by something other than the owner (public `events`, which are deliberately unowned — key those on the `dedupe_key` prefix), and `ideas`/`alerts`/`settings`, which carry a `user_id` column with no FK constraint.
+
+Keep cleanup hooks to a handful of set-based statements rather than a loop per row, and pass an explicit timeout (`afterAll(fn, 60_000)`). Dozens of sequential round trips against the 15-connection pool blew bun's 5s default, and a hook that times out midway has already deleted the children but not the account — which is how 74 throwaway accounts ended up stranded in the live database. They are not inert there: the running app treats every row in `users` as a real account, so it kept fetching broker snapshots and paying to triage events for each one.
+
+The cascade rule and the explicit deletes are belt and braces, deliberately. Cascade makes a new user-owned table correct without anyone remembering it; the explicit per-table deletes in the cleanup hooks cover the tables cascade cannot reach.
 
 ## Task tracking
 
