@@ -486,6 +486,74 @@ BEGIN
   END LOOP;
 END $$;
 
+-- ideas and alerts carry a user_id with no foreign key at all, so the block
+-- above (which only rewrites an existing constraint) never reached them: a
+-- deleted account left its ideas and alerts behind as orphans pointing at an id
+-- that no longer exists. Both columns are NOT NULL DEFAULT 1, and that default
+-- is vestigial — every insert in the app passes user_id explicitly
+-- (ai/validator.ts, ai/intraday.ts, engine/alerts.ts) — so constraining them
+-- costs nothing at write time.
+--
+-- Guarded on there being no orphans right now. Adding a foreign key validates
+-- existing rows, so on a database that already has orphans this would throw
+-- from db.exec() and take the boot down with it. Skipping loudly is strictly
+-- better than refusing to start; clean the orphans and the next boot adds it.
+--
+-- settings is deliberately NOT in this list. Its user_id doubles as a namespace
+-- where 0 means "global, not per-user" (see the table definition), and 0 is part
+-- of the composite primary key so it cannot be NULL instead. A plain foreign key
+-- would reject those rows. settings therefore stays on explicit cleanup.
+DO $$
+DECLARE
+  t text;
+  orphans bigint;
+BEGIN
+  FOREACH t IN ARRAY ARRAY['ideas', 'alerts'] LOOP
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint c
+      JOIN pg_class cl ON cl.oid = c.conrelid AND cl.relnamespace = 'public'::regnamespace
+      JOIN pg_class rf ON rf.oid = c.confrelid AND rf.relnamespace = 'public'::regnamespace
+      WHERE c.contype = 'f' AND cl.relname = t AND rf.relname = 'users'
+    ) THEN
+      EXECUTE format('SELECT count(*) FROM public.%I WHERE user_id NOT IN (SELECT id FROM public.users)', t)
+        INTO orphans;
+      IF orphans = 0 THEN
+        EXECUTE format(
+          'ALTER TABLE public.%I ADD CONSTRAINT %I FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE',
+          t, t || '_user_id_fkey');
+        RAISE NOTICE 'cascade: added FK on %', t;
+      ELSE
+        RAISE WARNING 'cascade: % has % orphaned row(s); FK not added. Clean them and reboot.', t, orphans;
+      END IF;
+    END IF;
+  END LOOP;
+END $$;
+
+-- settings is the one user-owned table that cannot carry a foreign key: its
+-- user_id doubles as a namespace where 0 means "global, not per-user", and 0 is
+-- part of the composite primary key, so it can be neither NULL nor a real
+-- users.id. A trigger closes the same gap the cascades close everywhere else.
+--
+-- Worth the extra machinery because the alternative is a convention — "remember
+-- to delete settings too" — and a forgotten convention is precisely the bug this
+-- whole block exists to retire. reset-accounts.ts and the test hooks already do
+-- it by hand; this makes them belt rather than the only line of defence.
+CREATE OR REPLACE FUNCTION public.settings_cleanup_on_user_delete() RETURNS trigger AS $$
+BEGIN
+  -- Guard on 0 so a hypothetical account with id 0 could never wipe the global
+  -- namespace (ai_live and friends live there).
+  IF OLD.id <> 0 THEN
+    DELETE FROM public.settings WHERE user_id = OLD.id;
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_settings_cleanup ON public.users;
+CREATE TRIGGER trg_settings_cleanup
+  AFTER DELETE ON public.users
+  FOR EACH ROW EXECUTE FUNCTION public.settings_cleanup_on_user_delete();
+
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);
