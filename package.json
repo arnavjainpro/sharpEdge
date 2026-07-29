@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@types/pngjs": "^6.0.5",
+    "pngjs": "^7.0.0",
     "yaml": "^2.6.0"
   },
   "devDependencies": {

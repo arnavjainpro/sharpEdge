@@ -2171,6 +2171,51 @@
       border-bottom: none;
     }
 
+    /* Company logos. One <img> per symbol, served by our own /api/logo proxy —
+       see ingest/logos.ts for why the image CDN is never contacted from the
+       browser. Symbols with no artwork 404 and pick up .is-missing, which drops
+       them out of flex layout entirely rather than leaving a hole and a gap. */
+    .tkr-logo {
+      width: 20px;
+      height: 20px;
+      flex: none;
+      border-radius: var(--radius-xs);
+      background: var(--surface-2);
+      object-fit: contain;
+      /* Plenty of marks are white or near-white on transparent; a hairline keeps
+         them from dissolving into a light surface. */
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+    }
+
+    .tkr-logo.sm {
+      width: 16px;
+      height: 16px;
+    }
+
+    .tkr-logo.lg {
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-sm);
+    }
+
+    .tkr-logo.is-missing {
+      display: none;
+    }
+
+    /* These two headers align on the text baseline, which would drop a logo onto
+       the baseline instead of centring it against the cap height. */
+    .tm-head .tkr-logo,
+    #stock-head .tkr-logo {
+      align-self: center;
+    }
+
+    /* Inside a table cell the image is an inline box, so it needs nudging onto
+       the text's optical centre. */
+    td>.tkr-logo {
+      vertical-align: -4px;
+      margin-right: 6px;
+    }
+
     .tick-name {
       min-width: 74px;
     }
@@ -4877,6 +4922,21 @@
     // Escaping can't neutralise a javascript:/data: scheme — an href needs its own gate.
     const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? String(u) : "#");
 
+    // Company logo. Points at our own proxy, never the image CDN directly: a
+    // hotlink would disclose every held and watched symbol to a third party on
+    // each render (see ingest/logos.ts). encodeURIComponent cannot emit quotes or
+    // angle brackets, so the attribute is safe without a further esc().
+    const logoImg = (ticker, cls = "") =>
+      `<img class="tkr-logo${cls ? " " + cls : ""}" src="/api/logo/${encodeURIComponent(String(ticker ?? ""))}" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
+
+    // Symbols with no artwork (futures, fresh listings) 404 by design. `error`
+    // does not bubble, so this listens in the capture phase — one handler covers
+    // every logo, including the many injected later through innerHTML.
+    document.addEventListener("error", (e) => {
+      const el = e.target;
+      if (el instanceof HTMLImageElement && el.classList.contains("tkr-logo")) el.classList.add("is-missing");
+    }, true);
+
     /* ── skeleton + toast primitives ── */
     function skelRows(n = 3, h = 36) {
       return `<div class="skel-rows">${Array.from({ length: n }, () => `<div class="skel" style="height:${h}px"></div>`).join("")}</div>`;
@@ -5044,7 +5104,7 @@
       if (!sugItems.length) { hideSuggest(); return; }
       suggestBox.innerHTML = sugItems.map((r, i) =>
         `<div class="tm-sug${i === sugIdx ? " active" : ""}" role="option" data-tkr="${esc(r.ticker)}">
-           <span class="sug-tkr">${esc(r.ticker)}</span><span class="sug-name">${esc(r.name)}</span>
+           ${logoImg(r.ticker, "sm")}<span class="sug-tkr">${esc(r.ticker)}</span><span class="sug-name">${esc(r.name)}</span>
          </div>`).join("");
       suggestBox.hidden = false;
       tickerSearch.setAttribute("aria-expanded", "true");
@@ -5169,7 +5229,7 @@
       <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "—"}</div></div>
     </div>` : "";
       return `
-    <div class="tm-head"><span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}</div>
+    <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}</div>
     <div class="tm-price">${priceStr}</div>
     <svg class="tm-spark" preserveAspectRatio="none"></svg>
     <div>${scoreLine}</div>
@@ -5793,7 +5853,7 @@
         <div style="flex:1;min-width:0">
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
             <span class="chip ${tone}">${label}</span>
-            <span style="font-weight:700">${esc(e.ticker)}</span>
+            ${logoImg(e.ticker, "sm")}<span style="font-weight:700">${esc(e.ticker)}</span>
             <span style="font-size:12px;color:var(--faint)">${fmtTime(e.ts)} · ${esc(e.conviction)} conviction</span>
           </div>
           <div class="headline">${esc(e.plain_headline || e.thesis?.slice(0, 120) || e.title)}</div>
@@ -5848,7 +5908,7 @@
       }
       wrap.innerHTML = `
         <div class="pos-top">
-          <span class="pos-sym">${esc(sym)}</span>
+          ${logoImg(sym, "sm")}<span class="pos-sym">${esc(sym)}</span>
           <span class="pos-qty">${esc(qty)}</span>
         </div>
         <div class="pos-px">${priceCell}</div>
@@ -6266,7 +6326,7 @@
         const q = quotes[t];
         return `
         <div class="wl-row" data-watch-open="${esc(t)}">
-          <span class="wl-sym">${esc(t)}</span>
+          ${logoImg(t, "sm")}<span class="wl-sym">${esc(t)}</span>
           <span class="wl-px">${q?.c != null ? money(q.c) : "—"}</span>
           <span class="wl-dp ${q && q.dp >= 0 ? "up" : "down"}">${q?.dp != null ? signed(q.dp) + "%" : ""}</span>
           <button class="wl-x" data-watch-remove="${esc(t)}" title="Remove from watchlist" aria-label="Remove ${esc(t)}">${icon("close", 13)}</button>
@@ -6657,6 +6717,7 @@
           const wrap = document.createElement("div");
           wrap.innerHTML = `
         <button class="rowbtn">
+          ${logoImg(item.ticker)}
           <div class="tick-name"><div class="sym">${esc(item.ticker)}${item.held ? ` <span class="chip warn sm">held</span>` : ""}</div><div class="sub">${money(item.price)}</div></div>
           <svg class="mini-spark" preserveAspectRatio="none"></svg>
           <span class="chip ${isLong ? "buy" : "sell"}">${isLong ? "Long" : "Short"} ${isLong ? item.long_score : item.short_score}</span>
@@ -6693,7 +6754,7 @@
     <div class="report">
       <button class="close-report" title="dismiss">${icon("close", 12)}</button>
       <div class="rhead">
-        <span style="font-weight:800;font-size:16px">${esc(rep.ticker)}</span>
+        ${logoImg(rep.ticker)}<span style="font-weight:800;font-size:16px">${esc(rep.ticker)}</span>
         <span class="rbadge ${esc(rep.rating)}">${esc(rep.rating)}</span>
         <span class="chip ${dirTone}">${esc(rep.direction).replace("_", " ")}</span>
         <span class="chip calm sm">${esc(rep.confidence)} confidence</span>
@@ -7144,7 +7205,7 @@
                   <span class="rbadge ${esc(it.rating ?? "")}">${esc(it.rating ?? "—")}</span>`;
       }
       return `<summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
-        ${dot}<span class="hist-label">${label}</span>${metric}${open}${del}${time}</summary>`;
+        ${dot}${it.ticker ? logoImg(it.ticker, "sm") : ""}<span class="hist-label">${label}</span>${metric}${open}${del}${time}</summary>`;
     }
 
     function histBodyHtml(it) {
@@ -7526,7 +7587,7 @@
           tbox.style.display = "";
           tbox.innerHTML = `<div style="font-weight:600;font-size:12.5px;margin-bottom:6px">Open trades you're tracking</div>` +
             tracked.map((t, i) => `<div class="journal-item" data-tracked="${i}">
-              <span style="font-weight:700">${esc(t.ticker)}</span>
+              ${logoImg(t.ticker, "sm")}<span style="font-weight:700">${esc(t.ticker)}</span>
               <span class="chip ${t.direction === "long" ? "buy" : "sell"} sm">${esc(t.direction)}</span>
               ${t.entry_price != null ? `<span style="color:var(--faint);font-size:12px">entry $${esc(String(t.entry_price))}</span>` : ""}
               <span style="color:var(--faint);font-size:12px">since ${new Date(t.opened_at * 1000).toLocaleDateString()}</span>
@@ -7555,7 +7616,7 @@
           div.className = "journal-item";
           const tone = o.outcome === "win" ? "buy" : o.outcome === "loss" ? "sell" : "calm";
           div.innerHTML = `
-        <span style="font-weight:700">${esc(o.ticker)}</span>
+        ${logoImg(o.ticker, "sm")}<span style="font-weight:700">${esc(o.ticker)}</span>
         <span class="chip ${o.direction === "long" ? "buy" : "sell"} sm">${esc(o.direction)}</span>
         <span class="chip ${tone} sm">${esc(o.outcome)}${o.pnl_pct != null ? ` ${signed(o.pnl_pct, 1)}%` : ""}</span>
         <span style="color:var(--faint);font-size:12px">${new Date(o.closed_at * 1000).toLocaleDateString()}</span>
@@ -7641,7 +7702,7 @@
       const capB = m?.marketCap ? (m.marketCap / 1e9).toFixed(m.marketCap >= 1e10 ? 0 : 1) + "B" : null;
       page.innerHTML = `
     <div id="stock-head">
-      <span class="sym">${esc(ticker)}</span>
+      ${logoImg(ticker, "lg")}<span class="sym">${esc(ticker)}</span>
       <span style="color:var(--dim);font-size:14px">${esc(m?.name ?? "")}</span>
       ${data.held ? `<span class="chip warn sm">held · ${data.held.shares} @ $${data.held.cost_basis}</span>` : ""}
       <span class="spacer"></span>
@@ -7982,7 +8043,7 @@
     <div class="report">
       <button class="close-report" title="dismiss">${icon("close", 12)}</button>
       <div class="rhead">
-        <span style="font-weight:800;font-size:16px">${esc(p.ticker)}</span>
+        ${logoImg(p.ticker)}<span style="font-weight:800;font-size:16px">${esc(p.ticker)}</span>
         <span class="rbadge ${esc(qualityBadge)}">${esc(p.setup_quality).replace("_", " ")}</span>
         <span class="chip ${dirTone}">${esc(p.direction).replace("_", " ")}</span>
         <span class="chip info sm">${esc(p.trade_type).replace("_", " ")}</span>
@@ -8223,7 +8284,7 @@
       const list = (wf ? wf.oosResult.tradeList : d.result.tradeList);
       return `<div class="report" style="margin-top:14px">
     <div class="rhead">
-      <span style="font-weight:800;font-size:16px">${esc(d.spec.ticker)}</span>
+      ${logoImg(d.spec.ticker)}<span style="font-weight:800;font-size:16px">${esc(d.spec.ticker)}</span>
       <span class="chip calm sm">${d.years}y history</span>
       ${wf ? `<span class="chip ${wf.wfEfficiency >= 0.5 ? "buy" : "sell"} sm">walk-forward validated</span>` : `<span class="chip info sm">single-pass</span>`}
     </div>

@@ -10,6 +10,7 @@ import { analyzeIntraday, manageTrade, type IntradayRequest, type FollowupReques
 import { parseStrategy } from "../ai/strategy";
 import { runBacktest, stressBacktest, walkForward, type StrategySpec } from "../engine/backtest";
 import { fetchDailyCandles, fetchIntradayBars } from "../ingest/candles";
+import { fetchLogo } from "../ingest/logos";
 import { getScreenerRows, sectorBoards, getSparkTimestamps } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";
@@ -1134,6 +1135,20 @@ export function startServer() {
         } catch {
           return Response.json({ ok: false, error: "fetch failed" }, { status: 502 });
         }
+      }
+
+      // Company logo, proxied so the browser never talks to the image CDN
+      // directly — see ingest/logos.ts for why. Sits behind the auth gate above,
+      // which also stops the instance being an open image proxy.
+      if (url.pathname.startsWith("/api/logo/")) {
+        const ticker = decodeURIComponent(url.pathname.slice("/api/logo/".length)).toUpperCase().trim();
+        const logo = await fetchLogo(ticker);
+        // 404 is the expected answer for a symbol with no artwork (futures,
+        // recent listings). The frontend hides the <img> on error.
+        if (!logo) return new Response("no logo", { status: 404, headers: { "Cache-Control": "public, max-age=86400" } });
+        return new Response(logo.bytes, {
+          headers: { "Content-Type": logo.type, "Cache-Control": "public, max-age=604800" },
+        });
       }
 
       // On-demand briefing (also generated automatically at 9:00 / 16:15 ET).
