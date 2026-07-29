@@ -14,7 +14,9 @@
 //    cents, timestamps in ms) parses fine and poisons every downstream number,
 //    so each validator also range-checks the values it got back. That's the
 //    degradation half of a degradation test.
-import { fetchDailyCandles, fetchIntradayBars, type DailyCandles, type IntradayBars } from "../ingest/yahoo";
+import { fetchIntradayBars, type DailyCandles, type IntradayBars } from "../ingest/candles";
+import { fetchDailyCandlesYahoo } from "../ingest/yahoo";
+import { fetchDailyCandlesFmp, fmpEnabled, fmpQuotaBlocked } from "../ingest/fmp";
 import { fetchQuote, fetchCompanyNews, wsStatus, type Quote, type NewsItem } from "../ingest/finnhub";
 import { db } from "../db";
 import { brokerSnapshot } from "../broker";
@@ -115,8 +117,23 @@ async function probe(feed: string, label: string, fn: () => Promise<string | nul
 
 async function probeAll(): Promise<CanaryResult[]> {
   const checks: Promise<CanaryResult>[] = [
-    probe("yahoo_daily", "Yahoo daily candles", async () => checkDailyShape(await fetchDailyCandles(PROBE, "1y", 210))),
+    // Probes the Yahoo fetcher directly, not the router: routed through
+    // fetchDailyCandles this would silently become an FMP probe whenever a key
+    // is configured, and the fallback leg would go untested until it was needed.
+    probe("yahoo_daily", "Yahoo daily candles", async () => checkDailyShape(await fetchDailyCandlesYahoo(PROBE, "1y", 210))),
     probe("yahoo_intraday", "Yahoo intraday bars", async () => checkIntradayShape(await fetchIntradayBars(PROBE, "15m"))),
+    // AAPL, not PROBE: SPY is the one ETF the cheaper FMP plans still serve, so
+    // probing it would report healthy right through a plan downgrade.
+    fmpEnabled()
+      ? probe("fmp_daily", "FMP daily candles", async () => {
+          const bars = await fetchDailyCandlesFmp(NEWS_PROBE, "1y", 210);
+          // A spent request allowance is a distinct, self-healing condition —
+          // naming it beats the generic "nothing parsed" complaint, which sends
+          // you looking for a shape change that isn't there.
+          if (!bars && fmpQuotaBlocked()) return "request allowance exhausted — daily candles are coming from Yahoo until it resets";
+          return checkDailyShape(bars);
+        })
+      : Promise.resolve(skip("fmp_daily", "FMP daily candles", "FMP_API_KEY not set — daily candles come from Yahoo")),
     probe("finnhub_quote", "Finnhub quotes", async () => checkQuoteShape(await fetchQuote(PROBE))),
     probe("finnhub_news", "Finnhub company news", async () => {
       const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);

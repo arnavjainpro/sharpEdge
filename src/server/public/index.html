@@ -6372,7 +6372,7 @@
         const stateChip = rot ? `<span class="chip ${SECTOR_STATE_TONE[rot.state] ?? "calm"} sm">${rot.state}</span>` : `<span class="chip calm sm">—</span>`;
         return `
       <tr>
-        <td>${esc(bd.sector)} <span style="color:var(--faint);font-weight:400">· ${esc(bd.etf)}</span></td>
+        <td>${bd.etf ? logoImg(bd.etf, "sm") : ""}${esc(bd.sector)}${bd.etf ? ` <span style="color:var(--faint);font-weight:400">· ${esc(bd.etf)}</span>` : ""}</td>
         <td>${stateChip}</td>
         <td class="${rot && rot.ret1w >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1w, 1) + "%" : "—"}</td>
         <td class="${rot && rot.ret1m >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1m, 1) + "%" : "—"}</td>

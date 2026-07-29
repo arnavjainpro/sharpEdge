@@ -9,7 +9,7 @@ import { isFuture } from "../ingest/futures";
 import { analyzeIntraday, manageTrade, type IntradayRequest, type FollowupRequest } from "../ai/intraday";
 import { parseStrategy } from "../ai/strategy";
 import { runBacktest, stressBacktest, walkForward, type StrategySpec } from "../engine/backtest";
-import { fetchDailyCandles, fetchIntradayBars } from "../ingest/yahoo";
+import { fetchDailyCandles, fetchIntradayBars } from "../ingest/candles";
 import { getScreenerRows, sectorBoards, getSparkTimestamps } from "../engine/screener";
 import { scoreTicker } from "../engine/ticker";
 import { listAlerts, createAlert, deleteAlert, type AlertKind } from "../engine/alerts";

@@ -11,7 +11,7 @@
 // instant, free, and reproducible.
 
 import { db, getSettingFor, setSettingFor } from "../db";
-import { fetchDailyCandles, fetchIntradayBars, type DailyCandles } from "../ingest/yahoo";
+import { fetchDailyCandles, fetchIntradayBars, type DailyCandles } from "../ingest/candles";
 import { atr, sma, rsi, vwap, pivotLevels } from "./technicals";
 import { replayIdea, rMultiple } from "./insights";
 

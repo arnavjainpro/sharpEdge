@@ -10,7 +10,7 @@
 // Never writes the screener table (computeBreadth counts every row → off-universe
 // rows would corrupt the regime breadth input and pollute sector boards).
 import { db } from "../db";
-import { fetchDailyCandles } from "../ingest/yahoo";
+import { fetchDailyCandles } from "../ingest/candles";
 import { sectorEtf } from "../ingest/universe";
 import { isFuture } from "../ingest/futures";
 import { benchmarkCandles, refreshMarketContext } from "./market";

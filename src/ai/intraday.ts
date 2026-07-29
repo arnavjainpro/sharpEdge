@@ -8,7 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config, marketPhase, type Portfolio, type RiskAppetite } from "../config";
 import { db } from "../db";
-import { fetchIntradayBars, fetchDailyCandles, type IntradayBars } from "../ingest/yahoo";
+import { fetchIntradayBars, fetchDailyCandles, type IntradayBars } from "../ingest/candles";
 import { fetchCompanyNews, fetchNextEarnings, cachedQuote } from "../ingest/finnhub";
 import { fetchOptionsSummary, optionsContextText } from "../ingest/options";
 import { stressStructure, type Leg } from "../engine/optionsMath";

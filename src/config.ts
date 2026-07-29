@@ -171,6 +171,11 @@ export function parseSignupAllowlist(raw: string | undefined): string[] {
 
 export const config = {
   finnhubKey: process.env.FINNHUB_API_KEY ?? "",
+  // Financial Modeling Prep — optional primary source for daily candles. Unset
+  // means every price bar comes from Yahoo, exactly as before. Even when set,
+  // plan-restricted symbols (most ETFs, class shares) fall back to Yahoo per
+  // symbol, so this never has to be all-or-nothing. See ingest/fmp.ts.
+  fmpKey: process.env.FMP_API_KEY ?? "",
   port: Number(process.env.PORT ?? 3000),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   telegramChatId: process.env.TELEGRAM_CHAT_ID ?? "",
@@ -230,7 +235,7 @@ export function etNow(now = new Date()): { mins: number; day: number } {
 // Real UTC epoch (ms) for a given ET wall-clock date+time — DST-correct. Finds
 // the ET offset at a first guess, then refines once in case the guess landed on
 // the far side of a spring-forward/fall-back boundary.
-function etWallToEpoch(year: number, month1: number, dom: number, hour: number, minute: number): number {
+export function etWallToEpoch(year: number, month1: number, dom: number, hour: number, minute: number): number {
   const guess = Date.UTC(year, month1 - 1, dom, hour, minute);
   const off1 = etOffsetMs(guess);
   const epoch = guess - off1;

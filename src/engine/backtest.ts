@@ -4,7 +4,7 @@
 // lookahead). Includes historical-window + bootstrap stress and anchored
 // walk-forward with in-train grid search / out-of-sample testing.
 // Run `bun src/engine/backtest.ts` for the self-check.
-import type { DailyCandles } from "../ingest/yahoo";
+import type { DailyCandles } from "../ingest/candles";
 
 // ── Strategy spec ────────────────────────────────────────────────────────────
 // Tunable numeric parameter. `range` (optional) is what walk-forward grid-search

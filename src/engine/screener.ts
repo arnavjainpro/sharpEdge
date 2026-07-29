@@ -6,8 +6,8 @@
 // Momentum alone is capped so it can never dominate a score, and shorts require
 // genuine structural breakdown — negative price action by itself is not enough.
 import { db, insertEvent, getSetting, setSetting } from "../db";
-import { fetchDailyCandles } from "../ingest/yahoo";
-import { scanUniverse, sectorMap, sectorEtf } from "../ingest/universe";
+import { fetchDailyCandlesBulk } from "../ingest/candles";
+import { scanUniverse, sectorMap, sectorEtf, SECTOR_ETF } from "../ingest/universe";
 import { benchmarkCandles, refreshMarketContext, getMarketSnapshot } from "./market";
 import { rsi, macd, sma, atr, slopePctPerBar, pivotLevels, rangeBreak, betaVs } from "./technicals";
 import { loadUniverseFilters, type Portfolio } from "../config";
@@ -339,7 +339,11 @@ export async function getScreenerRows(portfolio: Portfolio): Promise<ScreenRow[]
 // one undifferentiated market-wide list.
 export interface SectorBoard {
   sector: string;
-  etf: string;
+  // null when the sector has no real sector ETF. sectorEtf() falls back to SPY,
+  // which is the right *benchmark* for relative-strength math but a wrong label
+  // here — it rendered rows reading "Miscellaneous · SPY" and "Futures · SPY",
+  // claiming SPY as those sectors' ETF.
+  etf: string | null;
   rotation: { ret1w: number; ret1m: number; rel1m: number; state: string } | null;
   scanned: number;
   breadthPct: number | null;
@@ -362,7 +366,7 @@ export async function sectorBoards(portfolio: Portfolio): Promise<SectorBoard[]>
     const above200 = rs.filter((r) => r.indicators.pctVs200 > 0).length;
     boards.push({
       sector,
-      etf: sectorEtf(sector),
+      etf: SECTOR_ETF[sector] ?? null,
       rotation: rot ? { ret1w: rot.ret1w, ret1m: rot.ret1m, rel1m: rot.rel1m, state: rot.state } : null,
       scanned: rs.length,
       breadthPct: rs.length ? (100 * above200) / rs.length : null,
@@ -443,7 +447,7 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   let cursor = 0;
   let recentFailures = 0; // rolling penalty: +1 per null fetch, -1 (floor 0) per success
   const scanOne = async (t: string) => {
-    const candles = await fetchDailyCandles(t);
+    const candles = await fetchDailyCandlesBulk(t);
     if (!candles) { recentFailures++; skips.no_data++; return; }
     recentFailures = Math.max(0, recentFailures - 1);
     const sector = sectors.get(t) ?? "Unknown";

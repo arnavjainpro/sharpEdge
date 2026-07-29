@@ -3,7 +3,7 @@
 // judges an individual setup (screener scores, validator, intraday analyzer,
 // briefings) reads this context so ideas are never rated in a vacuum.
 import { db } from "../db";
-import { fetchDailyCandles, type DailyCandles } from "../ingest/yahoo";
+import { fetchDailyCandlesBulk, type DailyCandles } from "../ingest/candles";
 import { SECTOR_ETF } from "../ingest/universe";
 import { sma, slopePctPerBar } from "./technicals";
 
@@ -56,7 +56,7 @@ const pctBack = (closes: number[], bars: number) => {
 };
 
 async function loadBenchmark(symbol: string): Promise<DailyCandles | null> {
-  const c = await fetchDailyCandles(symbol, "1y", 60); // VIX etc. tolerate shorter history
+  const c = await fetchDailyCandlesBulk(symbol, "1y", 60); // VIX etc. tolerate shorter history
   if (c) candleCache.set(symbol, c);
   await Bun.sleep(250);
   return c;
