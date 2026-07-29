@@ -8167,8 +8167,8 @@
     ${statCell("Win rate", m.winRate.toFixed(0) + "%")}
     ${statCell("Trades", m.trades)}
     ${statCell("Sharpe", m.sharpe.toFixed(2))}
-    ${!oos ? statCell("Profit factor", isFinite(m.profitFactor) ? m.profitFactor.toFixed(2) : "∞") : ""}
-    ${!oos ? statCell("Buy & hold", pct(m.buyHoldPct)) : ""}
+    ${statCell("Profit factor", Number.isFinite(m.profitFactor) ? m.profitFactor.toFixed(2) : "∞")}
+    ${statCell(oos ? "Buy & hold (OOS)" : "Buy & hold", pct(m.buyHoldPct))}
   </div>`;
     }
 
