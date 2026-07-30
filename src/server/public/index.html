@@ -3872,8 +3872,12 @@
     /* The advisor answers with tables and multi-paragraph markdown. 380px is a
        reach affordance, not a reading one, so the panel can take over the
        screen when the answer earns it. */
+    /* An explicit height, not just a raised max-height: the panel is otherwise
+       content-sized, so lifting the cap alone made Expand *shorter* — the extra
+       width reflowed the log into fewer lines. */
     #chat-panel.expanded {
       width: min(920px, 92vw);
+      height: min(80vh, 900px);
       max-height: min(80vh, 900px);
     }
 
@@ -3888,11 +3892,16 @@
       width: 18px;
       height: 18px;
       cursor: nwse-resize;
-      z-index: 1;
+      /* Above #chat-head, which the global `header` rule hands z-index:20 — at
+         z-index:1 the grip painted underneath it and no pointerdown ever
+         reached it, so the drag was dead for a real mouse. */
+      z-index: 21;
       touch-action: none;
       border-top: 2px solid transparent;
       border-left: 2px solid transparent;
-      border-top-left-radius: var(--radius-lg);
+      /* No border-radius of its own: the panel's overflow:hidden already clips
+         the corner, and a radius here made the outermost few pixels — the
+         natural place to grab — untargetable. */
     }
 
     #chat-grip:hover {
@@ -6962,7 +6971,7 @@
         const stateChip = rot ? `<span class="chip ${SECTOR_STATE_TONE[rot.state] ?? "calm"} sm">${rot.state}</span>` : `<span class="chip calm sm">—</span>`;
         return `
       <tr>
-        <td>${bd.etf ? logoImg(bd.etf, "sm") : ""}${esc(bd.sector)}${bd.etf ? ` <span style="color:var(--faint);font-weight:400">· ${esc(bd.etf)}</span>` : ""}</td>
+        <td>${esc(bd.sector)}${bd.etf ? ` <span style="color:var(--faint);font-weight:400">· ${esc(bd.etf)}</span>` : ""}</td>
         <td>${stateChip}</td>
         <td class="${rot && rot.ret1w >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1w, 1) + "%" : "—"}</td>
         <td class="${rot && rot.ret1m >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1m, 1) + "%" : "—"}</td>
