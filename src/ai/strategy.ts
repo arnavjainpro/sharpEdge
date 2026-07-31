@@ -28,7 +28,10 @@ const SPEC_SCHEMA = {
   type: "object",
   properties: {
     clarification: { type: ["string", "null"], description: "If the request can't be expressed in the vocabulary, ask ONE concrete question here and leave the rest null." },
-    direction: { type: ["string", "null"], enum: ["long", "short", null] },
+    // Nullable enum has to be an anyOf: structured outputs rejects an `enum`
+    // sitting on a union `type` ("Enum value 'long' does not match declared
+    // type '['string','null']'"), which 400s every backtest parse.
+    direction: { anyOf: [{ type: "string", enum: ["long", "short"] }, { type: "null" }] },
     entry: { type: ["array", "null"], items: RULE_SCHEMA, description: "ALL entry rules must hold to enter (AND)." },
     exit: { type: ["array", "null"], items: RULE_SCHEMA, description: "ANY exit rule triggers an exit (OR). May be empty if relying on stop/target." },
     stop_atr: { type: ["number", "null"], description: "Stop distance in ATR(14) multiples, e.g. 2." },

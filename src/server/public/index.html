@@ -921,6 +921,43 @@
       color: var(--dim);
     }
 
+    /* Watchlist toggle in the quick-search header. Pushed to the trailing edge
+       so it never crowds the symbol or company name, and self-aligned because
+       .tm-head is baseline-aligned — a button left on the text baseline sits
+       visibly low against the 20px symbol. */
+    .tm-star {
+      margin-left: auto;
+      align-self: center;
+      background: none;
+      border: none;
+      padding: 2px 5px;
+      border-radius: var(--radius-xs);
+      font-size: 19px;
+      line-height: 1;
+      color: var(--faint);
+      cursor: pointer;
+      transition: color .12s, background .12s;
+    }
+
+    .tm-star:hover {
+      color: var(--amber);
+      background: var(--hover);
+    }
+
+    .tm-star.on {
+      color: var(--amber);
+    }
+
+    .tm-star:disabled {
+      cursor: wait;
+      opacity: .55;
+    }
+
+    .tm-star:focus-visible {
+      outline: none;
+      box-shadow: var(--ring);
+    }
+
     .tm-price {
       font-size: 26px;
       font-weight: 700;
@@ -5139,8 +5176,47 @@
       if (data.error) { lastTickerData = null; tickerResult.innerHTML = `<div class="tm-hint">${esc(data.error)} — check the symbol.</div>`; return; }
       lastTickerData = data;
       tickerResult.innerHTML = renderTickerDetail(data);
+      wireWatchStar(tickerResult.querySelector("#tm-star"), data.ticker ?? sym);
       const sp = tickerResult.querySelector(".tm-spark");
       if (sp && data.indicators?.spark) sparkSvg(sp, data.indicators.spark, true);
+    }
+
+    // Watchlist toggle for the quick-search header. Same contract as the stock
+    // page's "☆ Watch" button — POST, then reload state so `portfolio` and the
+    // watchlist card update together rather than drifting out of sync.
+    function wireWatchStar(btn, ticker) {
+      if (!btn || !ticker) return;
+      const watched = () => (portfolio.watchlist || []).includes(ticker);
+      const sync = () => {
+        const on = watched();
+        btn.textContent = on ? "★" : "☆";
+        btn.classList.toggle("on", on);
+        btn.setAttribute("aria-pressed", String(on));
+        // The glyph alone says nothing to a screen reader, and the two states
+        // are one character apart visually.
+        const label = `${on ? "Remove" : "Add"} ${ticker} ${on ? "from" : "to"} watchlist`;
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
+      };
+      sync();
+      btn.addEventListener("click", async () => {
+        const action = watched() ? "remove" : "add";
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/watchlist", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker, action }),
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          await loadState();
+          toast(action === "add" ? `${ticker} added to watchlist` : `${ticker} removed from watchlist`);
+        } catch {
+          toast("Couldn't update the watchlist — try again.");
+        } finally {
+          btn.disabled = false;
+          sync();   // re-read from state, so a failed call shows the truth
+        }
+      });
     }
 
     tickerSearch.addEventListener("input", (e) => { currentSym = ""; runSuggest(e.target.value); });
@@ -5229,7 +5305,7 @@
       <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "—"}</div></div>
     </div>` : "";
       return `
-    <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}</div>
+    <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}<button type="button" class="tm-star" id="tm-star" aria-pressed="false"></button></div>
     <div class="tm-price">${priceStr}</div>
     <svg class="tm-spark" preserveAspectRatio="none"></svg>
     <div>${scoreLine}</div>
