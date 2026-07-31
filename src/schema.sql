@@ -401,3 +401,42 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_bars_ticker_ts ON bars(ticker, ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_ts ON ideas(ts DESC);
 CREATE INDEX IF NOT EXISTS idx_ideas_user_ts ON ideas(user_id, ts DESC);
+
+-- Monetization (freemium + a single $24/mo Pro tier).
+--
+-- 'plan' gates the AI-heavy, higher-cost features (validation, backtest, chat
+-- advisor, intraday, briefings, journal-that-learns) and lifts the free-tier
+-- usage ceilings. The DEFAULT is 'free' so every existing account, and every
+-- new signup, starts on the free tier — nobody is silently granted Pro. Values:
+-- 'free' | 'pro'. Billing (Stripe) flips this column via webhook; until then it
+-- is only ever 'free' in practice, which is the safe closed state.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_since integer;
+
+-- Per-user, per-metric usage meter for the free-tier ceilings (e.g. 3 AI
+-- validations and 1 backtest per calendar month). `period` is a coarse bucket
+-- string — 'YYYY-MM' for monthly counters — so a new month is simply a new row
+-- and old rows are self-expiring history, no cron sweep needed. The PK makes
+-- the increment an idempotent UPSERT target. Pro accounts never write here;
+-- their ceilings are unlimited so entitlements.ts short-circuits before metering.
+CREATE TABLE IF NOT EXISTS usage_counters (
+  user_id integer NOT NULL REFERENCES users(id),
+  metric text NOT NULL,              -- 'ai_validation' | 'backtest' | ...
+  period text NOT NULL,              -- 'YYYY-MM' for monthly ceilings
+  count integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, metric, period)
+);
+CREATE INDEX IF NOT EXISTS idx_usage_counters_user ON usage_counters(user_id, period);
+
+-- Every time a free user hits the paywall and clicks "Upgrade to Pro" we log it
+-- here. Until Stripe checkout exists this is the product's most valuable number:
+-- how many people, on which feature, wanted to pay. Append-only; one row per
+-- click (a user can appear many times, which is itself signal — they kept trying).
+CREATE TABLE IF NOT EXISTS billing_interest (
+  id serial PRIMARY KEY,
+  user_id integer NOT NULL REFERENCES users(id),
+  feature text,                      -- which gate triggered the paywall
+  reason text,                       -- 'pro_only' | 'limit_reached'
+  ts integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_billing_interest_ts ON billing_interest(ts DESC);
