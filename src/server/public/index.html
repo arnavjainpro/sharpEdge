@@ -8367,7 +8367,7 @@
     <p class="kv" style="color:var(--dim)">${specSummary(d.spec)}</p>
     ${d.walkForwardError ? `<p class="kv" style="color:var(--amber)">${esc(d.walkForwardError)}</p>` : ""}
     ${wf ? `<p class="kv" style="font-size:12px;color:var(--faint)">Headline numbers below are OUT-OF-SAMPLE — the honest ones. In-sample averaged ${pct(wf.windows.reduce((s, w) => s + w.isReturnPct, 0) / (wf.windows.length || 1))} annualized.</p>` : ""}
-    ${metricsGrid(headline, !!wf)}
+    ${metricsGrid(headline.metrics, !!wf)}
     ${curveSvg(headline.equityCurve, wf ? null : d.result.buyHoldCurve)}
     ${wf ? wfHtml(wf) : ""}
     ${stressReportHtml(d.stress)}
