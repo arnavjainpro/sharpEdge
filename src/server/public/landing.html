@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>sharpEdge: Make Sharper Decisions</title>
   <meta name="description"
     content="A trading research and decision-support engine. 1,500 stocks scanned every six hours, six-dimension AI validation, and options priced by a real Black-Scholes engine.">
@@ -44,6 +44,8 @@
       font: 400 17px/1.5 var(--sans);
       -webkit-font-smoothing: antialiased;
       overflow-x: hidden;
+      -webkit-text-size-adjust: 100%;
+      overflow-wrap: anywhere;
     }
 
     img {
@@ -54,6 +56,52 @@
     a {
       color: inherit;
       text-decoration: none;
+    }
+
+    :focus-visible {
+      outline: 3px solid #ffffff;
+      outline-offset: 3px;
+      box-shadow: 0 0 0 6px var(--brand);
+      border-radius: 4px;
+    }
+
+    header.solid :focus-visible,
+    main :focus-visible,
+    footer :focus-visible {
+      outline-color: var(--surface);
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      left: max(8px, env(safe-area-inset-left));
+      z-index: 100;
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: #ffffff;
+      color: #14181a;
+      font-weight: 700;
+      transform: translateY(-160%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    #main-content:focus {
+      outline: none;
     }
 
     /* Meta runs a near-full-width column: ~1440px of content inside ~36px gutters. */
@@ -174,6 +222,7 @@
     .hero {
       position: relative;
       height: 100vh;
+      height: 100svh;
       min-height: 620px;
       background: linear-gradient(135deg, #0f2c22 0%, #14684c 55%, #1c3b30 100%);
       overflow: hidden;
@@ -594,7 +643,8 @@
       }
 
       .nav {
-        height: 64px;
+        height: calc(64px + env(safe-area-inset-top));
+        padding-top: env(safe-area-inset-top);
         gap: 20px;
       }
 
@@ -606,6 +656,7 @@
         padding: 104px 20px 36px;
         height: auto;
         min-height: 86vh;
+        min-height: 86svh;
       }
 
       .hero-foot {
@@ -680,11 +731,34 @@
       .nav-right .plain {
         display: none;
       }
+
+      .hero-cta,
+      .card-cta {
+        flex-wrap: wrap;
+      }
+
+      .hero-cta .btn,
+      .card-cta .btn {
+        flex: 1 1 140px;
+      }
+
+      .foot-grid {
+        grid-template-columns: 1fr;
+      }
+
+      footer {
+        padding-bottom: calc(48px + env(safe-area-inset-bottom));
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {
-      * {
+      *,
+      *::before,
+      *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
         transition: none !important;
+        scroll-behavior: auto !important;
       }
 
       .btn:hover,
@@ -692,13 +766,21 @@
         transform: none;
       }
     }
+
+    @media (forced-colors: active) {
+      :focus-visible {
+        outline: 3px solid Highlight !important;
+        box-shadow: none !important;
+      }
+    }
   </style>
 </head>
 
 <body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
   <header id="hdr">
-    <nav class="wrap nav">
-      <a class="brand" href="/">
+    <nav class="wrap nav" aria-label="Primary">
+      <a class="brand" href="/" aria-label="sharpEdge home">
         <img src="/assets/logo-mark.png" alt="">
         sharpEdge
       </a>
@@ -715,10 +797,12 @@
     </nav>
   </header>
 
+  <main id="main-content" tabindex="-1">
+
   <!-- ── hero ──────────────────────────────────────────────────────────── -->
-  <div class="hero" id="hero">
+  <section class="hero" id="hero" aria-labelledby="hero-title">
     <img class="hero-img" src="/assets/shot-hero.png" alt="The sharpEdge market dashboard" onerror="this.remove()">
-    <h1>Every setup, stress&#8209;tested.</h1>
+    <h1 id="hero-title">Every setup, stress&#8209;tested.</h1>
     <div class="hero-foot">
       <div class="hero-copy">
         <p>1,500 stocks scanned every six hours. Six-dimension AI validation.
@@ -730,7 +814,7 @@
       </div>
       <div class="hero-mark">sharpEdge</div>
     </div>
-  </div>
+  </section>
 
   <!-- ── explore tiles ─────────────────────────────────────────────────── -->
   <section class="sec-tiles" id="explore">
@@ -738,7 +822,7 @@
       <h2 class="eyebrow-h">Explore sharpEdge</h2>
       <div class="tiles">
         <a class="tile" href="#ideas">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <path d="M3 17l5-6 4 4 5-8 4 5" />
             <path d="M3 21h18" />
@@ -746,7 +830,7 @@
           <span>Screener</span>
         </a>
         <a class="tile" href="#analyze">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="14" rx="2" />
             <path d="M7 14l3-4 3 3 4-6" />
@@ -754,7 +838,7 @@
           <span>Analyze</span>
         </a>
         <a class="tile" href="#backtest">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <path d="M3 12a9 9 0 1 0 3-6.7" />
             <path d="M3 4v5h5" />
@@ -828,7 +912,7 @@
       <h2 class="band-h">Why sharpEdge</h2>
       <div class="why-grid">
         <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <path d="M12 3l8 3v6c0 4.4-3.2 7.9-8 9-4.8-1.1-8-4.6-8-9V6l8-3z" />
             <path d="M9 12l2 2 4-4" />
@@ -838,7 +922,7 @@
             only ever reads them.</p>
         </div>
         <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <path d="M4 19V9M10 19V5M16 19v-7M22 19H2" />
           </svg>
@@ -847,7 +931,7 @@
             no cost, nothing to hallucinate.</p>
         </div>
         <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <path d="M4 5h13a3 3 0 0 1 3 3v11H7a3 3 0 0 1-3-3V5z" />
             <path d="M4 16a3 3 0 0 1 3-3h13" />
@@ -858,7 +942,7 @@
             flags the errors you keep repeating.</p>
         </div>
         <div class="why-card">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
             stroke-linejoin="round">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21a8 8 0 0 1 16 0" />
@@ -895,7 +979,8 @@
       <div class="signup-label">Create your<br>sharpEdge account</div>
       <div>
         <form id="signup-form">
-          <input type="email" name="email" placeholder="Email" autocomplete="email" required aria-label="Email">
+          <label class="sr-only" for="signup-email">Email address</label>
+          <input id="signup-email" type="email" name="email" placeholder="Email" autocomplete="email" required>
           <button class="btn btn-line" type="submit">Get started</button>
         </form>
         <p class="fine">
@@ -908,6 +993,7 @@
       </div>
     </div>
   </section>
+  </main>
 
   <!-- ── footer ────────────────────────────────────────────────────────── -->
   <footer>

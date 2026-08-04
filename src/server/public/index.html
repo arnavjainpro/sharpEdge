@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>sharpEdge</title>
   <link rel="icon" type="image/png" href="/assets/favicon.png">
   <!-- Stamp the stored theme before first paint. The app script runs at the end of
@@ -31,9 +31,9 @@
       --line-soft: #eaefe7;
       --text: #14181a;
       --dim: #5a6560;
-      --faint: #8b968f;
-      --green: #0e9f5c;
-      --green-ink: #0b7c48;
+      --faint: #647069;
+      --green: #087a46;
+      --green-ink: #087a46;
       --green-soft: rgba(14, 159, 92, .1);
       /* brand leans pine/teal so it stays tellable apart from market --green in
          both themes: a pure forest hue collides with it once lightened for dark */
@@ -46,7 +46,7 @@
       --red: #c8453a;
       --red-soft: rgba(200, 69, 58, .09);
       --sell: var(--red);
-      --amber: #b07a08;
+      --amber: #8a5d00;
       --amber-soft: rgba(176, 122, 8, .12);
       --blue: #2f6fe0;
       --blue-soft: rgba(47, 111, 224, .1);
@@ -120,7 +120,7 @@
         --line-soft: #1f2624;
         --text: #e8ede9;
         --dim: #9aa59e;
-        --faint: #66716b;
+        --faint: #8b9690;
         --green: #2ecc7a;
         --green-ink: #4ade95;
         --green-soft: rgba(46, 204, 122, .14);
@@ -158,7 +158,7 @@
       --line-soft: #1f2624;
       --text: #e8ede9;
       --dim: #9aa59e;
-      --faint: #66716b;
+      --faint: #8b9690;
       --green: #2ecc7a;
       --green-ink: #4ade95;
       --green-soft: rgba(46, 204, 122, .14);
@@ -195,6 +195,8 @@
       color: var(--text);
       font: 400 14px/1.5 var(--sans);
       -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: 100%;
+      overflow-wrap: anywhere;
     }
 
     button {
@@ -203,9 +205,43 @@
     }
 
     :focus-visible {
-      outline: none;
+      outline: 3px solid transparent;
       box-shadow: var(--ring);
       border-radius: 4px;
+    }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      left: max(8px, env(safe-area-inset-left));
+      z-index: 1000;
+      padding: 10px 14px;
+      border-radius: var(--radius-xs);
+      background: var(--text);
+      color: var(--surface);
+      font-weight: 700;
+      text-decoration: none;
+      transform: translateY(-160%);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    main:focus {
+      outline: none;
     }
 
     @keyframes spin {
@@ -226,6 +262,20 @@
         animation-duration: .01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+
+    @media (forced-colors: active) {
+      :focus-visible {
+        outline: 3px solid Highlight !important;
+        box-shadow: none !important;
+      }
+
+      #status-dot,
+      .alloc-dot,
+      .sdot-badge {
+        forced-color-adjust: none;
       }
     }
 
@@ -956,6 +1006,7 @@
     }
 
     .tm-card {
+      position: relative;
       width: 100%;
       max-width: 560px;
       background: var(--surface);
@@ -971,7 +1022,7 @@
     #ticker-search {
       border: none;
       border-bottom: 1px solid var(--line);
-      padding: 16px 18px;
+      padding: 16px 56px 16px 18px;
       font: 600 16px var(--sans);
       background: var(--surface);
       color: var(--text);
@@ -984,6 +1035,21 @@
     #ticker-search::placeholder {
       color: var(--faint);
       font-weight: 400;
+    }
+
+    .tm-close {
+      position: absolute;
+      top: 9px;
+      right: 10px;
+      z-index: 1;
+      width: 36px;
+      height: 36px;
+      border: 0;
+      border-radius: var(--radius-xs);
+      background: var(--surface-2);
+      color: var(--dim);
+      font-size: 20px;
+      line-height: 1;
     }
 
     /* autocomplete dropdown */
@@ -1320,7 +1386,7 @@
       margin-bottom: -8px;
     }
 
-    .dash-greet h1 {
+    #greet-line {
       font-size: 26px;
       font-weight: 600;
       letter-spacing: -.02em;
@@ -2565,10 +2631,11 @@
     /* auth screen */
     #auth-screen {
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
     }
 
     #auth-card {
@@ -4198,6 +4265,7 @@
         max-height: none;
         border-radius: 0;
         padding-bottom: env(safe-area-inset-bottom);
+        z-index: 60;
       }
 
       #chat-panel.expanded {
@@ -4209,7 +4277,7 @@
         width: 48px;
         height: 48px;
         right: 16px;
-        bottom: calc(16px + env(safe-area-inset-bottom));
+        bottom: calc(76px + env(safe-area-inset-bottom));
       }
     }
 
@@ -4691,33 +4759,241 @@
     .followup .advise-btn {
       flex-shrink: 0;
     }
+
+    /* Accessibility and device resilience. Dense data stays scrollable instead
+       of forcing the whole page wider than the viewport. */
+    .card:has(> table),
+    .table-wrap,
+    [class$="-table-wrap"] {
+      overflow-x: auto;
+      overscroll-behavior-inline: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      max-width: 100%;
+    }
+
+    .wl-row:focus-within .wl-x,
+    .wl-row:focus .wl-x {
+      opacity: 1;
+    }
+
+    @media (pointer: coarse) {
+      button,
+      [role="button"],
+      input[type="checkbox"],
+      input[type="radio"] {
+        min-height: 44px;
+      }
+
+      .wl-x {
+        opacity: 1;
+        min-width: 44px;
+        justify-content: center;
+      }
+    }
+
+    @media (max-width: 720px) {
+      input,
+      select,
+      textarea {
+        font-size: max(16px, 1em);
+      }
+
+      .shell {
+        min-height: 100dvh;
+      }
+
+      #sidebar,
+      #sidebar:not(.collapsed),
+      #sidebar.collapsed {
+        position: fixed;
+        inset: auto 0 0 0;
+        z-index: 45;
+        width: 100%;
+        height: auto;
+        padding: 4px max(8px, env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+        border-top: 1px solid var(--line);
+        overflow: hidden;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      #sidebar .side-logo-row,
+      #sidebar > .spacer,
+      #sidebar .side-toggle-row,
+      #sidebar .side-user {
+        display: none;
+      }
+
+      #sidebar #section-switch,
+      #sidebar:not(.collapsed) #section-switch,
+      #sidebar.collapsed #section-switch {
+        display: flex;
+        flex: 0 0 52px;
+        width: 52px;
+        min-height: 52px;
+        margin: 0 4px 0 0;
+        padding: 0;
+        justify-content: center;
+        border-radius: var(--radius-sm);
+      }
+
+      #sidebar #section-switch .slabel,
+      #sidebar #section-switch .sswap {
+        display: none;
+      }
+
+      #nav {
+        display: flex;
+        flex: 1;
+        overflow-x: auto;
+        gap: 2px;
+        scrollbar-width: none;
+        overscroll-behavior-inline: contain;
+      }
+
+      #nav::-webkit-scrollbar {
+        display: none;
+      }
+
+      #sidebar #nav button,
+      #sidebar:not(.collapsed) #nav button,
+      #sidebar.collapsed #nav button {
+        flex: 1 0 68px;
+        min-width: 68px;
+        min-height: 54px;
+        padding: 6px 4px;
+        gap: 3px;
+        flex-direction: column;
+        justify-content: center;
+        text-align: center;
+      }
+
+      #sidebar #nav button .nlabel,
+      #sidebar:not(.collapsed) #nav button .nlabel,
+      #sidebar.collapsed #nav button .nlabel {
+        display: block;
+        flex: none;
+        max-width: 66px;
+        opacity: 1;
+        font-size: 10px;
+        line-height: 1.15;
+        text-align: center;
+        text-overflow: ellipsis;
+      }
+
+      .main-col {
+        padding-bottom: calc(66px + env(safe-area-inset-bottom));
+      }
+
+      header {
+        padding-top: calc(12px + env(safe-area-inset-top));
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+        flex-wrap: wrap;
+      }
+
+      #tab-head {
+        flex: 1 1 auto;
+      }
+
+      header > .spacer {
+        display: none;
+      }
+
+      #mkt-pill {
+        order: 4;
+        max-width: 100%;
+      }
+
+      #status-label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      main {
+        width: 100%;
+        min-width: 0;
+      }
+
+      [data-pane] {
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .tm-card {
+        max-height: calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      }
+
+      #ticker-modal {
+        padding-top: max(16px, env(safe-area-inset-top));
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+      }
+
+      #toast-stack {
+        right: max(12px, env(safe-area-inset-right));
+        left: max(12px, env(safe-area-inset-left));
+        bottom: calc(76px + env(safe-area-inset-bottom));
+      }
+
+      .toast {
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 420px) {
+      header .switch-wrap {
+        display: none;
+      }
+
+      #portfolio-value {
+        font-size: clamp(34px, 12vw, var(--fs-hero));
+      }
+
+      .pf-actions,
+      .intraday-row,
+      .fu-row {
+        align-items: stretch;
+        flex-direction: column;
+      }
+    }
   </style>
 </head>
 
 <body>
 
+  <a class="skip-link" id="app-skip" href="#main-content" hidden>Skip to main content</a>
+
   <section id="auth-screen" hidden>
-    <form id="auth-card">
+    <form id="auth-card" aria-describedby="auth-blurb auth-error">
       <div class="auth-logo">
         <img class="logo-light" src="/assets/logo-lockup.png" alt="sharpEdge: Make Sharper Decisions">
         <img class="logo-dark" src="/assets/logo-lockup-dark.png" alt="sharpEdge: Make Sharper Decisions">
       </div>
       <p id="auth-blurb">Sign in to your account.</p>
+      <label class="sr-only" for="auth-email">Email address</label>
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
+      <label class="sr-only" for="auth-password">Password</label>
       <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" required
         minlength="8">
       <!-- inputmode brings up the numeric keypad on a phone; one-time-code lets
            iOS and Safari offer the code straight from the mail. -->
+      <label class="sr-only" for="auth-code">Six-digit verification code</label>
       <input type="text" id="auth-code" placeholder="6-digit code" autocomplete="one-time-code" inputmode="numeric"
         pattern="[0-9]{6}" maxlength="6" hidden>
-      <div id="auth-error"></div>
+      <div id="auth-error" role="alert" aria-live="assertive"></div>
       <button type="submit" class="advise-btn" id="auth-submit">Sign in</button>
       <button type="button" id="auth-flip">New here? Create an account</button>
     </form>
   </section>
 
-  <div id="ticker-modal" hidden>
-    <div class="tm-card" role="dialog" aria-label="Ticker search">
+  <div id="ticker-modal" role="dialog" aria-modal="true" aria-labelledby="ticker-modal-title" hidden>
+    <div class="tm-card">
+      <h2 class="sr-only" id="ticker-modal-title">Search stocks</h2>
+      <button class="tm-close" id="ticker-close" type="button" aria-label="Close ticker search">×</button>
+      <label class="sr-only" for="ticker-search">Search by ticker symbol or company name</label>
       <input id="ticker-search" type="text" placeholder="Search by symbol or name: AAPL, Apple, Nvidia…"
         autocomplete="off" spellcheck="false" maxlength="48" role="combobox" aria-autocomplete="list"
         aria-expanded="false" aria-controls="ticker-suggest">
@@ -4730,7 +5006,7 @@
   </div>
 
   <div id="app-shell" class="shell" hidden>
-    <aside id="sidebar">
+    <aside id="sidebar" aria-label="Application navigation">
       <div class="side-logo-row">
         <a class="side-logo" id="home-link" href="#portfolio" title="Home">
           <img class="side-mark" src="/assets/logo-mark.png" alt="sharpEdge">
@@ -4749,8 +5025,8 @@
           hidden></span>
       </button>
 
-      <nav id="nav">
-        <button data-tab="portfolio" class="active"><span class="ndot"></span><span
+      <nav id="nav" aria-label="Primary">
+        <button type="button" data-tab="portfolio" class="active" aria-current="page"><span class="ndot"></span><span
             class="nlabel">Portfolio</span></button>
         <button data-tab="market"><span class="ndot"></span><span class="nlabel">Market</span></button>
         <button data-tab="ideas"><span class="ndot"></span><span class="nlabel">Ideas</span></button>
@@ -4785,9 +5061,9 @@
     </aside>
 
     <div class="main-col">
-      <header>
+      <header aria-label="Application toolbar">
         <div id="tab-head">
-          <div id="tab-title">Portfolio</div>
+          <h1 id="tab-title" tabindex="-1">Portfolio</h1>
           <div id="tab-sub"></div>
         </div>
         <span class="spacer"></span>
@@ -4801,7 +5077,7 @@
           <span class="search-label">Search any ticker…</span>
           <span class="search-kbd" id="search-kbd">⌘K</span>
         </button>
-        <div id="mkt-pill" title="system status">
+        <div id="mkt-pill" title="System status" role="status" aria-live="polite">
           <span id="status-dot"></span>
           <span id="status-label">live</span>
         </div>
@@ -4811,12 +5087,12 @@
             aria-label="Toggle live AI updates"><i></i></button>
         </span>
       </header>
-      <div id="banner">AI was halted after unusually high activity to protect your API spend.<button
-          id="breaker-reset">Resume</button></div>
+      <div id="banner" role="alert">AI was halted after unusually high activity to protect your API spend.<button
+          id="breaker-reset" type="button">Resume</button></div>
 
-      <main>
+      <main id="main-content" tabindex="-1">
         <section class="dash-greet" data-pane="portfolio">
-          <h1 id="greet-line">Welcome back</h1>
+          <div id="greet-line">Welcome back</div>
           <span class="sub" id="greet-sub"></span>
         </section>
 
@@ -4860,7 +5136,8 @@
                   <button data-range="0">All</button>
                 </div>
               </div>
-              <svg id="portfolio-spark" preserveAspectRatio="none"></svg>
+              <svg id="portfolio-spark" preserveAspectRatio="none" role="img"
+                aria-label="Historical value of current holdings"></svg>
             </div>
           </div>
           <div id="broker-line"></div>
@@ -4869,9 +5146,10 @@
             <div class="hint">Link Robinhood (read-only) for live positions in <a href="#settings">Settings →
                 Brokerage</a>. It takes priority over this manual paste, which is the universal fallback for any
               broker's export.</div>
+            <label class="sr-only" for="import-json">Positions in JSON format</label>
             <textarea id="import-json" spellcheck="false"
               placeholder='{"positions":[{"ticker":"AAPL","shares":10,"cost_basis":180},{"ticker":"AAPL 2026-08-21 250C","shares":2,"cost_basis":5.20,"asset_class":"option","market_value":1240,"option":{"type":"call","strike":250,"expiry":"2026-08-21","underlying":"AAPL"}}],"watchlist":["NVDA"],"account":{"equity":25000}}'></textarea>
-            <div class="hint" id="import-msg"></div>
+            <div class="hint" id="import-msg" role="status" aria-live="polite"></div>
             <button class="advise-btn" id="import-go" style="margin-top:6px">Import</button>
             <button class="advise-btn ghost" id="import-clear" style="margin-top:6px">Clear import (back to
               YAML)</button>
@@ -4960,6 +5238,7 @@
           </div>
           <div class="card">
             <table class="sectors" id="sector-table">
+              <caption class="sr-only">Current sector rotation</caption>
               <tbody>
                 <tr>
                   <td class="empty">Waiting for the first scan…</td>
@@ -5039,11 +5318,12 @@
               </svg>
               Validate top setups <span class="gen-cost">AI · ~$0.05 · 1-3 min</span></button>
           </div>
-          <dialog id="filters-modal">
-            <h3 style="margin:0 0 12px">Filter ideas</h3>
+          <dialog id="filters-modal" aria-labelledby="filters-title">
+            <h3 id="filters-title" style="margin:0 0 12px">Filter ideas</h3>
             <div class="flabel">Presets</div>
             <div id="preset-chips" class="filter-bar" style="margin:0 0 8px"></div>
             <div class="cf-row">
+              <label class="sr-only" for="preset-name">Filter set name</label>
               <input type="text" id="preset-name" placeholder="Name this filter set" maxlength="40" style="flex:1">
               <button class="refresh-btn" id="preset-save" title="Save the current filters as a reusable preset">+ Save preset</button>
             </div>
@@ -5056,6 +5336,7 @@
                 <option value=">">&gt;</option>
                 <option value="<">&lt;</option>
               </select>
+              <label class="sr-only" for="cf-val">Filter value</label>
               <input type="number" id="cf-val" step="any" placeholder="value" style="width:74px">
               <button class="refresh-btn" id="cf-add" title="Add this rule as a removable filter">+ Add rule</button>
             </div>
@@ -5096,7 +5377,7 @@
                     </select></label>
                   <button type="submit" class="advise-btn" style="margin-top:0">Save</button>
                 </div>
-                <div class="settings-msg" id="risk-msg"></div>
+                <div class="settings-msg" id="risk-msg" role="status" aria-live="polite"></div>
                 <p style="font-size:12px;color:var(--faint)" id="appetite-note"></p>
                 <p style="font-size:12px;color:var(--faint)"><span id="equity-note"></span> Position sizing is against
                   your available buying power. These settings only affect this analyzer, not the Ideas tab or your
@@ -5104,8 +5385,10 @@
               </form>
             </details>
             <div class="intraday-row">
+              <label class="sr-only" for="intraday-ticker">Ticker symbol</label>
               <input type="text" id="intraday-ticker" placeholder="Ticker" autocomplete="off" list="ticker-options">
               <datalist id="ticker-options"></datalist>
+              <label class="sr-only" for="intraday-tf">Chart timeframe</label>
               <select id="intraday-tf">
                 <option value="1m">1-minute</option>
                 <option value="5m" selected>5-minute</option>
@@ -5113,20 +5396,20 @@
                 <option value="60m">1-hour</option>
               </select>
             </div>
-            <div id="drop-zone" tabindex="0">Paste (Ctrl+V) or drop a chart screenshot anywhere in this panel, or click
+            <div id="drop-zone" tabindex="0" role="button" aria-controls="file-input">Paste (Ctrl+V) or drop a chart screenshot anywhere in this panel, or click
               to browse. A screenshot is optional, and the analysis always cross-checks it against live data.</div>
             <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" hidden>
-            <div id="img-preview-wrap"><button id="img-clear" class="img-x" title="remove screenshot"><svg class="ic" width="12"
+            <div id="img-preview-wrap"><button id="img-clear" class="img-x" title="Remove screenshot" aria-label="Remove screenshot"><svg class="ic" width="12"
                   height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg></button><img id="img-preview" alt="chart screenshot preview"></div>
             <div id="swing-slots" style="display:none">
               <div class="swing-grid">
-                <div class="swing-slot" data-label="1D"><span>1-Day chart</span></div>
-                <div class="swing-slot" data-label="1W"><span>1-Week chart</span></div>
-                <div class="swing-slot" data-label="1M"><span>1-Month chart</span></div>
-                <div class="swing-slot" data-label="OPTIONS-CHAIN"><span>Options chain (optional)</span></div>
+                <div class="swing-slot" data-label="1D" role="button" tabindex="0" aria-label="Upload 1-day chart"><span>1-Day chart</span></div>
+                <div class="swing-slot" data-label="1W" role="button" tabindex="0" aria-label="Upload 1-week chart"><span>1-Week chart</span></div>
+                <div class="swing-slot" data-label="1M" role="button" tabindex="0" aria-label="Upload 1-month chart"><span>1-Month chart</span></div>
+                <div class="swing-slot" data-label="OPTIONS-CHAIN" role="button" tabindex="0" aria-label="Upload options chain screenshot, optional"><span>Options chain (optional)</span></div>
               </div>
               <div id="swing-tray" hidden><span class="tray-hint">Pasted: drag each one into the box it
                   belongs in ↑</span></div>
@@ -5138,6 +5421,7 @@
                 a concrete contract or spread with stress-tested max loss/gain.</div>
             </div>
             <div class="intraday-row">
+              <label class="sr-only" for="intraday-notes">Setup notes, optional</label>
               <input type="text" id="intraday-notes" placeholder="Notes (optional): what you're seeing / planning…"
                 autocomplete="off">
               <button class="advise-btn" id="intraday-go" style="margin-top:0">Analyze setup</button>
@@ -5150,16 +5434,18 @@
           <h2>Backtest &amp; walk-forward</h2>
           <div id="backtest-form">
             <div class="intraday-row">
+              <label class="sr-only" for="bt-ticker">Ticker symbol</label>
               <input type="text" id="bt-ticker" placeholder="Ticker" autocomplete="off">
               <span style="font-size:12px;color:var(--faint)">Walk-forward validated (out-of-sample) automatically when
                 ≥5y of history exists.</span>
             </div>
+            <label class="sr-only" for="bt-desc">Strategy description</label>
             <textarea id="bt-desc" spellcheck="false"
               placeholder="Describe the strategy in plain English: e.g. &quot;buy when the 50-day average crosses above the 200-day, sell on the cross back down, 2xATR stop&quot;. Or upload a chart below and I'll infer the setup."></textarea>
-            <div id="bt-drop" tabindex="0" class="dropzone">Optional: paste, drop, or click to add a chart. The setup
+            <div id="bt-drop" tabindex="0" role="button" aria-controls="bt-file" class="dropzone">Optional: paste, drop, or click to add a chart. The setup
               will be read from it.</div>
             <input type="file" id="bt-file" accept="image/png,image/jpeg,image/webp" hidden>
-            <div id="bt-img-wrap"><button id="bt-img-clear" class="img-x" title="remove screenshot"><svg class="ic" width="12" height="12"
+            <div id="bt-img-wrap"><button id="bt-img-clear" class="img-x" title="Remove screenshot" aria-label="Remove screenshot"><svg class="ic" width="12" height="12"
                   viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
                   stroke-linejoin="round" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12" />
@@ -5263,7 +5549,7 @@
               <button type="button" class="advise-btn" id="pf-code-confirm" style="margin-top:0">Confirm email</button>
               <button type="button" id="pf-code-cancel" title="Discard the pending change and keep your current email">Cancel</button>
             </div>
-            <div class="settings-msg" id="profile-msg"></div>
+            <div class="settings-msg" id="profile-msg" role="status" aria-live="polite"></div>
           </form>
         </section>
 
@@ -5287,7 +5573,7 @@
               <label>Verification code<input type="text" id="link-code" inputmode="numeric" autocomplete="one-time-code"></label>
               <button type="button" class="advise-btn" id="link-code-go" style="margin-top:0">Submit code</button>
             </div>
-            <div class="settings-msg" id="link-msg"></div>
+            <div class="settings-msg" id="link-msg" role="status" aria-live="polite"></div>
             <p style="font-size:12px;color:var(--faint)">Read-only: sharpEdge never places or cancels orders. Your
               password goes straight to Robinhood and is never stored: only the returned access tokens are.
               A linked account takes priority over the manual position import.</p>
@@ -5365,11 +5651,12 @@
               <label>Entry $<input type="number" id="jr-entry" step="0.01" placeholder="optional"></label>
               <label>Exit $<input type="number" id="jr-exit" step="0.01" placeholder="optional"></label>
             </div>
+            <label class="sr-only" for="journal-notes">Trade notes</label>
             <textarea id="journal-notes"
               placeholder="What actually happened: what went right or wrong, in your own words. The AI reads this history when validating future setups (e.g. “chased the breakout with no volume confirmation, stopped out at the pivot”)."></textarea>
             <div class="settings-row">
               <button type="submit" class="advise-btn" style="margin-top:0">Log trade</button>
-              <span class="settings-msg" id="journal-msg"></span>
+              <span class="settings-msg" id="journal-msg" role="status" aria-live="polite"></span>
             </div>
           </form>
           <div class="card" style="margin-top:12px;padding:4px 16px" id="journal-list">
@@ -5414,7 +5701,7 @@
   <!-- Populated and opened by openPaywall() whenever a paid endpoint answers
        402. Keep this outside #app-shell so it remains available while panes
        are switched or hidden. -->
-  <dialog id="paywall-modal" aria-label="Upgrade to Pro">
+  <dialog id="paywall-modal" aria-labelledby="pw-title">
     <div class="pw-eyebrow">sharpEdge Pro</div>
     <h3 id="pw-title">Unlock the full engine</h3>
     <p class="pw-reason" id="pw-reason"></p>
@@ -5436,14 +5723,14 @@
        attribute, so anything mounted inside a pane would vanish on tab switch.
        Ids are the ones the old Chat pane used, and that pane is gone: two
        copies of #chat-log would make $() return whichever came first. -->
-  <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel"
+  <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel" hidden
     aria-label="Ask Jawa" title="Ask Jawa (Ctrl+J)">
     <span class="fab-open"></span>
     <span class="fab-dot" hidden></span>
   </button>
 
-  <div id="chat-panel" role="dialog" aria-label="Ask Jawa" hidden>
-    <div id="chat-grip" title="Drag to resize"></div>
+  <div id="chat-panel" role="dialog" aria-labelledby="chat-title" hidden>
+    <div id="chat-grip" title="Drag to resize" aria-hidden="true"></div>
     <header id="chat-head">
       <button id="chat-list-btn" type="button" class="chat-ghost" title="Saved conversations"
         aria-label="Saved conversations"></button>
@@ -5457,7 +5744,7 @@
     <div id="chat-threads" hidden></div>
 
     <div id="chat-body">
-      <div id="chat-log" aria-live="polite"></div>
+      <div id="chat-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
       <form id="chat-form">
         <input id="chat-input" placeholder="Ask Jawa…" autocomplete="off" maxlength="4000"
           aria-label="Ask Jawa">
@@ -5554,6 +5841,9 @@
       if (!stack) {
         stack = document.createElement("div");
         stack.id = "toast-stack";
+        stack.setAttribute("role", "status");
+        stack.setAttribute("aria-live", "polite");
+        stack.setAttribute("aria-atomic", "false");
         document.body.appendChild(stack);
       }
       while (stack.children.length >= 3) stack.firstChild.remove();
@@ -5717,6 +6007,10 @@
       const [name, ...rest] = raw.split("/");
       return { name, param: rest.join("/") || null };
     }
+    function announcePaneChange() {
+      if ($("#app-shell").hidden) return;
+      requestAnimationFrame(() => $("#tab-title").focus({ preventScroll: true }));
+    }
     function showPane(name, param) {
       // Chat stopped being a destination. A bookmark or an old link to #chat
       // opens the widget over the dashboard instead of resolving to nothing.
@@ -5732,10 +6026,13 @@
         applySection("trading");
         document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== "stock"; });
         document.querySelectorAll("#nav button").forEach((b) => b.classList.remove("active"));
+        document.querySelectorAll("#nav button").forEach((b) => b.removeAttribute("aria-current"));
         $("#tab-title").textContent = ticker;
         $("#tab-sub").textContent = "Full analysis & price history";
+        document.title = `${ticker} | sharpEdge`;
         if (location.hash !== "#stock/" + ticker) history.pushState(null, "", "#stock/" + ticker);
         renderStockPage(ticker);
+        announcePaneChange();
         return;
       }
       if (!PANES.includes(name)) name = "portfolio";
@@ -5748,9 +6045,15 @@
         localStorage.setItem(lastTabKey(section), name);
       }
       document.querySelectorAll("[data-pane]").forEach((el) => { el.hidden = el.dataset.pane !== name; });
-      document.querySelectorAll("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+      document.querySelectorAll("#nav button").forEach((b) => {
+        const active = b.dataset.tab === name;
+        b.classList.toggle("active", active);
+        if (active) b.setAttribute("aria-current", "page");
+        else b.removeAttribute("aria-current");
+      });
       $("#tab-title").textContent = TAB_TITLES[name] || "sharpEdge";
       $("#tab-sub").textContent = TAB_SUBS[name] || "";
+      document.title = `${TAB_TITLES[name] || "sharpEdge"} | sharpEdge`;
       // Settings has no nav button; the sidebar account row carries the state.
       $("#side-user-btn").classList.toggle("active", name === "settings");
       const badge = document.querySelector(`#nav button[data-tab="${name}"] .badge`);
@@ -5766,6 +6069,7 @@
       if (name === "practice") { loadPracticeStats(); if (!lessons.length) loadLessons(); }
       if (name === "learn-progress") loadProgress();
       if (location.hash !== "#" + name) history.replaceState(null, "", "#" + name);
+      announcePaneChange();
     }
     function bumpBadge(name) {
       if (document.querySelector("#nav button.active")?.dataset.tab === name) return;
@@ -5811,6 +6115,8 @@
     function applySidebarCollapsed(collapsed) {
       $("#sidebar").classList.toggle("collapsed", collapsed);
       $("#sidebar-collapse").style.transform = collapsed ? "rotate(180deg)" : "";
+      $("#sidebar-collapse").setAttribute("aria-expanded", String(!collapsed));
+      $("#sidebar-collapse").setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
     }
     applySidebarCollapsed(localStorage.getItem("sidebarCollapsed") === "1");
     $("#sidebar-collapse").addEventListener("click", () => {
@@ -5836,6 +6142,7 @@
     const tickerModal = $("#ticker-modal");
     const tickerSearch = $("#ticker-search");
     const tickerResult = $("#ticker-result");
+    let tickerReturnFocus = null;
     let tickerSeq = 0;                     // guards against out-of-order keystroke responses
     let lastTickerData = null;             // wave 5 (alerts) reads the currently-shown ticker
 
@@ -5844,6 +6151,7 @@
     // search, so reopening showed stale text and a stale result card.
     const TM_HINT = `<div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news. From there, jump to the full page or TradingView.</div>`;
     function openTickerModal() {
+      tickerReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : $("#search-open");
       tickerSearch.value = "";
       tickerResult.innerHTML = TM_HINT;
       currentSym = "";
@@ -5852,8 +6160,13 @@
       tickerModal.hidden = false;
       tickerSearch.focus();
     }
-    function closeTickerModal() { tickerModal.hidden = true; hideSuggest(); }
+    function closeTickerModal() {
+      tickerModal.hidden = true;
+      hideSuggest();
+      if (tickerReturnFocus?.isConnected) tickerReturnFocus.focus();
+    }
     $("#search-open").addEventListener("click", openTickerModal);
+    $("#ticker-close").addEventListener("click", closeTickerModal);
     document.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openTickerModal(); }
       // ⌘K is taken, so chat gets J. The FAB is last in DOM order: without a
@@ -5863,6 +6176,15 @@
       // never closes both it and the chat panel.
       else if (e.key === "Escape" && !tickerModal.hidden) closeTickerModal();
       else if (e.key === "Escape" && !$("#chat-panel").hidden) chatClose();
+    });
+    tickerModal.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const focusable = [...tickerModal.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => !el.hidden && el.getClientRects().length);
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
     tickerModal.addEventListener("click", (e) => { if (e.target === tickerModal) closeTickerModal(); });
 
@@ -5877,15 +6199,18 @@
       suggestBox.innerHTML = "";
       sugItems = []; sugIdx = -1;
       tickerSearch.setAttribute("aria-expanded", "false");
+      tickerSearch.removeAttribute("aria-activedescendant");
     }
     function renderSuggest() {
       if (!sugItems.length) { hideSuggest(); return; }
       suggestBox.innerHTML = sugItems.map((r, i) =>
-        `<div class="tm-sug${i === sugIdx ? " active" : ""}" role="option" data-tkr="${esc(r.ticker)}">
+        `<div id="ticker-option-${i}" class="tm-sug${i === sugIdx ? " active" : ""}" role="option" aria-selected="${i === sugIdx}" data-tkr="${esc(r.ticker)}">
            ${logoImg(r.ticker, "sm")}<span class="sug-tkr">${esc(r.ticker)}</span><span class="sug-name">${esc(r.name)}</span>
          </div>`).join("");
       suggestBox.hidden = false;
       tickerSearch.setAttribute("aria-expanded", "true");
+      if (sugIdx >= 0) tickerSearch.setAttribute("aria-activedescendant", `ticker-option-${sugIdx}`);
+      else tickerSearch.removeAttribute("aria-activedescendant");
     }
     const runSuggest = debounce(async (raw) => {
       const q = raw.trim();
@@ -6002,7 +6327,7 @@
         <span>${KIND_LABEL[a.kind] || a.kind} ${a.threshold}</span>
         ${a.recurring ? `<span class="chip calm sm" title="re-arms after each firing">${icon("refresh", 10)}</span>` : ""}
         ${a.active ? "" : `<span class="chip calm sm">fired</span>`}
-        <button class="del" data-alert-del="${a.id}" title="delete alert">${icon("close", 12)}</button>
+        <button class="del" data-alert-del="${a.id}" title="Delete alert" aria-label="Delete alert">${icon("close", 12)}</button>
       </div>`).join("");
     }
     document.addEventListener("click", async (e) => {
@@ -6049,7 +6374,7 @@
       return `
     <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}<button type="button" class="tm-star" id="tm-star" aria-pressed="false"></button></div>
     <div class="tm-price">${priceStr}</div>
-    <svg class="tm-spark" preserveAspectRatio="none"></svg>
+    <svg class="tm-spark" preserveAspectRatio="none" role="img" aria-label="Recent ${esc(d.ticker)} price trend"></svg>
     <div>${scoreLine}</div>
     ${d.note ? `<div class="tm-note">${esc(d.note)}</div>` : ""}
     ${stats}
@@ -6069,18 +6394,18 @@
     <div class="tm-alert-box" data-ticker="${esc(ticker)}">
       <div class="klabel" style="margin-top:14px">Set an alert</div>
       <div class="tm-actions" style="margin-top:6px">
-        <select class="alert-kind">
+        <select class="alert-kind" aria-label="Alert condition">
           <option value="price_above">Price above</option>
           <option value="price_below">Price below</option>
           <option value="score_gte">Score ≥</option>
         </select>
-        <input class="alert-threshold" type="number" step="any" value="${price != null ? Number(price).toFixed(2) : 60}" style="width:96px">
+        <input class="alert-threshold" type="number" step="any" aria-label="Alert threshold" value="${price != null ? Number(price).toFixed(2) : 60}" style="width:96px">
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--dim)"
           title="Re-arms after firing: pings again on each fresh crossing instead of retiring">
           <input type="checkbox" class="alert-recurring"> repeat</label>
         <button class="advise-btn" data-alert-action="create">${icon("bell", 13)} Create</button>
       </div>
-      <div class="tm-alert-msg"></div>
+      <div class="tm-alert-msg" role="status" aria-live="polite"></div>
       <div class="tm-alert-list"></div>
     </div>`;
     }
@@ -6671,7 +6996,7 @@
         const res = await fetchPaid("/api/portfolio/score", { method: "POST" });
         if (!res) return; // 402 → paywall shown; finally restores the button
         if (res.ok) {
-          box.innerHTML = `<div class="report"><button class="close-report" title="dismiss">${icon("close", 12)}</button><div class="pf-score-md"></div></div>`;
+          box.innerHTML = `<div class="report"><button class="close-report" title="Dismiss" aria-label="Dismiss report">${icon("close", 12)}</button><div class="pf-score-md"></div></div>`;
           renderMd(box.querySelector(".pf-score-md"), res.analysis);
           box.querySelector(".close-report").addEventListener("click", () => { box.innerHTML = ""; });
           loadScoreTrend(); // it's saved now, so refresh the hero trend line
@@ -6760,7 +7085,7 @@
         </div>
         <div class="pos-px">${priceCell}</div>
         <div class="pos-dp ${q && q.dp >= 0 ? "up" : "down"}">${q ? signed(q.dp) + "% today" : "&nbsp;"}</div>
-        <svg class="pos-spark" preserveAspectRatio="none"></svg>
+        <svg class="pos-spark" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="pos-dp ${gain >= 0 ? "up" : "down"}" title="Unrealised gain or loss on this position">${gain >= 0 ? "+" : "−"}${money(Math.abs(gain))} total</div>
         <div class="pos-foot">
           ${timeChip}
@@ -6987,7 +7312,7 @@
         drill = d;
         $("#drill-meta").textContent = d.sector ? `${d.sector} · symbol hidden` : "symbol hidden";
         $("#drill-body").innerHTML = `
-          <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none"></svg>
+          <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none" role="img" aria-label="Historical candlestick practice chart"></svg>
           <div class="drill-form">
             <div class="drill-field">
               <label>Direction</label>
@@ -6996,9 +7321,9 @@
                 <button data-dir="short">Short</button>
               </div>
             </div>
-            <div class="drill-field"><label>Entry</label><input id="drill-entry" type="number" step="any" inputmode="decimal"></div>
-            <div class="drill-field"><label>Stop</label><input id="drill-stop" type="number" step="any" inputmode="decimal"></div>
-            <div class="drill-field"><label>Target</label><input id="drill-target" type="number" step="any" inputmode="decimal"></div>
+            <div class="drill-field"><label for="drill-entry">Entry</label><input id="drill-entry" type="number" step="any" inputmode="decimal"></div>
+            <div class="drill-field"><label for="drill-stop">Stop</label><input id="drill-stop" type="number" step="any" inputmode="decimal"></div>
+            <div class="drill-field"><label for="drill-target">Target</label><input id="drill-target" type="number" step="any" inputmode="decimal"></div>
             <button class="advise-btn" id="drill-submit" style="margin-top:0">Commit plan</button>
             <button class="advise-btn ghost" id="drill-pass" style="margin-top:0">No trade</button>
           </div>
@@ -7084,7 +7409,7 @@
             <div class="n">${esc(outcomeNote)}</div></div>
         </div>
         <div style="margin-bottom:var(--sp-4)"><span class="chip ${tone}">${esc(label)}</span></div>
-        <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none"></svg>
+        <svg class="drill-chart" id="drill-svg" preserveAspectRatio="none" role="img" aria-label="Historical candlestick practice chart with outcome revealed"></svg>
         <div class="widget-note" style="margin-bottom:var(--sp-4)">Everything left of the line is what you saw. The shaded part is what happened after you committed. The levels drawn on it were all readable before you decided.</div>
         ${crits}
         ${readable ? `
@@ -7172,7 +7497,7 @@
       $("#watchlist-card").innerHTML = list.map((t) => {
         const q = quotes[t];
         return `
-        <div class="wl-row" data-watch-open="${esc(t)}">
+        <div class="wl-row" data-watch-open="${esc(t)}" role="link" tabindex="0" aria-label="Open ${esc(t)} stock details">
           ${logoImg(t, "sm")}<span class="wl-sym">${esc(t)}</span>
           <span class="wl-px">${q?.c != null ? money(q.c) : "N/A"}</span>
           <span class="wl-dp ${q && q.dp >= 0 ? "up" : "down"}">${q?.dp != null ? signed(q.dp) + "%" : ""}</span>
@@ -7191,6 +7516,14 @@
       // Row click opens the stock page: checked after remove so the ✕ wins.
       const open = e.target.closest("[data-watch-open]");
       if (open) showPane("stock", open.dataset.watchOpen);
+    });
+    document.addEventListener("keydown", (e) => {
+      const open = e.target.closest?.("[data-watch-open]");
+      if (!open || e.target.closest?.("button, a, input, select, textarea")) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        showPane("stock", open.dataset.watchOpen);
+      }
     });
 
     /* ── market overview ── */
@@ -7470,7 +7803,7 @@
       if (!box) return;
       if (!filterPresets.length) { box.innerHTML = `<span style="color:var(--faint)">No saved presets yet: set filters below, name them, and save.</span>`; return; }
       box.innerHTML = filterPresets.map((p, i) =>
-        `<span style="display:inline-flex;align-items:center"><button class="filter-chip" data-preset="${i}" title="Apply this preset">${esc(p.name)}</button><button class="filter-chip" data-preset-del="${i}" title="Delete preset" style="padding:4px 6px">${icon("close", 12)}</button></span>`).join(" ");
+        `<span style="display:inline-flex;align-items:center"><button class="filter-chip" data-preset="${i}" title="Apply this preset">${esc(p.name)}</button><button class="filter-chip" data-preset-del="${i}" title="Delete preset" aria-label="Delete ${esc(p.name)} preset" style="padding:4px 6px">${icon("close", 12)}</button></span>`).join(" ");
     }
     function applyPreset(p) {
       customFilters = (p.customFilters || []).filter(validRule).map((f) => ({ ...f }));
@@ -7566,7 +7899,7 @@
         <button class="rowbtn">
           ${logoImg(item.ticker)}
           <div class="tick-name"><div class="sym">${esc(item.ticker)}${item.held ? ` <span class="chip warn sm">held</span>` : ""}</div><div class="sub">${money(item.price)}</div></div>
-          <svg class="mini-spark" preserveAspectRatio="none"></svg>
+          <svg class="mini-spark" preserveAspectRatio="none" aria-hidden="true"></svg>
           <span class="chip ${isLong ? "buy" : "sell"}">${isLong ? "Long" : "Short"} ${isLong ? item.long_score : item.short_score}</span>
           <div class="row-price"><div class="sub" style="font-size:12px;color:var(--dim);max-width:150px;white-space:normal;text-align:right">${reasons.slice(0, 2).join(" · ") || "Multi-factor"}</div></div>
         </button>`;
@@ -7599,7 +7932,7 @@
       const tp = rep.trade_plan || {};
       return `
     <div class="report">
-      <button class="close-report" title="dismiss">${icon("close", 12)}</button>
+      <button class="close-report" title="Dismiss" aria-label="Dismiss report">${icon("close", 12)}</button>
       <div class="rhead">
         ${logoImg(rep.ticker)}<span style="font-weight:800;font-size:16px">${esc(rep.ticker)}</span>
         <span class="rbadge ${esc(rep.rating)}">${esc(rep.rating)}</span>
@@ -8063,7 +8396,7 @@
       // one here would silently disagree with your own scoreboard, so it isn't
       // offered: unlike an idea or a backtest, which are outputs you can redo.
       const del = it.deletable && it.kind !== "practice"
-        ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry">${icon("close", 12)}</button>` : "";
+        ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry" aria-label="Delete this history entry">${icon("close", 12)}</button>` : "";
       let label, metric;
       if (it.kind === "portfolio_score") {
         label = "Portfolio";
@@ -8561,7 +8894,7 @@
               ${t.entry_price != null ? `<span style="color:var(--faint);font-size:12px">entry $${esc(String(t.entry_price))}</span>` : ""}
               <span style="color:var(--faint);font-size:12px">since ${new Date(t.opened_at * 1000).toLocaleDateString()}</span>
               <button class="advise-btn ghost" data-close style="margin:0;padding:2px 10px;font-size:12px">Close → journal</button>
-              <button class="del" data-untrack title="stop tracking">${icon("close", 12)}</button>
+              <button class="del" data-untrack title="Stop tracking" aria-label="Stop tracking this trade">${icon("close", 12)}</button>
             </div>`).join("");
           tbox.querySelectorAll("[data-tracked]").forEach((row) => {
             const t = tracked[+row.dataset.tracked];
@@ -8589,7 +8922,7 @@
         <span class="chip ${o.direction === "long" ? "buy" : "sell"} sm">${esc(o.direction)}</span>
         <span class="chip ${tone} sm">${esc(o.outcome)}${o.pnl_pct != null ? ` ${signed(o.pnl_pct, 1)}%` : ""}</span>
         <span style="color:var(--faint);font-size:12px">${new Date(o.closed_at * 1000).toLocaleDateString()}</span>
-        <button class="del" title="delete entry">${icon("close", 12)}</button>
+        <button class="del" title="Delete entry" aria-label="Delete this journal entry">${icon("close", 12)}</button>
         ${o.notes ? `<div class="note">${esc(o.notes)}</div>` : ""}`;
           div.querySelector(".del").addEventListener("click", async () => {
             await fetch(`/api/journal/${o.id}`, { method: "DELETE" });
@@ -8682,7 +9015,7 @@
     <p style="font-size:12.5px;color:var(--faint);margin-top:2px">
       ${[m?.sector, m?.industry, capB ? "mkt cap $" + capB : null].filter(Boolean).map(esc).join(" · ") || "Not in the scan universe"}
     </p>
-    <svg id="stock-spark" preserveAspectRatio="none"></svg>
+    <svg id="stock-spark" preserveAspectRatio="none" role="img" aria-label="${esc(ticker)} price history"></svg>
     <div class="tf-bar" id="tf-bar">
       ${["1D", "1W", "1M", "3M", "6M", "1Y", "3Y", "5Y", "ALL"].map((t) => `<button data-tf="${t}"${t === "6M" ? ' class="active"' : ""}>${t === "ALL" ? "All" : t}</button>`).join("")}
     </div>
@@ -8772,7 +9105,9 @@
     }
     $("#img-clear").addEventListener("click", clearIntradayImage);
     dropZone.addEventListener("click", () => $("#file-input").click());
-    dropZone.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#file-input").click(); });
+    dropZone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#file-input").click(); }
+    });
     $("#file-input").addEventListener("change", (e) => loadIntradayImage(e.target.files[0]));
 
     // One place that pulls a screenshot out of a paste or a drop. A clipboard or
@@ -8894,6 +9229,7 @@
       item.className = "tray-item";
       const img = document.createElement("img");
       img.className = "tray-thumb"; img.src = dataUrl; img.draggable = true;
+      img.alt = "Unassigned chart screenshot";
       img.title = "drag into the 1D / 1W / 1M / options box";
       img.addEventListener("dragstart", (e) => {
         dragging = { dataUrl, el: item };
@@ -8902,7 +9238,8 @@
       });
       img.addEventListener("dragend", () => { dragging = null; });
       const x = document.createElement("button");
-      x.className = "img-x"; x.type = "button"; x.title = "discard this screenshot"; x.textContent = "×";
+      x.className = "img-x"; x.type = "button"; x.title = "Discard this screenshot";
+      x.setAttribute("aria-label", "Discard unassigned screenshot"); x.textContent = "×";
       x.addEventListener("click", () => { item.remove(); syncTray(); });
       item.append(img, x);
       swingTray.appendChild(item);
@@ -8917,7 +9254,8 @@
       input.type = "file"; input.accept = "image/png,image/jpeg,image/webp"; input.hidden = true;
       slot.appendChild(input);
       const del = document.createElement("button");
-      del.className = "img-x"; del.type = "button"; del.title = "remove this screenshot";
+      del.className = "img-x"; del.type = "button"; del.title = "Remove this screenshot";
+      del.setAttribute("aria-label", `Remove ${label} screenshot`);
       del.textContent = "×"; del.hidden = true;
       slot.appendChild(del);
 
@@ -8926,6 +9264,7 @@
         slot.classList.add("filled");
         slot.style.backgroundImage = `url(${dataUrl})`;
         slot.draggable = true;             // a filled box can be dragged to another box
+        slot.setAttribute("aria-label", `Replace ${label} screenshot`);
         del.hidden = false;
       };
       const clearSlot = () => {
@@ -8933,6 +9272,7 @@
         slot.classList.remove("filled");
         slot.style.backgroundImage = "";
         slot.draggable = false;
+        slot.setAttribute("aria-label", `Upload ${label} screenshot`);
         del.hidden = true;
       };
       const load = async (file) => {
@@ -8944,6 +9284,9 @@
 
       del.addEventListener("click", (e) => { e.stopPropagation(); clearSlot(); });
       slot.addEventListener("click", () => input.click());
+      slot.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+      });
       input.addEventListener("change", (e) => load(e.target.files[0]));
 
       slot.addEventListener("dragstart", (e) => {
@@ -9015,7 +9358,7 @@
       const qualityBadge = p.setup_quality === "no_trade" ? "no_trade" : p.setup_quality;
       return `
     <div class="report">
-      <button class="close-report" title="dismiss">${icon("close", 12)}</button>
+      <button class="close-report" title="Dismiss" aria-label="Dismiss report">${icon("close", 12)}</button>
       <div class="rhead">
         ${logoImg(p.ticker)}<span style="font-weight:800;font-size:16px">${esc(p.ticker)}</span>
         <span class="rbadge ${esc(qualityBadge)}">${esc(p.setup_quality).replace("_", " ")}</span>
@@ -9064,9 +9407,9 @@
     <div class="fu-log"></div>
     <div class="fu-thumbs"></div>
     <div class="fu-row">
-      <input type="text" class="fu-input" placeholder="Ask what to do now: e.g. 'hit my first target, trim or hold?'">
-      <button class="fu-img" title="add a screenshot">📎</button>
-      <button class="advise-btn fu-ask" style="margin-top:0">Ask</button>
+      <input type="text" class="fu-input" aria-label="Trade follow-up question" placeholder="Ask what to do now: e.g. 'hit my first target, trim or hold?'">
+      <button type="button" class="fu-img" title="Add a screenshot" aria-label="Add a screenshot">📎</button>
+      <button type="button" class="advise-btn fu-ask" style="margin-top:0">Ask</button>
     </div>
     <input type="file" class="fu-file" accept="image/png,image/jpeg,image/webp" hidden>`;
       card.appendChild(wrap);
@@ -9174,7 +9517,9 @@
     }
     $("#bt-img-clear").addEventListener("click", () => { btImage = null; $("#bt-img-wrap").style.display = "none"; btDrop.style.display = ""; });
     btDrop.addEventListener("click", () => $("#bt-file").click());
-    btDrop.addEventListener("keydown", (e) => { if (e.key === "Enter") $("#bt-file").click(); });
+    btDrop.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#bt-file").click(); }
+    });
     $("#bt-file").addEventListener("change", (e) => setBtImage(e.target.files[0]));
     ["dragover", "dragenter"].forEach((t) => btDrop.addEventListener(t, (e) => { e.preventDefault(); btDrop.classList.add("drag"); }));
     ["dragleave", "drop"].forEach((t) => btDrop.addEventListener(t, (e) => { e.preventDefault(); btDrop.classList.remove("drag"); }));
@@ -9189,7 +9534,7 @@
       const min = Math.min(...all), max = Math.max(...all), span = max - min || 1;
       const pl = (vals) => vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - ((v - min) / span) * (h - 6) - 3}`).join(" ");
       const up = strat[strat.length - 1] >= strat[0];
-      return `<svg class="eqcurve" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      return `<svg class="eqcurve" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Strategy equity curve compared with buy and hold">
     ${bh && bh.length > 1 ? `<polyline points="${pl(bh)}" fill="none" stroke="var(--chart-ref)" stroke-width="1.2" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>` : ""}
     <polyline points="${pl(strat)}" fill="none" stroke="${up ? "var(--chart-up)" : "var(--chart-down)"}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"/>
   </svg>`;
@@ -9667,11 +10012,11 @@
       localStorage.removeItem("chatSize");
       p.classList.toggle("expanded");
       $("#chat-expand").title = p.classList.contains("expanded") ? "Shrink" : "Expand";
+      $("#chat-expand").setAttribute("aria-label", p.classList.contains("expanded") ? "Shrink chat" : "Expand chat");
+      $("#chat-expand").setAttribute("aria-pressed", String(p.classList.contains("expanded")));
       $("#chat-expand").innerHTML = icon(p.classList.contains("expanded") ? "minimize" : "maximize", 15);
     });
     $("#chat-form").addEventListener("submit", (ev) => { ev.preventDefault(); chatSend(); });
-
-    if (localStorage.getItem("chatOpen") === "1") chatOpen();
 
     /* ── header controls ── */
     function renderAiToggle() {
@@ -9777,6 +10122,9 @@
     function bootApp() {
       $("#app-shell").hidden = false;
       $("#auth-screen").hidden = true;
+      $("#app-skip").hidden = false;
+      $("#chat-fab").hidden = false;
+      if (localStorage.getItem("chatOpen") === "1") chatOpen();
 
       const es = new EventSource("/api/stream");
       /* Killing the server drops this stream; EventSource reconnects on its own,
@@ -9824,6 +10172,7 @@
     let pendingEmail = "";
     function renderAuthMode() {
       const signup = authMode === "signup", confirm = authMode === "confirm";
+      document.title = `${confirm ? "Confirm account" : signup ? "Create account" : "Sign in"} | sharpEdge`;
       $("#auth-blurb").textContent = confirm
         ? `Enter the 6-digit code sent to ${pendingEmail}. Your account is created when you do.`
         : signup ? "Create your account." : "Sign in to your account.";
@@ -9834,13 +10183,19 @@
       $("#auth-password").autocomplete = signup ? "new-password" : "current-password";
       // `required` on a hidden input blocks submit in every browser, so the two
       // groups have to swap together.
-      for (const sel of ["#auth-email", "#auth-password"]) { $(sel).hidden = confirm; $(sel).required = !confirm; }
+      for (const sel of ["#auth-email", "#auth-password"]) {
+        $(sel).hidden = confirm; $(sel).required = !confirm;
+        document.querySelector(`label[for="${sel.slice(1)}"]`).hidden = confirm;
+      }
       $("#auth-code").hidden = !confirm;
       $("#auth-code").required = confirm;
+      document.querySelector('label[for="auth-code"]').hidden = !confirm;
       $("#auth-error").textContent = "";
       $("#auth-error").classList.remove("ok");
+      $("#auth-card").querySelectorAll("input").forEach((input) => input.removeAttribute("aria-invalid"));
       if (confirm) { $("#auth-code").value = ""; $("#auth-code").focus(); }
     }
+    $("#auth-card").addEventListener("input", (event) => event.target.removeAttribute?.("aria-invalid"));
     $("#auth-flip").addEventListener("click", () => {
       // From confirm, "use a different email" goes back to signup: the pending
       // row is harmless and expires on its own.
@@ -9876,9 +10231,11 @@
           // wrong codes): leaving the code box up would be a dead end.
           if (res.restart) { authMode = "signup"; renderAuthMode(); }
           $("#auth-error").textContent = res.error || "Something went wrong.";
+          $(confirm ? "#auth-code" : "#auth-email").setAttribute("aria-invalid", "true");
         }
       } catch (e) {
         $("#auth-error").textContent = "Could not reach the server.";
+        $(authMode === "confirm" ? "#auth-code" : "#auth-email").setAttribute("aria-invalid", "true");
       } finally {
         btn.disabled = false;
       }
@@ -9887,6 +10244,23 @@
       await fetch("/api/auth/logout", { method: "POST" });
       location.reload();
     });
+
+    // Button groups use a visible active class throughout the app. Mirror that
+    // state to assistive technology, including controls rendered after fetches.
+    const pressedSelector = ".tabbar button, .range-tabs button, .tf-bar button, .theme-tabs button, .chart-style-tabs button";
+    function syncPressedStates(root = document) {
+      const controls = root.matches?.(pressedSelector) ? [root] : root.querySelectorAll?.(pressedSelector) || [];
+      controls.forEach((button) => button.setAttribute("aria-pressed", String(button.classList.contains("active"))));
+      const headers = root.matches?.("th") ? [root] : root.querySelectorAll?.("th:not([scope])") || [];
+      headers.forEach((header) => header.setAttribute("scope", "col"));
+    }
+    syncPressedStates();
+    new MutationObserver((changes) => {
+      for (const change of changes) {
+        if (change.type === "attributes") syncPressedStates(change.target);
+        else change.addedNodes.forEach((node) => { if (node.nodeType === Node.ELEMENT_NODE) syncPressedStates(node); });
+      }
+    }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
 
     (async () => {
       try {

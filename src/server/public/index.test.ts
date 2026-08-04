@@ -40,4 +40,28 @@ describe("dashboard shell", () => {
 
     expect(offenders).toEqual([]);
   });
+
+  test("dashboard and landing page expose accessibility foundations", async () => {
+    for (const page of ["index.html", "landing.html"]) {
+      const html = await Bun.file(new URL(`./${page}`, import.meta.url)).text();
+
+      expect(html).toContain("viewport-fit=cover");
+      expect(html).toMatch(/class="skip-link"[^>]*href="#main-content"/);
+      expect(html).toMatch(/<main[^>]*id="main-content"[^>]*tabindex="-1"/);
+      expect(html).toContain("@media (prefers-reduced-motion: reduce)");
+      expect(html).toContain("@media (forced-colors: active)");
+    }
+  });
+
+  test("custom dashboard interactions have keyboard and screen reader semantics", async () => {
+    const html = await Bun.file(new URL("./index.html", import.meta.url)).text();
+
+    expect(html).toMatch(/id="ticker-modal" role="dialog" aria-modal="true" aria-labelledby=/);
+    expect(html).toMatch(/id="drop-zone" tabindex="0" role="button"/);
+    expect(html).toMatch(/id="bt-drop" tabindex="0" role="button"/);
+    expect(html).toMatch(/class="swing-slot"[^>]*role="button"[^>]*tabindex="0"/);
+    expect(html).toMatch(/id="auth-error" role="alert" aria-live="assertive"/);
+    expect(html).toContain('role="link" tabindex="0" aria-label="Open ${esc(t)} stock details"');
+    expect(html).toContain('e.key === "Enter" || e.key === " "');
+  });
 });
