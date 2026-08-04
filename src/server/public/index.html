@@ -1455,6 +1455,44 @@
       min-width: 0;
     }
 
+    /* Let the portfolio chart fill its column instead of stopping short of the
+       KPI grid beside it. align-self on the one item, not align-items on the
+       grid: the KPI column must keep `start`, or the day it becomes the shorter
+       of the two its four tiles would stretch to fill instead.
+
+       chartFrame() wraps the <svg> in a second .chart-wrap holding .chart-plot
+       and the .chart-x date row, so the fill has to be handed down that chain —
+       and the rules are scoped to .hero-grid because .chart-wrap/.chart-plot are
+       the generic frame every other chart in the app uses too. */
+    .hero-grid>.chart-wrap {
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hero-grid>.chart-wrap>.chart-wrap {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* .chart-plot is the box that gets sized; the svg is pinned inside it. A
+       percentage height on the svg itself resolves against an indefinite parent,
+       falls back to its 1:1 viewBox ratio, and it renders as tall as the column
+       is wide — which then feeds back as the grid row height. Out of flow, it
+       contributes nothing to that measurement and simply fills. */
+    .hero-grid .chart-plot {
+      flex: 1;
+      min-height: 88px;
+    }
+
+    .hero-grid .chart-plot>#portfolio-spark {
+      position: absolute;
+      inset: 0;
+      height: 100%;
+    }
+
     .chart-head {
       display: flex;
       align-items: center;
@@ -2288,6 +2326,9 @@
     #portfolio-spark {
       margin-top: 16px;
       width: 100%;
+      /* Applies before chartFrame() has wrapped the svg — the skeleton state.
+         Once wrapped, .chart-plot owns the height and the rule above pins the
+         svg to it. */
       height: 88px;
     }
 
