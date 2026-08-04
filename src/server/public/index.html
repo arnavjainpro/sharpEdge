@@ -5122,13 +5122,12 @@
             <div class="kpi-grid" id="kpi-grid"></div>
             <div class="chart-wrap">
               <div class="chart-head">
-                <!-- Named for what it actually is. The curve prices the shares you
-                     hold TODAY back through history, so it ignores past buys,
-                     sells, deposits and closed positions - it is not an account
-                     balance. Real equity history needs persisted snapshots. -->
-                <span class="klabel term" style="margin:0"
-                  title="Your current holdings priced with past closes. Not a true account balance: it ignores earlier buys and sells, deposits, dividends and positions you have since closed.">Holdings
-                  value, back-priced</span>
+                <!-- Label removed by request. Still worth knowing what this curve
+                     is: it prices the shares you hold TODAY back through history,
+                     so it ignores past buys, sells, deposits, dividends and closed
+                     positions - it is not an account balance. Real equity history
+                     needs persisted snapshots. .range-tabs has margin-left:auto,
+                     so it stays right-aligned with no sibling to push against. -->
                 <div class="range-tabs" id="range-tabs" role="group" aria-label="Chart range">
                   <button data-range="30">1M</button>
                   <button data-range="90">3M</button>
