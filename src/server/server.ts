@@ -37,6 +37,7 @@ import { logOutcome, listOutcomes, deleteOutcome, trackTrade, listTracked, untra
 import { hashPassword, verifyPassword, createUser, findUserByEmail, findUserById, getProfile, updateProfile, getPasswordHash, createSession, destroySession, startSignup, confirmSignup, pendingSignupExists, discardSignup, startEmailChange, confirmEmailChange, cancelEmailChange, getPendingEmail } from "../auth";
 import { emailEnabled, sendEmail, verificationEmail } from "../notify/email";
 import { userIdFromRequest, sessionTokenFromRequest, sessionCookieHeader, clearCookieHeader } from "../auth/middleware";
+import { planFor, checkProFeature, checkMetered, meter, upgradePayload, entitlementsFor, FREE_WATCHLIST_MAX } from "../billing/entitlements";
 import { join } from "path";
 
 // ── SSE hub ──────────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ export function startServer() {
           portfolio, events, briefing, marketPhase: marketPhase(), marketClock: nextMarketTransition(),
           earnings: earningsFor(portfolio.holdings.map((h) => h.ticker)),
           aiLive: await aiLive(),
+          entitlements: await entitlementsFor(userId),
           broker: broker
             ? { source: broker.source, asOf: broker.asOf, account: broker.account, openOrders: broker.openOrders }
             : null,
@@ -361,10 +363,39 @@ export function startServer() {
         try {
           const body = (await req.json().catch(() => ({}))) as { ticker?: string; action?: string };
           const action = body.action === "remove" ? "remove" : "add";
-          const watchlist = await updateWatchlist(userId, String(body.ticker ?? ""), action);
+          const ticker = String(body.ticker ?? "").toUpperCase().trim();
+          // Free accounts cap the watchlist; Pro is unlimited. Only a genuine ADD
+          // of a NOT-yet-watched ticker counts — re-adding one already on the list
+          // or removing is always allowed, so a full free list stays editable.
+          if (action === "add") {
+            const current = currentPortfolio(userId).watchlist ?? [];
+            const isPro = (await planFor(userId)) === "pro";
+            if (!isPro && current.length >= FREE_WATCHLIST_MAX && !current.includes(ticker)) {
+              return Response.json(
+                upgradePayload({ ok: false, reason: "limit_reached", feature: "watchlist", limit: FREE_WATCHLIST_MAX, used: current.length }),
+                { status: 402 },
+              );
+            }
+          }
+          const watchlist = await updateWatchlist(userId, ticker, action);
           return Response.json({ ok: true, watchlist });
         } catch (err) {
           return Response.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+        }
+      }
+
+      // Upgrade intent from the paywall. No payment yet — this records that a
+      // free user wanted Pro, which is the demand signal worth having pre-launch.
+      if (url.pathname === "/api/billing/interest" && req.method === "POST") {
+        try {
+          const body = (await req.json().catch(() => ({}))) as { feature?: string; reason?: string };
+          await db
+            .query(`INSERT INTO billing_interest (user_id, feature, reason, ts) VALUES (?, ?, ?, ?)`)
+            .run(userId, body.feature ?? null, body.reason ?? null, Math.floor(Date.now() / 1000));
+          return Response.json({ ok: true });
+        } catch (err) {
+          console.error("[server] billing interest failed:", err);
+          return Response.json({ ok: false, error: String(err) }, { status: 500 });
         }
       }
 
@@ -530,10 +561,16 @@ export function startServer() {
           const ticker = String(body.ticker ?? "").toUpperCase().trim();
           if (!ticker) return Response.json({ ok: false, error: "no ticker" }, { status: 400 });
           const direction = body.direction === "long" || body.direction === "short" ? body.direction : "auto";
+          // Free tier gets a few validations a month; Pro is unlimited. Checked
+          // before the model runs so we never spend tokens on a refused request.
+          const gate = await checkMetered(userId, "ai_validation");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
           const report = await validateIdea(userId, ticker, direction, currentPortfolio(userId), {
             notes: body.notes, options: !!body.options, source: "validate",
           });
           if ("error" in report) return Response.json({ ok: false, error: report.error }, { status: 422 });
+          // Meter only a successful validation, so an errored run doesn't burn quota.
+          await meter(userId, "ai_validation");
           return Response.json({ ok: true, report });
         } catch (err) {
           console.error("[server] validate failed:", err);
@@ -544,6 +581,12 @@ export function startServer() {
       // Batch idea generation: strongest confluences across sectors, both
       // directions, validated one by one (capped — this is the expensive path).
       if (url.pathname === "/api/ideas/generate" && req.method === "POST") {
+        {
+          // Batch idea generation is a Pro power feature — it fans out to several
+          // validations at once, the most expensive AI path in the app.
+          const gate = await checkProFeature(userId, "idea_generate");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
+        }
         if (generateInFlight) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
         generateInFlight = true;
         try {
@@ -579,6 +622,8 @@ export function startServer() {
       // Intraday analyzer: ticker and/or chart screenshot → structured plan
       if (url.pathname === "/api/intraday/analyze" && req.method === "POST") {
         try {
+          const gate = await checkProFeature(userId, "intraday");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
           const body = (await req.json()) as IntradayRequest;
           const plan = await analyzeIntraday(userId, body, currentPortfolio(userId));
           if ("error" in plan) return Response.json({ ok: false, error: plan.error }, { status: 422 });
@@ -597,6 +642,14 @@ export function startServer() {
           const body = (await req.json()) as { ticker?: string; description?: string; spec?: StrategySpec; image?: string; walkForward?: boolean };
           const ticker = String(body.ticker ?? body.spec?.ticker ?? "").toUpperCase().trim();
           if (!ticker) return Response.json({ ok: false, error: "provide a ticker" }, { status: 400 });
+          // A re-run from history supplies `spec` and re-renders a backtest the
+          // user already paid for, so only a FRESH description→parse counts
+          // against the free-tier ceiling. Checked before parsing.
+          const fresh = !body.spec;
+          if (fresh) {
+            const gate = await checkMetered(userId, "backtest");
+            if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
+          }
           let spec = body.spec;
           if (!spec) {
             const parsed = await parseStrategy(ticker, body.description ?? "", body.image);
@@ -631,6 +684,9 @@ export function startServer() {
             ].filter(Boolean).join(" · ") || null,
             payload: JSON.stringify({ spec, metrics: m, walkForward: !!body.walkForward, years: Math.round(years * 10) / 10 }),
           });
+          // Meter only a fresh, successful backtest — never a history re-run or a
+          // clarification (which returned early above).
+          if (fresh) await meter(userId, "backtest");
           return Response.json({ ok: true, spec, result, stress, walkForward: walkForwardResult, walkForwardError, years: Math.round(years * 10) / 10 });
         } catch (err) {
           console.error("[server] backtest failed:", err);
@@ -641,6 +697,8 @@ export function startServer() {
       // In-trade management follow-up: prior plan + new screenshots + question
       if (url.pathname === "/api/intraday/followup" && req.method === "POST") {
         try {
+          const gate = await checkProFeature(userId, "intraday");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
           const body = (await req.json()) as FollowupRequest;
           const out = await manageTrade(userId, body, currentPortfolio(userId));
           if ("error" in out) return Response.json({ ok: false, error: out.error }, { status: 422 });
@@ -928,6 +986,10 @@ export function startServer() {
       // Guarded per-user like /api/ideas/generate: this is a slow deep-model call,
       // so a double-click used to mean two Opus charges and two duplicate rows.
       if (url.pathname === "/api/portfolio/score" && req.method === "POST") {
+        {
+          const gate = await checkProFeature(userId, "portfolio_score");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
+        }
         if (scoreInFlight.has(userId)) return Response.json({ ok: false, error: "already scoring" }, { status: 429 });
         scoreInFlight.add(userId);
         try {
@@ -1242,6 +1304,10 @@ export function startServer() {
 
       // On-demand briefing (also generated automatically at 9:00 / 16:15 ET).
       if (url.pathname === "/api/briefing" && req.method === "POST") {
+        {
+          const gate = await checkProFeature(userId, "briefing");
+          if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
+        }
         if (!onBriefingRequest) return new Response("pipeline not ready", { status: 503 });
         if (briefingInFlight.has(userId)) return Response.json({ ok: false, error: "already generating" }, { status: 429 });
         briefingInFlight.add(userId);

@@ -1051,6 +1051,43 @@
       color: var(--dim);
     }
 
+    /* Watchlist toggle in the quick-search header. Pushed to the trailing edge
+       so it never crowds the symbol or company name, and self-aligned because
+       .tm-head is baseline-aligned — a button left on the text baseline sits
+       visibly low against the 20px symbol. */
+    .tm-star {
+      margin-left: auto;
+      align-self: center;
+      background: none;
+      border: none;
+      padding: 2px 5px;
+      border-radius: var(--radius-xs);
+      font-size: 19px;
+      line-height: 1;
+      color: var(--faint);
+      cursor: pointer;
+      transition: color .12s, background .12s;
+    }
+
+    .tm-star:hover {
+      color: var(--amber);
+      background: var(--hover);
+    }
+
+    .tm-star.on {
+      color: var(--amber);
+    }
+
+    .tm-star:disabled {
+      cursor: wait;
+      opacity: .55;
+    }
+
+    .tm-star:focus-visible {
+      outline: none;
+      box-shadow: var(--ring);
+    }
+
     .tm-price {
       font-size: 26px;
       font-weight: 700;
@@ -2802,6 +2839,92 @@
     #filters-modal::backdrop {
       background: rgba(0, 0, 0, .35);
       backdrop-filter: blur(2px);
+    }
+
+    /* Paywall — shown whenever a paid endpoint answers 402. Same centred-dialog
+       shape as the filters modal, styled up a notch because it's an upgrade moment. */
+    #paywall-modal {
+      position: fixed;
+      inset: 0;
+      margin: auto;
+      height: fit-content;
+      max-height: calc(100vh - 48px);
+      overflow-y: auto;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-lg);
+      padding: 26px 26px 22px;
+      width: min(420px, calc(100vw - 32px));
+      text-align: center;
+    }
+
+    #paywall-modal::backdrop {
+      background: rgba(0, 0, 0, .45);
+      backdrop-filter: blur(3px);
+    }
+
+    #paywall-modal .pw-eyebrow {
+      font-size: var(--fs-label);
+      font-weight: 700;
+      letter-spacing: var(--tracking-label);
+      text-transform: uppercase;
+      color: var(--brand);
+    }
+
+    #paywall-modal h3 {
+      margin: 8px 0 6px;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    #paywall-modal .pw-reason {
+      color: var(--dim);
+      font-size: 13px;
+      margin: 0 0 16px;
+      line-height: 1.45;
+    }
+
+    #paywall-modal .pw-feats {
+      text-align: left;
+      list-style: none;
+      padding: 0;
+      margin: 0 0 18px;
+      display: grid;
+      gap: 8px;
+    }
+
+    #paywall-modal .pw-feats li {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    #paywall-modal .pw-feats li svg {
+      flex: none;
+      margin-top: 1px;
+      color: var(--brand);
+    }
+
+    #paywall-modal .pw-price {
+      font-size: 13px;
+      color: var(--dim);
+      margin: 0 0 16px;
+    }
+
+    #paywall-modal .pw-price b {
+      color: var(--text);
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    #paywall-modal .pw-cta {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     #filters-modal .cf-row {
@@ -5365,6 +5488,66 @@
       stack.appendChild(t);
       setTimeout(() => t.remove(), 3500);
     }
+
+    /* ── paywall ── */
+    // Human-readable reason lines for each gate the server can return. Keyed by
+    // `${reason}:${feature}`, with a plain-reason fallback so a new feature never
+    // renders a blank modal.
+    const PAYWALL_REASONS = {
+      "limit_reached:ai_validation": "You've used all your free trade validations this month.",
+      "limit_reached:backtest": "You've used your free backtest this month.",
+      "limit_reached:watchlist": "Free accounts can watch up to 5 tickers.",
+      "pro_only:chat_advisor": "The chat advisor is a Pro feature.",
+      "pro_only:intraday": "The intraday analyzer is a Pro feature.",
+      "pro_only:briefing": "Daily briefings are a Pro feature.",
+      "pro_only:portfolio_score": "AI portfolio scoring is a Pro feature.",
+      "pro_only:idea_generate": "Batch idea generation is a Pro feature.",
+    };
+    let pwUpgrade = null; // the upgrade payload of the gate that opened the modal
+    function openPaywall(upgrade = {}) {
+      pwUpgrade = upgrade;
+      const key = `${upgrade.reason}:${upgrade.feature}`;
+      const reason = PAYWALL_REASONS[key]
+        || (upgrade.reason === "limit_reached" ? "You've hit the free-tier limit." : "This is a Pro feature.");
+      $("#pw-reason").textContent = reason;
+      $("#pw-title").textContent = upgrade.reason === "limit_reached" ? "You're out of free runs" : "Unlock the full engine";
+      const dlg = $("#paywall-modal");
+      if (!dlg.open) dlg.showModal();
+    }
+    // Any paid endpoint answers 402 with { error:"upgrade_required", upgrade:{…} }.
+    // Central chokepoint: does the fetch, and on 402 opens the paywall and returns
+    // null so the caller bails without treating it as a normal error. On any other
+    // status it returns the parsed JSON, so existing call-site logic is unchanged.
+    async function fetchPaid(url, opts) {
+      const resp = await fetch(url, opts);
+      if (resp.status === 402) {
+        let body = {};
+        try { body = await resp.json(); } catch {}
+        openPaywall(body.upgrade || {});
+        return null;
+      }
+      return resp.json();
+    }
+    $("#pw-dismiss").addEventListener("click", () => $("#paywall-modal").close());
+    // Until Stripe checkout is wired, the upgrade CTA records interest — a
+    // pre-launch demand signal worth more right now than the payment itself.
+    $("#pw-upgrade").addEventListener("click", async () => {
+      const btn = $("#pw-upgrade");
+      btn.disabled = true;
+      try {
+        await fetch("/api/billing/interest", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ feature: pwUpgrade?.feature ?? null, reason: pwUpgrade?.reason ?? null }),
+        });
+        toast("You're on the list — Pro billing is launching soon.");
+      } catch {
+        toast("Couldn't reach the server — try again.", "err");
+      } finally {
+        btn.disabled = false;
+        $("#paywall-modal").close();
+      }
+    });
+
     // Ticker is required by every analysis entry point. The model can read a
     // symbol off a screenshot, but every data pull behind the plan — intraday
     // bars, daily structure, the options chain, news, position sizing — keys off
@@ -5658,8 +5841,48 @@
       if (data.error) { lastTickerData = null; tickerResult.innerHTML = `<div class="tm-hint">${esc(data.error)} — check the symbol.</div>`; return; }
       lastTickerData = data;
       tickerResult.innerHTML = renderTickerDetail(data);
+      wireWatchStar(tickerResult.querySelector("#tm-star"), data.ticker ?? sym);
       const sp = tickerResult.querySelector(".tm-spark");
       if (sp && data.indicators?.spark) sparkSvg(sp, data.indicators.spark, true);
+    }
+
+    // Watchlist toggle for the quick-search header. Same contract as the stock
+    // page's "☆ Watch" button — POST, then reload state so `portfolio` and the
+    // watchlist card update together rather than drifting out of sync.
+    function wireWatchStar(btn, ticker) {
+      if (!btn || !ticker) return;
+      const watched = () => (portfolio.watchlist || []).includes(ticker);
+      const sync = () => {
+        const on = watched();
+        btn.textContent = on ? "★" : "☆";
+        btn.classList.toggle("on", on);
+        btn.setAttribute("aria-pressed", String(on));
+        // The glyph alone says nothing to a screen reader, and the two states
+        // are one character apart visually.
+        const label = `${on ? "Remove" : "Add"} ${ticker} ${on ? "from" : "to"} watchlist`;
+        btn.title = label;
+        btn.setAttribute("aria-label", label);
+      };
+      sync();
+      btn.addEventListener("click", async () => {
+        const action = watched() ? "remove" : "add";
+        btn.disabled = true;
+        try {
+          const res = await fetch("/api/watchlist", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticker, action }),
+          });
+          if (res.status === 402) { openPaywall((await res.json().catch(() => ({}))).upgrade || {}); return; }
+          if (!res.ok) throw new Error(String(res.status));
+          await loadState();
+          toast(action === "add" ? `${ticker} added to watchlist` : `${ticker} removed from watchlist`);
+        } catch {
+          toast("Couldn't update the watchlist — try again.");
+        } finally {
+          btn.disabled = false;
+          sync();   // re-read from state, so a failed call shows the truth
+        }
+      });
     }
 
     tickerSearch.addEventListener("input", (e) => { currentSym = ""; runSuggest(e.target.value); });
@@ -5748,7 +5971,7 @@
       <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "—"}</div></div>
     </div>` : "";
       return `
-    <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}</div>
+    <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}<button type="button" class="tm-star" id="tm-star" aria-pressed="false"></button></div>
     <div class="tm-price">${priceStr}</div>
     <svg class="tm-spark" preserveAspectRatio="none"></svg>
     <div>${scoreLine}</div>
@@ -6341,7 +6564,8 @@
       const orig = btn.textContent;
       btn.textContent = "Scoring your portfolio… (~30s)";
       try {
-        const res = await (await fetch("/api/portfolio/score", { method: "POST" })).json();
+        const res = await fetchPaid("/api/portfolio/score", { method: "POST" });
+        if (!res) return; // 402 → paywall shown; finally restores the button
         if (res.ok) {
           box.innerHTML = `<div class="report"><button class="close-report" title="dismiss">${icon("close", 12)}</button><div class="pf-score-md"></div></div>`;
           renderMd(box.querySelector(".pf-score-md"), res.analysis);
@@ -7404,10 +7628,11 @@
       const orig = btn.textContent;
       btn.textContent = "Validating… (~30s)";
       try {
-        const res = await (await fetch("/api/ideas/validate", {
+        const res = await fetchPaid("/api/ideas/validate", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticker, direction, options: inStockPage && !!$("#stock-opts")?.checked }),
-        })).json();
+        });
+        if (!res) return; // 402 → paywall shown; finally restores the button
         if (res.ok) showReport(res.report, target || $("#report-area"));
         else alert(`Validation failed: ${res.error}`);
       } catch (e) { alert(`Validation failed: ${e}`); }
@@ -7442,9 +7667,10 @@
               if (passesFilters(item, screener[item.ticker]?.indicators, isLong)) tickers.push(item.ticker);
           filters.tickers = tickers;
         }
-        const res = await (await fetch("/api/ideas/generate", {
+        const res = await fetchPaid("/api/ideas/generate", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count: 4, filters }),
-        })).json();
+        });
+        if (!res) return; // 402 → paywall shown; finally restores the button
         if (res.ok) {
           if (!res.reports.length) {
             const note = document.createElement("div");
@@ -8388,7 +8614,8 @@
         wBtn.disabled = true;
         const action = (portfolio.watchlist || []).includes(ticker) ? "remove" : "add";
         try {
-          await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, action }) });
+          const res = await fetch("/api/watchlist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, action }) });
+          if (res.status === 402) { openPaywall((await res.json().catch(() => ({}))).upgrade || {}); return; }
           await loadState();
         } finally { wBtn.disabled = false; setWatchLabel(); }
       });
@@ -8771,10 +8998,11 @@
         log.scrollIntoView({ block: "nearest" });
         askBtn.disabled = true;
         try {
-          const res = await (await fetch("/api/intraday/followup", {
+          const res = await fetchPaid("/api/intraday/followup", {
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ ticker, mode: swing ? "swing" : "intraday", plan, question: q, images: imgs.length ? imgs : undefined, history }),
-          })).json();
+          });
+          if (!res) { p.remove(); return; } // 402 → paywall shown; drop the pending bubble
           p.classList.remove("pending");
           if (res.ok) { renderMd(p, res.answer); history.push({ role: "user", content: q }, { role: "assistant", content: res.answer }); while (history.length > 8) history.shift(); }
           else p.textContent = `Failed: ${res.error}`;
@@ -8795,7 +9023,7 @@
       const orig = btn.textContent;
       btn.textContent = "Analyzing… (~30-60s)";
       try {
-        const res = await (await fetch("/api/intraday/analyze", {
+        const res = await fetchPaid("/api/intraday/analyze", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ticker: ticker || undefined,
@@ -8805,7 +9033,8 @@
             images: swing && swingList.length ? swingList : undefined,
             notes: $("#intraday-notes").value.trim() || undefined,
           }),
-        })).json();
+        });
+        if (!res) return; // 402 → paywall shown; finally restores the button
         if (res.ok) {
           const div = document.createElement("div");
           div.innerHTML = planCardHtml(res.plan);
@@ -8923,7 +9152,7 @@
     <p class="kv" style="color:var(--dim)">${specSummary(d.spec)}</p>
     ${d.walkForwardError ? `<p class="kv" style="color:var(--amber)">${esc(d.walkForwardError)}</p>` : ""}
     ${wf ? `<p class="kv" style="font-size:12px;color:var(--faint)">Headline numbers below are OUT-OF-SAMPLE — the honest ones. In-sample averaged ${pct(wf.windows.reduce((s, w) => s + w.isReturnPct, 0) / (wf.windows.length || 1))} annualized.</p>` : ""}
-    ${metricsGrid(headline, !!wf)}
+    ${metricsGrid(headline.metrics, !!wf)}
     ${curveSvg(headline.equityCurve, wf ? null : d.result.buyHoldCurve)}
     ${wf ? wfHtml(wf) : ""}
     ${stressReportHtml(d.stress)}
@@ -8941,10 +9170,11 @@
       if (!desc && !btImage) { toast("Describe the strategy or upload a chart.", "err"); $("#bt-desc").focus(); return; }
       const btn = $("#bt-go"); btn.disabled = true; const orig = btn.textContent; btn.textContent = "Backtesting… (~10-40s)";
       try {
-        const res = await (await fetch("/api/backtest", {
+        const res = await fetchPaid("/api/backtest", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticker, description: desc || undefined, image: btImage || undefined, walkForward: true }),
-        })).json();
+        });
+        if (!res) return; // 402 → paywall shown; finally restores the button
         if (!res.ok) $("#bt-result").innerHTML = `<div class="empty">${esc(res.error)}</div>`;
         else if (res.clarification) $("#bt-result").innerHTML = `<div class="report" style="margin-top:14px"><div class="klabel">One detail first</div><p class="kv">${esc(res.clarification)}</p></div>`;
         else $("#bt-result").innerHTML = backtestResultHtml(res);
@@ -9221,7 +9451,7 @@
       // it lands.
       const askedIn = chatThreadId;
       try {
-        const res = await (await fetch("/api/ask", {
+        const res = await fetchPaid("/api/ask", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ question, threadId: chatThreadId ?? undefined }),
         })).json();

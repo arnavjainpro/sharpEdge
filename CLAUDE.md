@@ -109,3 +109,22 @@ Postgres (Supabase) accessed through a hand-written shim that mimics the old `bu
 ### Config — `src/config.ts`
 
 Loads `config/portfolio.yaml` (holdings, watchlist, `risk:` sizing knobs) and `config/screener.yaml` (universe filters), plus ET market-hours helpers (`marketPhase`, `nextMarketTransition`, DST-correct). `allTickers()`/`holdingSymbol()` is the single normalization chokepoint that strips option composites (`"MRVL 2026-07-24 203C"`) and crypto (`"SOL-USD"`) out of every ticker list (search, detectors, daily-stats) — extend it there, not at each call site, if a new non-scannable holding shape shows up.
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore
+- Author a backlog-ready spec/issue → invoke /spec
