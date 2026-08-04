@@ -1,7 +1,7 @@
 // SHARP-29: the pure half of multi-account monitoring.
 //
 // These decide WHO a piece of background work is for. They live here rather
-// than in index.ts because index.ts boots the whole process on import — logic
+// than in index.ts because index.ts boots the whole process on import: logic
 // that lives there can never be tested, and this is exactly the logic where a
 // quiet mistake means one account silently stops being monitored.
 import type { Portfolio } from "../config";
@@ -36,7 +36,7 @@ export function buildWatchMap(users: MonitoredUser[]): Map<string, number[]> {
 }
 
 // A merged view for jobs that only need "which tickers exist across all
-// accounts" — the universe build, the screener's name-biasing, daily stats, the
+// accounts": the universe build, the screener's name-biasing, daily stats, the
 // quote-cache heartbeat.
 //
 // Holdings are deduped by ticker keeping the first seen. Share counts and cost

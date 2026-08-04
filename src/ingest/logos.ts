@@ -2,7 +2,7 @@
 //
 // FMP serves these from a public image CDN with no key. Pointing <img> tags
 // straight at it would work, but every render would tell a third party which
-// symbols this user holds and watches — a portfolio leak by side channel, from
+// symbols this user holds and watches: a portfolio leak by side channel, from
 // the user's own IP. So the browser asks this app, and this app asks FMP.
 //
 // The cache is the other half: misses are remembered too. Futures, delisted
@@ -15,7 +15,7 @@ import { SYMBOL_RE } from "./universe";
 const CDN = "https://images.financialmodelingprep.com/symbol";
 
 // FMP writes class shares with a dot (BRK.B) and serves a higher-resolution
-// asset under it — the dash form resolves but to a smaller image. Same edge
+// asset under it: the dash form resolves but to a smaller image. Same edge
 // conversion as ingest/fmp.ts.
 const toFmp = (t: string) => t.replace(/-/g, ".");
 
@@ -55,7 +55,7 @@ const INK_TOLERANCE = 24;
 // These logos are not drawn to a common margin: Apple is a small mark adrift in
 // white (its ink covers 39% x 48% of the canvas), NVIDIA is letterboxed to 66%
 // height, Microsoft runs edge to edge. Rendered into one fixed box they come out
-// at visibly different sizes, and no amount of object-fit can help — the padding
+// at visibly different sizes, and no amount of object-fit can help: the padding
 // is in the pixels, not the layout.
 //
 // So trim the uniform border away and let each mark fill its box, which is what
@@ -67,7 +67,7 @@ export function trimBorder(input: Buffer): Buffer | null {
   try {
     png = PNG.sync.read(input);
   } catch {
-    return null; // not a PNG we can read — serve the original untouched
+    return null; // not a PNG we can read: serve the original untouched
   }
   const { width: w, height: h, data } = png;
   if (w < 4 || h < 4) return null;
@@ -87,8 +87,8 @@ export function trimBorder(input: Buffer): Buffer | null {
     );
   };
   // Only whole rows/columns of flat background come off. A mark that reaches an
-  // edge simply keeps that edge — NVIDIA loses its top and bottom bands and
-  // nothing else — and a frame with no flat edge at all (Microsoft's top row is
+  // edge simply keeps that edge: NVIDIA loses its top and bottom bands and
+  // nothing else: and a frame with no flat edge at all (Microsoft's top row is
   // half orange, half green) is left completely untouched.
   let top = 0, bottom = h - 1, left = 0, right = w - 1;
   const rowIsBg = (y: number) => { for (let x = 0; x < w; x++) if (!isBg(x, y)) return false; return true; };
@@ -100,7 +100,7 @@ export function trimBorder(input: Buffer): Buffer | null {
 
   const cw = right - left + 1;
   const ch = bottom - top + 1;
-  // Nothing to reclaim, or the image is blank — leave it alone either way.
+  // Nothing to reclaim, or the image is blank: leave it alone either way.
   if (cw < 2 || ch < 2 || (cw === w && ch === h)) return null;
 
   const out = new PNG({ width: cw, height: ch });
@@ -110,11 +110,11 @@ export function trimBorder(input: Buffer): Buffer | null {
   return PNG.sync.write(out);
 }
 
-// Null means "no logo for this symbol" — the caller should 404, not retry.
+// Null means "no logo for this symbol": the caller should 404, not retry.
 export async function fetchLogo(rawTicker: string): Promise<Logo | null> {
   const ticker = String(rawTicker ?? "").trim().toUpperCase();
   // Reject before spending a request. This also quietly covers futures ("ES=F"),
-  // option composites and crypto, none of which have artwork — and it keeps
+  // option composites and crypto, none of which have artwork: and it keeps
   // arbitrary path input from reaching the CDN.
   if (!SYMBOL_RE.test(ticker)) return null;
 
@@ -127,7 +127,7 @@ export async function fetchLogo(rawTicker: string): Promise<Logo | null> {
     });
     const type = res.headers.get("content-type") ?? "";
     if (!res.ok || !type.startsWith("image/")) {
-      // A 404 here is a fact about the symbol, not a blip — remember it.
+      // A 404 here is a fact about the symbol, not a blip: remember it.
       remember(ticker, { bytes: null, type: "", ts: Date.now() });
       return null;
     }

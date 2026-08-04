@@ -1,5 +1,5 @@
 // One-time migration: copy all data from the legacy bun:sqlite database
-// (data/sharpedge.db) into Supabase Postgres. Idempotent — it TRUNCATEs the
+// (data/sharpedge.db) into Supabase Postgres. Idempotent: it TRUNCATEs the
 // Postgres tables first, so it can be re-run safely.
 //
 // Run: bun run scripts/migrate-to-supabase.ts

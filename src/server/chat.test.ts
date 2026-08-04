@@ -125,7 +125,7 @@ test("deleting a thread takes its messages with it", async () => {
 test("an unknown role is refused by the database, not stored", async () => {
   const a = await throwawayUser();
   const id = await createChatThread(a, "t");
-  // A bad role would not surface here — it would surface as an Anthropic 400
+  // A bad role would not surface here: it would surface as an Anthropic 400
   // the next time the thread was replayed, far from the write that caused it.
   let refused = false;
   try {

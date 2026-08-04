@@ -1,6 +1,6 @@
 // The one place the rest of the app asks for price history.
 //
-// Daily bars come from FMP when a key is configured, and from Yahoo otherwise —
+// Daily bars come from FMP when a key is configured, and from Yahoo otherwise -
 // or when FMP declines the symbol, which its cheaper plans do for most ETFs and
 // class shares. Intraday is Yahoo-only: FMP gates it behind a higher tier.
 //
@@ -35,12 +35,12 @@ export async function fetchDailyCandles(ticker: string, range = "1y", minBars = 
   return (await fetchDailyCandlesFmp(ticker, range, minBars)) ?? fetchDailyCandlesYahoo(ticker, range, minBars);
 }
 
-// For HIGH-VOLUME background paths — the ~3,100-name screener scan, idea replay,
+// For HIGH-VOLUME background paths: the ~3,100-name screener scan, idea replay,
 // benchmark refresh. These skip FMP entirely and go straight to Yahoo.
 //
 // One full scan is ~3,100 requests and runs four times a day. That exhausts
 // FMP's allowance within minutes of boot (measured), and once it's gone the
-// breaker blocks FMP for everything — starving exactly the user-facing lookups
+// breaker blocks FMP for everything: starving exactly the user-facing lookups
 // it's worth spending on. Yahoo has no key and no quota, and on settled sessions
 // the two agree to the penny, so the scan gives up nothing by using it.
 export const fetchDailyCandlesBulk = fetchDailyCandlesYahoo;

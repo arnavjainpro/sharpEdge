@@ -1,10 +1,10 @@
 // Market screener: scans the full liquid US universe (large/mid/small cap,
-// sector-tagged) for BOTH long and short setups using daily candles. Pure math —
+// sector-tagged) for BOTH long and short setups using daily candles. Pure math -
 // no AI tokens. Every ticker gets a long score and a short score built from
 // confluence across trend structure, momentum quality, volume, volatility
 // context, support/resistance, and relative strength vs sector and market.
 // Momentum alone is capped so it can never dominate a score, and shorts require
-// genuine structural breakdown — negative price action by itself is not enough.
+// genuine structural breakdown: negative price action by itself is not enough.
 import { db, insertEvent, getSetting, setSetting } from "../db";
 import { fetchDailyCandlesBulk } from "../ingest/candles";
 import { scanUniverse, sectorMap, sectorEtf, SECTOR_ETF } from "../ingest/universe";
@@ -30,7 +30,7 @@ export interface Indicators {
   pct52w: number;          // 0 = at 52wk low, 100 = at 52wk high
   volTrend: number;        // 20d avg volume / 60d avg volume
   atrPct: number | null;   // ATR14 as % of price (volatility context)
-  extension: number | null;// (price - SMA20) / ATR — how stretched vs its mean
+  extension: number | null;// (price - SMA20) / ATR: how stretched vs its mean
   support: number | null;  // nearest swing support below
   resistance: number | null;
   rangeState: "breakout" | "breakdown" | "none";
@@ -46,7 +46,7 @@ export interface Indicators {
 
 // Which source indices a downsample to `points` keeps. Exported so the spark
 // values and the spark timestamps are selected by the SAME indices rather than
-// by two independent calls that could drift apart — a drifted date axis is
+// by two independent calls that could drift apart: a drifted date axis is
 // silently wrong, which is worse than no axis at all (SHARP-23).
 export function downsampleIndices(len: number, points: number): number[] {
   if (len <= points) return Array.from({ length: len }, (_, i) => i);
@@ -122,7 +122,7 @@ export function computeIndicators(
       const eta = Math.ceil(gapNow / closingPerDay);
       if (eta <= 20) {
         crossStatus = "golden_soon";
-        crossDetail = `SMA50 is ${(gapNow * 100).toFixed(2)}% below SMA200, converging — est. cross in ~${eta} sessions`;
+        crossDetail = `SMA50 is ${(gapNow * 100).toFixed(2)}% below SMA200, converging: est. cross in ~${eta} sessions`;
       }
     }
   }
@@ -219,7 +219,7 @@ export function scoreLong(ind: Indicators): number {
   }
   if (ind.extension != null) {
     if (Math.abs(ind.extension) < 2.5) s += 3;             // not chasing an extended move
-    else if (ind.extension > 3.5) s -= 6;                  // parabolic — poor entry
+    else if (ind.extension > 3.5) s -= 6;                  // parabolic: poor entry
   }
   // Relative strength (max 12)
   if (ind.rsSpy1m != null) s += clamp(ind.rsSpy1m * 0.6, -6, 6);
@@ -254,7 +254,7 @@ export function scoreShort(ind: Indicators): number {
   s += clamp(-ind.mom6m * 0.1, -4, 5);
   if (ind.rsi14 != null) {
     if (ind.rsi14 >= 35 && ind.rsi14 <= 55) s += 5;        // fading rallies, room below
-    else if (ind.rsi14 < 25) s -= 8;                        // capitulation — bounce risk
+    else if (ind.rsi14 < 25) s -= 8;                        // capitulation: bounce risk
     else if (ind.rsi14 > 65) s -= 3;                        // shorting strength
   }
   // Trend confirmation (max 6)
@@ -341,7 +341,7 @@ export interface SectorBoard {
   sector: string;
   // null when the sector has no real sector ETF. sectorEtf() falls back to SPY,
   // which is the right *benchmark* for relative-strength math but a wrong label
-  // here — it rendered rows reading "Miscellaneous · SPY" and "Futures · SPY",
+  // here: it rendered rows reading "Miscellaneous · SPY" and "Futures · SPY",
   // claiming SPY as those sectors' ETF.
   etf: string | null;
   rotation: { ret1w: number; ret1m: number; rel1m: number; state: string } | null;
@@ -397,7 +397,7 @@ export const isScanRunning = () => scanRunning;
 export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   scanRunning = true;
   try {
-  // Benchmarks must be loaded for RS/beta math — refresh if the cache is cold.
+  // Benchmarks must be loaded for RS/beta math: refresh if the cache is cold.
   if (!benchmarkCandles("SPY")) await refreshMarketContext();
   const spy = benchmarkCandles("SPY");
   const spyCloses = spy?.closes ?? null;
@@ -436,7 +436,7 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
     if (id) events.push({ id, ts: now, ticker: t, kind, title, detail: { ...ind, ...extra } });
   };
   // Pick/short events are emitted top-N AFTER the full pass, so a broad rally
-  // can't flood triage — the event budget per scan is bounded by construction.
+  // can't flood triage: the event budget per scan is bounded by construction.
   const pickCands: { t: string; ind: Indicators; score: number; sector: string }[] = [];
   const shortCands: { t: string; ind: Indicators; score: number; sector: string }[] = [];
 
@@ -465,11 +465,11 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
     // Cross events are self-rate-limited by the 10-session formation window.
     const extra = { longScore, shortScore, sector };
     if (ind.crossStatus === "golden_formed" && longScore >= 65) {
-      await emit(t, ind, extra, "golden_cross", `${t} golden cross formed — ${ind.crossDetail} (long score ${longScore})`, `gx:${t}:${week}`);
+      await emit(t, ind, extra, "golden_cross", `${t} golden cross formed: ${ind.crossDetail} (long score ${longScore})`, `gx:${t}:${week}`);
     } else if (ind.crossStatus === "golden_soon" && longScore >= 68) {
-      await emit(t, ind, extra, "golden_cross", `${t} golden cross approaching — ${ind.crossDetail} (long score ${longScore})`, `gxsoon:${t}:${week}`);
+      await emit(t, ind, extra, "golden_cross", `${t} golden cross approaching: ${ind.crossDetail} (long score ${longScore})`, `gxsoon:${t}:${week}`);
     } else if (ind.crossStatus === "death_formed" && heldSet.has(t)) {
-      await emit(t, ind, extra, "death_cross", `${t} DEATH CROSS on a held position — ${ind.crossDetail}`, `dx:${t}:${week}`);
+      await emit(t, ind, extra, "death_cross", `${t} DEATH CROSS on a held position: ${ind.crossDetail}`, `dx:${t}:${week}`);
     }
     if (longScore >= 84 && !regime?.riskOff) pickCands.push({ t, ind, score: longScore, sector });
     if (shortScore >= 84) shortCands.push({ t, ind, score: shortScore, sector });
@@ -478,9 +478,9 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
     Array.from({ length: Math.max(1, concurrency) }, async (_, w) => {
       while (cursor < tickers.length) {
         // Failure spike (sustained nulls): park every worker beyond the first
-        // two — serial-ish pace is the safe fallback, and successes heal the counter.
+        // two: serial-ish pace is the safe fallback, and successes heal the counter.
         if (w >= 2 && recentFailures >= 15) {
-          console.log(`[screener] worker ${w} parked — Yahoo failure spike (${recentFailures} rolling)`);
+          console.log(`[screener] worker ${w} parked: Yahoo failure spike (${recentFailures} rolling)`);
           return;
         }
         const t = tickers[cursor++];
@@ -503,9 +503,9 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   }
   for (const c of shortCands.sort((a, b) => b.score - a.score).slice(0, 8)) {
     await emit(c.t, c.ind, { shortScore: c.score, sector: c.sector }, "screener_short",
-      `${c.t} strong multi-factor SHORT setup (${c.sector}, short score ${c.score}/100 — structural breakdown confirmed)`, `short:${c.t}:${week}`);
+      `${c.t} strong multi-factor SHORT setup (${c.sector}, short score ${c.score}/100: structural breakdown confirmed)`, `short:${c.t}:${week}`);
   }
-  // Prune rows for tickers that left the universe (delistings, filter changes) —
+  // Prune rows for tickers that left the universe (delistings, filter changes) -
   // but only after a substantially complete pass, never after an aborted one.
   if (scanned > tickers.length * 0.5) {
     const pruned = (await db.query(`DELETE FROM screener WHERE updated_at < extract(epoch from now())::int - 172800 RETURNING ticker`).all()).length;
@@ -513,7 +513,7 @@ export async function runScan(portfolio: Portfolio): Promise<RawEvent[]> {
   }
   const skipped = tickers.length - scanned;
   const skipDetail = skipped
-    ? ` (skipped ${skipped}: ${skips.no_data} no Yahoo data — delisted/renamed/throttled, ${skips.short_history} under ~1y history, ${skips.error} errors, ${skipped - skips.no_data - skips.short_history - skips.error} unstarted)`
+    ? ` (skipped ${skipped}: ${skips.no_data} no Yahoo data: delisted/renamed/throttled, ${skips.short_history} under ~1y history, ${skips.error} errors, ${skipped - skips.no_data - skips.short_history - skips.error} unstarted)`
     : "";
   console.log(`[screener] scan complete: ${scanned}/${tickers.length} scored${skipDetail}, ${events.length} new setups`);
   return events;

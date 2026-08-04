@@ -1,5 +1,5 @@
 // Conversational advisor: answers ad-hoc questions ("should I trim NVDA?",
-// "what's my biggest risk right now?") grounded in the live system state —
+// "what's my biggest risk right now?") grounded in the live system state -
 // portfolio, technicals, recent events, and its own past signals.
 import Anthropic from "@anthropic-ai/sdk";
 import { config, allTickers, type Portfolio } from "../config";
@@ -21,7 +21,7 @@ export interface ChatTurn {
   content: string;
 }
 
-// Stable persona — cached; volatile market context goes in the user turn.
+// Stable persona: cached; volatile market context goes in the user turn.
 function advisorSystemPrompt(portfolio: Portfolio): string {
   const positions = portfolio.holdings
     .map((h) => {
@@ -48,13 +48,13 @@ Rules:
 - Ground every claim in the context provided. If the context doesn't contain what you'd need, say so plainly rather than guessing.
 - When a position has a stated investor thesis, evaluate events and questions against it: distinguish "thesis broken" (sell case) from "price drifting but thesis intact" (hold case). If a position has no stated thesis, note that once and reason from fundamentals in the context.
 - Be position-aware: quantify their actual exposure, unrealized P&L vs cost basis, and concentration when relevant.
-- Give a clear recommendation when asked for one, with your conviction level and what would change your mind. Don't hedge into uselessness — but don't manufacture confidence the evidence doesn't support.
+- Give a clear recommendation when asked for one, with your conviction level and what would change your mind. Don't hedge into uselessness, but don't manufacture confidence the evidence doesn't support.
 - Keep answers tight: lead with the answer, then the reasoning. Use short paragraphs or bullets.
 - Personality never costs accuracy. If being blunt and being correct pull apart, be correct. Never round a number, soften a risk, or drop a caveat that changes the decision to keep a line punchy.
 - You are decision support for a self-directed investor, not licensed financial advice; be honest about uncertainty.`;
 }
 
-// Tickers the question is actually about — so we can pull fresh news for them
+// Tickers the question is actually about: so we can pull fresh news for them
 // without paying for headlines across the whole book on every question.
 function tickersInQuestion(question: string, portfolio: Portfolio): string[] {
   const q = question.toUpperCase();
@@ -64,7 +64,7 @@ function tickersInQuestion(question: string, portfolio: Portfolio): string[] {
 // The two account-scoped reads behind the chat context, exported so the
 // isolation suite can pin them directly. They used to be inline SQL that
 // drifted out of sync with /api/state and started serving one account's private
-// analysis to every other account — a copy of the query in the test would have
+// analysis to every other account: a copy of the query in the test would have
 // been free to drift the same way, so both callers share these.
 //
 // Same projection as /api/state (server.ts): the event row is public market
@@ -108,7 +108,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
   for (const t of allTickers(portfolio)) {
     const stats = await db.query(`SELECT prev_close FROM daily_stats WHERE ticker = ?`).get(t) as { prev_close: number } | null;
     const tech = snapshot(await recentBars(t, 120), stats?.prev_close ?? null);
-    // Bars are empty when the market is quiet (overnight/weekends) — fall back to a REST quote.
+    // Bars are empty when the market is quiet (overnight/weekends): fall back to a REST quote.
     let price = tech.price;
     let chg = tech.sessionChangePct;
     if (price == null) {
@@ -123,7 +123,7 @@ async function buildMarketContext(userId: number, portfolio: Portfolio, question
     );
   }
 
-  // Fresh headlines (last 7 days) for tickers named in the question — fills the
+  // Fresh headlines (last 7 days) for tickers named in the question: fills the
   // gap where the local events table is empty or the app wasn't running.
   const asked = tickersInQuestion(question, portfolio);
   for (const t of asked.slice(0, 3)) {
@@ -178,7 +178,7 @@ export function replayWindow(
   nowSec: number = Math.floor(Date.now() / 1000)
 ): ChatTurn[] {
   const fresh = messages.filter((m) => nowSec - m.ts <= CHAT_REPLAY_MAX_AGE_SEC);
-  // A trailing user turn has no answer — the model call that would have
+  // A trailing user turn has no answer: the model call that would have
   // answered it failed. Replaying it would ask the model to respond to two
   // questions at once.
   while (fresh.length && fresh[fresh.length - 1]!.role === "user") fresh.pop();
@@ -230,12 +230,12 @@ export async function askAdvisor(
 // One-tap news digest for a ticker: last 7 days of headlines → a few plain-
 // English bullets on the fast model (pennies per call, user-initiated).
 export async function summarizeTickerNews(ticker: string): Promise<string> {
-  if (!haikuBreaker.allow()) throw new Error("AI circuit breaker is tripped — reset it from the status bar.");
+  if (!haikuBreaker.allow()) throw new Error("AI circuit breaker is tripped: reset it from the status bar.");
   const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   const news = (await fetchCompanyNews(ticker, iso(Date.now() - 7 * 86400_000), iso(Date.now()))).slice(0, 15);
   if (!news.length) return `No news found for ${ticker} in the last 7 days.`;
   const items = news
-    .map((n) => `- [${iso(n.datetime * 1000)}] ${n.headline} (${n.source})${n.summary ? ` — ${n.summary.slice(0, 200)}` : ""}`)
+    .map((n) => `- [${iso(n.datetime * 1000)}] ${n.headline} (${n.source})${n.summary ? `: ${n.summary.slice(0, 200)}` : ""}`)
     .join("\n");
   const response = await claudeQueue(() =>
     client.messages.create({
@@ -254,30 +254,30 @@ export async function summarizeTickerNews(ticker: string): Promise<string> {
 // sector concentration, regime) → deep-model rundown with a 0-100 score,
 // pros, and cons. Markdown out; the frontend renders it as-is.
 export async function scorePortfolio(userId: number, portfolio: Portfolio): Promise<string> {
-  if (!opusBreaker.allow()) throw new Error("AI circuit breaker is tripped — reset it from the status bar.");
+  if (!opusBreaker.allow()) throw new Error("AI circuit breaker is tripped: reset it from the status bar.");
   const rows = new Map((await getScreenerRows(portfolio)).map((r) => [r.ticker, r]));
   const lines: string[] = ["POSITIONS:"];
   let hasEtf = false;
   for (const h of portfolio.holdings) {
     const cls = h.asset_class ?? "equity";
-    // An ETF held as an equity position is internally diversified — mark it so
+    // An ETF held as an equity position is internally diversified: mark it so
     // the model doesn't read a single fund as a concentrated single-stock bet.
     const meta = await universeMeta(h.ticker);
     const isEtf = meta?.sector === "ETF";
     if (isEtf) hasEtf = true;
-    const tag = isEtf ? `ETF — ${meta!.name}` : cls;
+    const tag = isEtf ? `ETF: ${meta!.name}` : cls;
     let line = `- ${h.ticker} (${tag}): ${h.shares} ${cls === "option" ? "contracts" : "shares"} @ $${h.cost_basis} cost`;
     if (h.market_value != null) line += `, market value $${Math.round(h.market_value).toLocaleString()}`;
     else {
       try { const q = await cachedQuote(h.ticker); line += `, now $${q.c} (${q.dp?.toFixed(1)}% today), value $${Math.round(q.c * h.shares).toLocaleString()}`; } catch {}
     }
     const r = rows.get(h.ticker);
-    if (r) line += ` — sector ${r.sector}, long score ${r.long_score}/100, short score ${r.short_score}/100`;
-    else if (meta) line += ` — sector ${meta.sector}`;
+    if (r) line += `: sector ${r.sector}, long score ${r.long_score}/100, short score ${r.short_score}/100`;
+    else if (meta) line += `: sector ${meta.sector}`;
     if (h.thesis) line += `\n  thesis: ${h.thesis}`;
     lines.push(line);
   }
-  if (hasEtf) lines.push("", "NOTE: positions marked ETF are diversified funds, not single stocks — a single ETF holding is NOT concentration; do not tell the trader to diversify out of one ETF.");
+  if (hasEtf) lines.push("", "NOTE: positions marked ETF are diversified funds, not single stocks: a single ETF holding is NOT concentration; do not tell the trader to diversify out of one ETF.");
   if (!portfolio.holdings.length) lines.push("(no positions)");
   lines.push("", await marketContextText(), "", accountContextText(userId));
 
@@ -296,15 +296,15 @@ Grade this portfolio like a conservative risk manager. Respond in markdown, exac
 ## Portfolio score: N/100
 One-sentence verdict.
 
-**Pros** — up to 3 bullets (what's working: diversification, alignment with regime/rotation, quality of setups held, cash buffer...)
+**Pros**: up to 3 bullets (what's working: diversification, alignment with regime/rotation, quality of setups held, cash buffer...)
 
-**Cons** — up to 3 bullets (concentration, correlated bets, positions fighting the market regime, weak-scoring holdings, missing hedges, oversized options exposure...)
+**Cons**: up to 3 bullets (concentration, correlated bets, positions fighting the market regime, weak-scoring holdings, missing hedges, oversized options exposure...)
 
-**Biggest risk** — one bullet, the single thing most likely to hurt.
+**Biggest risk**: one bullet, the single thing most likely to hurt.
 
-**Suggested next steps** — 2-3 concrete, optional actions.
+**Suggested next steps**: 2-3 concrete, optional actions.
 
-Be terse — this is read between trades, not studied. Every bullet is ONE line: the point plus the number behind it, no preamble and no restating the position list. Say only what's worth acting on; three sharp bullets beat five padded ones, and fewer is fine when there's less to say.
+Be terse: this is read between trades, not studied. Every bullet is ONE line: the point plus the number behind it, no preamble and no restating the position list. Say only what's worth acting on; three sharp bullets beat five padded ones, and fewer is fine when there's less to say.
 
 Score honestly: 80+ means genuinely well-constructed, 50-79 solid with real issues, below 50 needs restructuring. Ground every claim in the data above; if data is missing (no equity figure, unquoted options), say so instead of guessing.`,
       }],
@@ -315,7 +315,7 @@ Score honestly: 80+ means genuinely well-constructed, 50-79 solid with real issu
 
 // The 0-100 lives only inside the model's markdown ("## Portfolio score: N/100"),
 // so pull it out once at write time for the history list and the trend sparkline.
-// Returns null when the model phrased it differently — callers must treat the
+// Returns null when the model phrased it differently: callers must treat the
 // score as optional rather than constraining on it.
 export function extractPortfolioScore(markdown: string): number | null {
   const m = markdown.match(/portfolio score:\s*(\d{1,3})/i);
@@ -324,7 +324,7 @@ export function extractPortfolioScore(markdown: string): number | null {
   return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
 }
 
-// First non-empty line after the score heading — the model's one-sentence verdict.
+// First non-empty line after the score heading: the model's one-sentence verdict.
 export function extractPortfolioVerdict(markdown: string): string | null {
   const lines = markdown.split("\n").map((l) => l.trim());
   const i = lines.findIndex((l) => /portfolio score:/i.test(l));

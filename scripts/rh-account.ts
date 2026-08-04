@@ -10,7 +10,7 @@ const user = await findUserByEmail(email);
 if (!user) { console.error(`no sharpEdge account for "${email}"`); process.exit(1); }
 
 const auth = await loadAuth(user.id);
-if (!auth) { console.error("robinhood not linked for that account — run `bun run link:robinhood` first"); process.exit(1); }
+if (!auth) { console.error("robinhood not linked for that account: run `bun run link:robinhood` first"); process.exit(1); }
 
 const headers = { Authorization: `Bearer ${auth.access_token}`, "User-Agent": "*", Accept: "*/*" };
 const get = async (p: string) => (await fetch(`https://api.robinhood.com${p}`, { headers })).json();

@@ -11,7 +11,7 @@ import { opusBreaker } from "./breaker";
 const client = new Anthropic();
 
 // Last N significant events (and this advisor's own past signals) for a ticker,
-// so Opus analyzes the *delta* of new news rather than each headline in amnesia —
+// so Opus analyzes the *delta* of new news rather than each headline in amnesia -
 // e.g. a "$50B buyback" reads very differently if a $60B one was announced last quarter.
 // The events half is global (public market fact); the signals half is joined on
 // userId so "your prior signal" means theirs and not another account's.
@@ -32,7 +32,7 @@ export async function recentHistory(ticker: string, excludeEventId: number, user
     .map((r) => {
       const when = new Date(r.ts * 1000).toISOString().slice(0, 16).replace("T", " ");
       let line = `- [${when} UTC] (${r.severity}/${r.kind}) ${r.title}`;
-      if (r.action) line += `\n  → your prior signal: ${r.action} (${r.conviction}) — ${r.thesis}`;
+      if (r.action) line += `\n  → your prior signal: ${r.action} (${r.conviction}): ${r.thesis}`;
       return line;
     })
     .join("\n");
@@ -47,7 +47,7 @@ export interface Signal {
   portfolio_impact: string;
 }
 
-// Stable system prompt — byte-identical across calls for prompt-cache hits.
+// Stable system prompt: byte-identical across calls for prompt-cache hits.
 function systemPrompt(portfolio: Portfolio): string {
   const positions = portfolio.holdings
     .map((h) => {
@@ -63,7 +63,7 @@ ${positions || "(no current positions)"}
 Watchlist: ${portfolio.watchlist.join(", ") || "none"}
 
 Rules:
-- Write for a beginner. Plain everyday English. If you must reference a technical concept, explain it in the same sentence (e.g. "the stock's short-term trend just rose above its long-term trend — historically a positive sign" instead of "golden cross"). No jargon like RSI, VWAP, MACD, or z-score in your output.
+- Write for a beginner. Plain everyday English. If you must reference a technical concept, explain it in the same sentence (e.g. "the stock's short-term trend just rose above its long-term trend: historically a positive sign" instead of "golden cross"). No jargon like RSI, VWAP, MACD, or z-score in your output.
 - Ground every claim in the event and data provided. Do not invent facts, prices, or news.
 - Be position-aware: if the investor holds the ticker, quantify exposure and speak to their actual position (P&L vs cost basis, concentration).
 - "action" is your recommendation: buy/add/trim/sell only with a clear catalyst-driven case; otherwise hold (if held) or watch (if not).
@@ -80,7 +80,7 @@ const SIGNAL_SCHEMA = {
     conviction: { type: "string", enum: ["high", "medium", "low"] },
     plain_headline: {
       type: "string",
-      description: "One short sentence of advice a complete beginner understands, suitable for a phone notification. E.g. 'Consider selling some SNDK to protect your big gain.' or 'NVDA just showed a classic buy signal — worth a look.'",
+      description: "One short sentence of advice a complete beginner understands, suitable for a phone notification. E.g. 'Consider selling some SNDK to protect your big gain.' or 'NVDA just showed a classic buy signal: worth a look.'",
     },
     thesis: { type: "string", description: "2-4 sentences in plain English: what happened and why the action follows." },
     invalidation: { type: "string", description: "In plain English: what happening next would mean this advice is wrong." },
@@ -90,12 +90,12 @@ const SIGNAL_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// userId owns the resulting signal — the analysis is written against THIS
+// userId owns the resulting signal: the analysis is written against THIS
 // portfolio ("you hold 200 shares, trimming half…"), so it must not surface on
 // another account's dashboard.
 export async function analyzeEvent(event: RawEvent, portfolio: Portfolio, userId: number): Promise<Signal | null> {
   if (!opusBreaker.allow()) {
-    console.warn(`[analyst] circuit breaker tripped — skipping analysis for event ${event.id}`);
+    console.warn(`[analyst] circuit breaker tripped: skipping analysis for event ${event.id}`);
     return null;
   }
   const bars = await recentBars(event.ticker, 120);
@@ -132,7 +132,7 @@ export async function analyzeEvent(event: RawEvent, portfolio: Portfolio, userId
             ``,
             marketCtx,
             ``,
-            `RECENT HISTORY for ${event.ticker} (prior significant events + your own past signals — analyze the new event as a delta against these, not in isolation):`,
+            `RECENT HISTORY for ${event.ticker} (prior significant events + your own past signals: analyze the new event as a delta against these, not in isolation):`,
             history,
           ].join("\n"),
         },

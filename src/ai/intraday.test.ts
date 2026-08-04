@@ -4,7 +4,7 @@ import { RISK_APPETITES } from "../config";
 
 // TypeScript already guarantees every entry is a real member of the structure
 // enum. What it can't check is whether the lists still mean what the settings UI
-// promises the trader — these pin that, since the playbook is what decides which
+// promises the trader: these pin that, since the playbook is what decides which
 // options structures the analyzer is allowed to hand back.
 
 test("every appetite offers something, and never the escape hatch", () => {

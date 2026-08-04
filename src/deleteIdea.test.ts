@@ -4,7 +4,7 @@ import { createUser, hashPassword } from "./auth";
 
 // SHARP-25 shipped with `UPDATE outcomes ...` in deleteIdea. The real table is
 // `trade_outcomes`, so every delete threw and "delete a past analysis" silently
-// never worked — typecheck can't see inside a SQL string, and no test had ever
+// never worked: typecheck can't see inside a SQL string, and no test had ever
 // run the function against a database.
 //
 // So this exercises the real query path, including the two foreign keys that
@@ -42,7 +42,7 @@ test("deleting a plain idea works and is idempotent", async () => {
 
   expect(await deleteIdea(u, id)).toBe(true);
   expect(await db.query(`SELECT id FROM ideas WHERE id = ?`).get(id)).toBeNull();
-  // Second call finds nothing — a double-click must not throw.
+  // Second call finds nothing: a double-click must not throw.
   expect(await deleteIdea(u, id)).toBe(false);
 });
 
@@ -87,7 +87,7 @@ test("another account's idea is untouched, links and all", async () => {
 
   expect(await deleteIdea(mine, id)).toBe(false);
   expect(await db.query(`SELECT id FROM ideas WHERE id = ?`).get(id)).not.toBeNull();
-  // Ownership is checked BEFORE anything is detached — a failed delete must not
+  // Ownership is checked BEFORE anything is detached: a failed delete must not
   // strip the journal link on the way to matching nothing.
   const outcome = await db.query(`SELECT idea_id FROM trade_outcomes WHERE user_id = ?`).get(theirs) as any;
   expect(outcome.idea_id).toBe(id);

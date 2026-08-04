@@ -1,4 +1,4 @@
-// Robinhood read-only brokerage adapter (UNOFFICIAL private API — Robinhood
+// Robinhood read-only brokerage adapter (UNOFFICIAL private API: Robinhood
 // publishes no public API). Pulls equities and options positions plus
 // account equity into the common BrokerSnapshot. READ-ONLY: it never places or
 // cancels orders. Tokens are obtained once via linkRobinhood() below (Settings →
@@ -21,7 +21,7 @@ const API = "https://api.robinhood.com";
 // is what rejects stale clients with "Update to the newest version of Robinhood";
 // bump it here if Robinhood tightens the minimum again. Default body encoding is
 // form-urlencoded (login + challenge); JSON is opted into per-request (pathfinder).
-// ponytail: version pinned to a known-good robin_stocks value — the upgrade path
+// ponytail: version pinned to a known-good robin_stocks value: the upgrade path
 //   is to bump this one string, not to rework the client.
 const HEADERS = {
   Accept: "*/*",
@@ -34,7 +34,7 @@ const HEADERS = {
 };
 
 // Robinhood's login/challenge endpoints want form-urlencoded bodies. Python's
-// requests renders booleans as "True"/"False" (capitalized) — match that so the
+// requests renders booleans as "True"/"False" (capitalized): match that so the
 // wire bytes are identical to the working reference client.
 function formEncode(body: Record<string, unknown>): string {
   const p = new URLSearchParams();
@@ -71,7 +71,7 @@ export function newDeviceToken(): string {
   return crypto.randomUUID();
 }
 
-// Low-level token request (form-urlencoded) — used by the linker and refresh.
+// Low-level token request (form-urlencoded): used by the linker and refresh.
 export async function requestToken(body: Record<string, unknown>): Promise<any> {
   const res = await fetch(`${API}/oauth2/token/`, {
     method: "POST",
@@ -176,7 +176,7 @@ export async function linkRobinhood(userId: number, username: string, password: 
 
   let { status, json } = await requestToken(base);
 
-  // Legacy MFA code path (SMS/TOTP) — some accounts still use this.
+  // Legacy MFA code path (SMS/TOTP): some accounts still use this.
   if (json?.mfa_required) {
     const code = await ask(`Enter the ${json.mfa_type ?? "MFA"} code`);
     ({ status, json } = await requestToken({ ...base, mfa_code: code }));
@@ -238,7 +238,7 @@ async function rhList(url: string, authHeader: string): Promise<any[]> {
   return out;
 }
 
-// Instrument-URL → symbol, cached (positions reference instruments by URL —
+// Instrument-URL → symbol, cached (positions reference instruments by URL -
 // this mapping is Robinhood-global public metadata, safe to share across users).
 const symbolCache = new Map<string, string>();
 async function instrumentSymbol(url: string, authHeader: string): Promise<string> {
@@ -251,7 +251,7 @@ async function instrumentSymbol(url: string, authHeader: string): Promise<string
 async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
   const holdings: Holding[] = [];
 
-  // Equities — priced by the app's existing quote feed, so no market_value here.
+  // Equities: priced by the app's existing quote feed, so no market_value here.
   const positions = await rhList(`${API}/positions/?nonzero=true`, authHeader);
   for (const p of positions) {
     const qty = Number(p.quantity);
@@ -264,10 +264,10 @@ async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
     });
   }
 
-  // Options — carry their own market value (can't be quoted by ticker).
+  // Options: carry their own market value (can't be quoted by ticker).
   // Isolated try/catch: an options-endpoint failure must not sink the whole
   // snapshot (which would silently fall back to YAML and hide everything).
-  // nonzero=True matches robin_stocks' exact wire format — RH's Django filter
+  // nonzero=True matches robin_stocks' exact wire format: RH's Django filter
   // parses the Python-style capitalized boolean, and lowercase "true" has been
   // seen to return zero rows.
   try {
@@ -311,9 +311,9 @@ async function pullSnapshot(authHeader: string): Promise<BrokerSnapshot> {
     const acc = (await rhList(`${API}/accounts/`, authHeader))[0] ?? {};
     const pf = portfolios[0] ?? {};
     // `|| null` would turn a legitimate $0 (fully invested) into "unknown" and
-    // silently drop the row from the UI and the AI prompt — coerce explicitly.
+    // silently drop the row from the UI and the AI prompt: coerce explicitly.
     const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
-    // The top-level `buying_power` is the START-OF-DAY figure — it's literally
+    // The top-level `buying_power` is the START-OF-DAY figure: it's literally
     // equal to margin_balances.start_of_day_overnight_buying_power and goes
     // stale the moment you trade, so it reads high all day. The live number is
     // margin_balances.overnight_buying_power. Cash accounts return no

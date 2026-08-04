@@ -1,6 +1,6 @@
 // Trade-outcome journal: the trader logs how each closed trade actually went
 // (win/loss, what went wrong, in their own words) and relevant history is fed
-// back into future AI analysis as PROMPT CONTEXT — retrieval-augmented, not
+// back into future AI analysis as PROMPT CONTEXT: retrieval-augmented, not
 // fine-tuning (Anthropic exposes no fine-tuning API for Claude, and at this
 // scale a compact text block outperforms one anyway). Same "compact text block
 // for AI prompts" pattern as accountContextText()/optionsContextText().
@@ -86,13 +86,13 @@ export async function untrack(userId: number, id: number): Promise<boolean> {
   return (await db.query(`DELETE FROM tracked_trades WHERE user_id = ? AND id = ?`).run(userId, id)).changes > 0;
 }
 
-// Clear any open track for a ticker+direction — called when the trade is
+// Clear any open track for a ticker+direction: called when the trade is
 // journaled (manually or from a broker-detected close) so it can't linger.
 export async function untrackByKey(userId: number, ticker: string, direction: "long" | "short"): Promise<void> {
   await db.query(`DELETE FROM tracked_trades WHERE user_id = ? AND ticker = ? AND direction = ?`).run(userId, ticker.toUpperCase().trim(), direction);
 }
 
-// The set of ticker|direction keys the user is tracking — lets idea cards show
+// The set of ticker|direction keys the user is tracking: lets idea cards show
 // a "Tracking" state without a round-trip per card.
 export async function trackedKeys(userId: number): Promise<string[]> {
   return (await db.query(`SELECT ticker, direction FROM tracked_trades WHERE user_id = ?`).all<any>(userId))
@@ -101,8 +101,8 @@ export async function trackedKeys(userId: number): Promise<string[]> {
 
 // Compact prompt block: the trader's last few outcomes overall plus every
 // outcome on the specific ticker being analyzed ("I've lost on this exact name
-// twice the same way" is the highest-value context). Capped small — roughly ten
-// bullets — so it never bloats the prompt.
+// twice the same way" is the highest-value context). Capped small: roughly ten
+// bullets: so it never bloats the prompt.
 export async function journalContextText(userId: number, ticker?: string): Promise<string> {
   const recent = await db
     .query(`SELECT * FROM trade_outcomes WHERE user_id = ? ORDER BY closed_at DESC LIMIT 5`)
@@ -123,7 +123,7 @@ export async function journalContextText(userId: number, ticker?: string): Promi
     return `- ${r.ticker} ${r.direction}, closed ${date}: ${r.outcome.toUpperCase()}${pnl}${px}${r.notes ? `. Trader's notes: "${r.notes}"` : ""}`;
   };
   return [
-    `TRADER'S PAST-TRADE JOURNAL (their own logged outcomes — real history, weigh it):`,
+    `TRADER'S PAST-TRADE JOURNAL (their own logged outcomes: real history, weigh it):`,
     ...rows.map(line),
   ].join("\n");
 }

@@ -2,7 +2,7 @@
 // independent and whose `ts` is second-granularity. /api/ideas/generate writes
 // several rows inside one second, so a bare `ts < before` cursor drops the rest
 // of the boundary second and `ts <= before` loops forever. Neither failure is
-// visible in the UI — the list just quietly misses rows — so it gets the one test.
+// visible in the UI: the list just quietly misses rows: so it gets the one test.
 import { expect, test } from "bun:test";
 
 type Row = { ts: number; src: "i" | "a"; id: number };
@@ -57,7 +57,7 @@ test("terminates when every row shares one ts", () => {
   expect(drained.map((r) => r.id)).toEqual([5, 4, 3, 2, 1]);
 });
 
-test("a ts-only cursor would drop rows — proving the composite key is needed", () => {
+test("a ts-only cursor would drop rows: proving the composite key is needed", () => {
   const all: Row[] = [
     { ts: 200, src: "i", id: 1 },
     { ts: 200, src: "i", id: 2 },

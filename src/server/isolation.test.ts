@@ -8,8 +8,8 @@ import {
 
 // The security claim of SHARP-29: fanning monitoring out to every account must
 // not let one account see another's reading of the market. Three things are
-// per-account — the severity a shared event got, the signal written from it,
-// and the handful of events that are private by nature — and this pins the
+// per-account: the severity a shared event got, the signal written from it,
+// and the handful of events that are private by nature: and this pins the
 // exact query /api/state uses to enforce that.
 //
 // NOTE: writes to the configured database, using throwaway @example.invalid
@@ -46,7 +46,7 @@ const stateEvents = (userId: number) => db.query(
 //
 // One statement per table, not one per row. This runs against a remote Postgres,
 // and the original per-id loop cost two round trips per event plus five per
-// throwaway account — past a dozen accounts that overran the 5s hook budget, the
+// throwaway account: past a dozen accounts that overran the 5s hook budget, the
 // hook was killed half-done, and the accounts it had not reached yet stayed in
 // the live database. They are not inert there: the running app treats every row
 // in `users` as a real account, so it kept fetching broker snapshots and paying
@@ -59,7 +59,7 @@ afterAll(async () => {
   await db.query(`DELETE FROM signals WHERE event_id IN (SELECT id FROM events WHERE dedupe_key LIKE ?)`).run(tagged);
   await db.query(`DELETE FROM events WHERE dedupe_key LIKE ?`).run(tagged);
   if (!made.length) return;
-  // Ints straight from createUser, never user input — safe to inline, and it
+  // Ints straight from createUser, never user input: safe to inline, and it
   // keeps this to one statement per table instead of one per account.
   const ids = `(${made.map((n) => Number(n)).filter(Number.isInteger).join(",")})`;
   // event_triage/signals again: a throwaway account can own rows against events
@@ -74,7 +74,7 @@ afterAll(async () => {
 // ── SHARP-32: resetting a practice record is scoped to one account ────────────
 // Reset archives rather than deletes, but it still has to be per-account: one
 // trader clearing their record must never blank someone else's. A leak here is
-// silent — the other account just quietly shows zero drills.
+// silent: the other account just quietly shows zero drills.
 
 const gradedDrill = (userId: number, ts: number) => db.query(
   `INSERT INTO practice_attempts
@@ -98,7 +98,7 @@ test("resetting one account's practice record leaves another account's intact", 
   expect((await practiceStats(b)).attempts).toBe(6);   // B is untouched
 });
 
-test("reset archives rather than destroys — the drills are still on record", async () => {
+test("reset archives rather than destroys: the drills are still on record", async () => {
   const a = await throwawayUser();
   const now = Math.floor(Date.now() / 1000);
   for (let i = 0; i < 4; i++) await gradedDrill(a, now - 600 + i);
@@ -142,7 +142,7 @@ test("legacy daily drills are kept but never averaged into the intraday record",
   const s = await practiceStats(a);
   expect(s.attempts).toBe(1);        // only the intraday one counts
 
-  // The daily rows are still there — history is preserved, not relabelled.
+  // The daily rows are still there: history is preserved, not relabelled.
   const kept = await db.query(
     `SELECT count(*)::int AS n FROM practice_attempts WHERE user_id = ? AND interval = '1d'`
   ).get(a) as { n: number };
@@ -152,11 +152,11 @@ test("legacy daily drills are kept but never averaged into the intraday record",
 test("one shared event, two accounts, two different readings", async () => {
   const a = await throwawayUser();
   const b = await throwawayUser();
-  // A public market event — one row, detected once.
+  // A public market event: one row, detected once.
   const eventId = (await testEvent("NVDA", "price_move", "NVDA test move"))!;
   expect(eventId).toBeNumber();
 
-  // A holds it, B doesn't — so the same event is critical to one and info to the other.
+  // A holds it, B doesn't: so the same event is critical to one and info to the other.
   await setTriageFor(eventId, a, "critical", "you hold 300 shares");
   await setTriageFor(eventId, b, "info", "not held");
 
@@ -178,7 +178,7 @@ test("a signal is only ever attached for the account it was written for", async 
 
   const forA = (await stateEvents(a)).find((r) => r.id === eventId);
   const forB = (await stateEvents(b)).find((r) => r.id === eventId);
-  // Both see the event — it's public market fact.
+  // Both see the event: it's public market fact.
   expect(forA).toBeDefined();
   expect(forB).toBeDefined();
   // Only A sees the advice, which names A's position size.
@@ -189,8 +189,8 @@ test("a signal is only ever attached for the account it was written for", async 
 test("a private event never reaches another account", async () => {
   const a = await throwawayUser();
   const b = await throwawayUser();
-  // "You closed NVDA — journal it?" is a fact about A's account, not the market.
-  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA (long) ~+12% — journal it?", a))!;
+  // "You closed NVDA: journal it?" is a fact about A's account, not the market.
+  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA (long) ~+12%: journal it?", a))!;
 
   expect((await stateEvents(a)).some((r) => r.id === eventId)).toBe(true);
   expect((await stateEvents(b)).some((r) => r.id === eventId)).toBe(false);
@@ -211,7 +211,7 @@ test("re-triage corrects rather than duplicating", async () => {
 // /api/state was always scoped correctly; the advisor's context builder was a
 // second, older copy of the same projection that never got the fan-out
 // treatment. It read the global events.severity column, joined signals with no
-// owner predicate, and took the newest briefing on the instance — so every
+// owner predicate, and took the newest briefing on the instance: so every
 // account's chat prompt carried whichever other account had most recently been
 // analysed. These pin the real exported queries, not a restatement of the SQL.
 
@@ -225,7 +225,7 @@ test("the advisor sees its own account's triage severity, not another's", async 
   await setTriageFor(eventId, b, "info", "B does not");
 
   expect((await advisorEvents(a, since)).some((r) => r.title === "AMD test headline")).toBe(true);
-  // B rated it info, so it must fall below B's critical/high cut — even though
+  // B rated it info, so it must fall below B's critical/high cut: even though
   // A's triage is the one sitting in the shared events.severity column.
   expect((await advisorEvents(b, since)).some((r) => r.title === "AMD test headline")).toBe(false);
 });
@@ -254,12 +254,12 @@ test("a private event stays out of the advisor context too", async () => {
   const a = await throwawayUser();
   const b = await throwawayUser();
   const since = Math.floor(Date.now() / 1000) - 3600;
-  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA — journal it?", a))!;
+  const eventId = (await testEvent("NVDA", "position_close", "Closed NVDA: journal it?", a))!;
   await setTriageFor(eventId, a, "high", "A's position");
   await setTriageFor(eventId, b, "high", "B should still never see it");
 
-  expect((await advisorEvents(a, since)).some((r) => r.title === "Closed NVDA — journal it?")).toBe(true);
-  expect((await advisorEvents(b, since)).some((r) => r.title === "Closed NVDA — journal it?")).toBe(false);
+  expect((await advisorEvents(a, since)).some((r) => r.title === "Closed NVDA: journal it?")).toBe(true);
+  expect((await advisorEvents(b, since)).some((r) => r.title === "Closed NVDA: journal it?")).toBe(false);
 });
 
 test("the advisor reads its own account's briefing, or none at all", async () => {
@@ -270,6 +270,6 @@ test("the advisor reads its own account's briefing, or none at all", async () =>
     .run(a, now, "A_PRIVATE_BRIEFING");
 
   expect((await advisorBriefing(a))?.content).toBe("A_PRIVATE_BRIEFING");
-  // B has no briefing of their own — the right answer is nothing, not A's.
+  // B has no briefing of their own: the right answer is nothing, not A's.
   expect(await advisorBriefing(b)).toBeNull();
 });

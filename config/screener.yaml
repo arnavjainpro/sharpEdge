@@ -6,9 +6,9 @@
 # your holdings/watchlist are always included regardless of filters.
 # Every stock is tagged with its sector/industry for sector rotation views.
 filters:
-  min_market_cap: 100000000   # $100M — includes small-caps, skips micro-caps
+  min_market_cap: 100000000   # $100M: includes small-caps, skips micro-caps
   min_price: 3                # avoid penny-stock data quality / borrow problems
-  min_volume: 150000          # shares/day — enough liquidity to actually trade
+  min_volume: 150000          # shares/day: enough liquidity to actually trade
   max_stocks: 5000            # scan size cap (≈6-8 min at concurrency 6, every 6h; ~7000 = whole market ≈ 8-9 min)
   concurrency: 6              # parallel Yahoo fetches; auto-throttles to 2 if Yahoo starts failing
 

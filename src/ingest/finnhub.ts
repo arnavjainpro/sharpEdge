@@ -47,7 +47,7 @@ export function cachedQuote(ticker: string, force = false): Promise<Quote> {
 }
 
 // Websocket trades patch the live price of an existing cache entry (never
-// create one — a bare price with zeroed pc/d/dp would corrupt callers).
+// create one: a bare price with zeroed pc/d/dp would corrupt callers).
 // TTL is untouched: REST still refreshes pc/h/l/o on expiry.
 export function patchQuoteFromTrade(dashSym: string, price: number, tradeTsMs: number) {
   const q = quoteCache.get(dashSym)?.q;
@@ -132,7 +132,7 @@ export async function refreshDailyStats(ticker: string) {
   return q;
 }
 
-// Live websocket health — exposed on /api/state so silent stalls become visible.
+// Live websocket health: exposed on /api/state so silent stalls become visible.
 export const wsStatus = {
   connected: false,
   lastMessageAt: 0, // any inbound frame, including Finnhub's {"type":"ping"}
@@ -141,7 +141,7 @@ export const wsStatus = {
 
 // Live trades websocket → aggregated into 1-minute bars.
 // Resilience: exponential-backoff reconnect (5s → 120s cap) + a watchdog that
-// force-recycles the socket if no frames arrive while the market is open —
+// force-recycles the socket if no frames arrive while the market is open -
 // otherwise a silently-dead socket would leave SQLite bars stale and Opus
 // analyzing news against stale technicals.
 export function startTradeStream(tickers: string[], onTrade?: (t: { s: string; p: number; v: number; t: number }) => void) {
@@ -186,12 +186,12 @@ export function startTradeStream(tickers: string[], onTrade?: (t: { s: string; p
 
   // Watchdog: checks every 15s; if the socket claims to be open but nothing has
   // arrived for 60s during market hours (Finnhub pings every ~15-30s even when
-  // trades are quiet), the connection is dead — force-close to trigger reconnect.
+  // trades are quiet), the connection is dead: force-close to trigger reconnect.
   // Skipped when the market is closed, where silence is normal.
   const watchdog = setInterval(() => {
     if (!wsStatus.connected || marketPhase() === "closed") return;
     if (Date.now() - wsStatus.lastMessageAt > 60_000) {
-      console.warn("[finnhub] watchdog: no frames for 60s during market hours — recycling socket");
+      console.warn("[finnhub] watchdog: no frames for 60s during market hours: recycling socket");
       ws?.close();
     }
   }, 15_000);

@@ -1,6 +1,6 @@
 // Financial circuit breaker: hard-stops AI spend if call volume goes anomalous
 // (e.g. a feed glitch replaying the same filing 50 times). Trips permanently
-// until manually reset — monitoring continues, AI calls stop.
+// until manually reset: monitoring continues, AI calls stop.
 
 type TripHandler = (name: string, count: number, windowSec: number) => void;
 let onTrip: TripHandler = () => {};

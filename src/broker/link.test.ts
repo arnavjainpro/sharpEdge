@@ -1,7 +1,7 @@
 // The web link flow's only stateful piece: Robinhood's login helper asks for a
 // verification code synchronously, but the code arrives in a separate HTTP
 // request minutes later. If this handshake breaks the UI either never shows the
-// code box or hangs after the user submits — neither raises an error anywhere.
+// code box or hangs after the user submits: neither raises an error anywhere.
 import { expect, test } from "bun:test";
 import { codeAsk, submitLinkCode, type LinkState } from "./link";
 

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>sharpEdge — Make Sharper Decisions</title>
+  <title>sharpEdge: Make Sharper Decisions</title>
   <meta name="description"
     content="A trading research and decision-support engine. 1,500 stocks scanned every six hours, six-dimension AI validation, and options priced by a real Black-Scholes engine.">
   <link rel="icon" type="image/png" href="/assets/favicon.png">
@@ -12,7 +12,7 @@
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
     /* Only the tokens this page uses, copied from index.html's design system so the
-       site and the dashboard read as one product. Deliberately a partial copy — the
+       site and the dashboard read as one product. Deliberately a partial copy: the
        full 150-line block would be a sync burden for no benefit here.
 
        Light only, on purpose: the marketing page ignores the OS setting and the
@@ -102,7 +102,7 @@
     }
 
     /* ── header ───────────────────────────────────────────────────────────── */
-    /* Fixed, and transparent while it sits over the hero — Meta's header overlays
+    /* Fixed, and transparent while it sits over the hero: Meta's header overlays
        the video and only takes a surface once you scroll past it. */
     header {
       position: fixed;
@@ -170,7 +170,7 @@
     }
 
     /* ── hero ─────────────────────────────────────────────────────────────── */
-    /* Edge to edge and a full viewport tall, like the reference — no gutters. */
+    /* Edge to edge and a full viewport tall, like the reference: no gutters. */
     .hero {
       position: relative;
       height: 100vh;
@@ -191,13 +191,13 @@
       height: 100%;
       object-fit: cover;
       /* Anchor right so the crop drops the app's own sidebar and logo rather than
-         slicing through them — the landing page has its own wordmark already. */
+         slicing through them: the landing page has its own wordmark already. */
       object-position: top right;
       z-index: -2;
     }
 
     /* The reference needs no scrim: its footage is dark where the type sits. A UI
-       screenshot has its own text everywhere, so two layers here — one pushing the
+       screenshot has its own text everywhere, so two layers here: one pushing the
        left column dark for the headline and copy, one for the nav and bottom edge. */
     .hero::after {
       content: "";
@@ -356,7 +356,7 @@
       z-index: -2;
     }
 
-    /* The pair cards crop a landscape screenshot to near-square, so anchor left —
+    /* The pair cards crop a landscape screenshot to near-square, so anchor left -
        centring slices the app's sidebar in half. */
     .pair .card img {
       object-position: top left;
@@ -427,7 +427,7 @@
       margin-bottom: 42px;
     }
 
-    /* Regular weight at display size — the reference's feature titles are not bold. */
+    /* Regular weight at display size: the reference's feature titles are not bold. */
     .why-card h4 {
       font-size: clamp(23px, 2.3vw, 31px);
       font-weight: 400;
@@ -864,7 +864,7 @@
             <path d="M4 21a8 8 0 0 1 16 0" />
           </svg>
           <h4>Your own account</h4>
-          <p>Every account gets its own portfolio, broker link, journal and alerts. Market data is shared —
+          <p>Every account gets its own portfolio, broker link, journal and alerts. Market data is shared;
             your positions never are.</p>
         </div>
       </div>
@@ -900,7 +900,7 @@
         </form>
         <p class="fine">
           Creating an account gives you your own portfolio, broker link, trade journal, alerts and background
-          monitoring. Market data — the screener, regime and universe — is shared across accounts; nothing
+          monitoring. Market data, including the screener, regime and universe, is shared across accounts; nothing
           derived from your positions ever is.<br>
           sharpEdge is read-only and never places or cancels broker orders.
           Alerts are delivered over Telegram, which you configure yourself.
@@ -1004,7 +1004,7 @@
     addEventListener("resize", onScroll, { passive: true });
     onScroll();
 
-    // Hand the typed email to the app's existing signup form via query param —
+    // Hand the typed email to the app's existing signup form via query param -
     // no new endpoint, the SPA does the actual account creation.
     document.getElementById("signup-form").addEventListener("submit", (ev) => {
       ev.preventDefault();

@@ -29,7 +29,7 @@ function stubFetch(body: object) {
 test("cachedQuote is single-flight and caches for the TTL", async () => {
   const calls = stubFetch(quote());
   const [a, b] = await Promise.all([cachedQuote("AAPL"), cachedQuote("AAPL")]);
-  await cachedQuote("AAPL"); // within TTL — still cached
+  await cachedQuote("AAPL"); // within TTL: still cached
   expect(calls()).toBe(1);
   expect(a.c).toBe(100);
   expect(b).toBe(a);
@@ -60,10 +60,10 @@ test("WS trade patches existing entry: price, d/dp, t in seconds", async () => {
 });
 
 test("WS trade never creates an entry; pc=0 guard holds", async () => {
-  patchQuoteFromTrade("ZZZZ", 5, Date.now()); // no entry — must be a no-op, no throw
+  patchQuoteFromTrade("ZZZZ", 5, Date.now()); // no entry: must be a no-op, no throw
   stubFetch(quote({ c: 1, pc: 0, d: 0, dp: 0 }));
   const q = await cachedQuote("BADQ");
   patchQuoteFromTrade("BADQ", 2, Date.now());
   expect(q.c).toBe(2);
-  expect(q.dp).toBe(0); // untouched — no Infinity
+  expect(q.dp).toBe(0); // untouched: no Infinity
 });

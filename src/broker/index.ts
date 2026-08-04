@@ -14,7 +14,7 @@ import type { BrokerSnapshot } from "./types";
 // Priority: linked Robinhood > one-shot import > portfolio.yaml.
 const providers = [robinhoodProvider, importProvider, yamlProvider];
 
-// Per-user cache — each signed-in user may have their own linked broker/import.
+// Per-user cache: each signed-in user may have their own linked broker/import.
 const cached = new Map<number, BrokerSnapshot>();
 const inFlight = new Map<number, Promise<BrokerSnapshot>>();
 
@@ -28,7 +28,7 @@ export async function refreshBroker(userId: number): Promise<BrokerSnapshot> {
 }
 
 // Watchlist-edit overlays. Applied on every path that returns a snapshot to
-// the caller — including the stale-fallback path below — so a just-saved
+// the caller: including the stale-fallback path below: so a just-saved
 // watchlist change is never silently absent from a response just because the
 // live provider happened to fail on that poll.
 //
@@ -50,7 +50,7 @@ async function applyOverlays(userId: number, snap: BrokerSnapshot): Promise<Brok
 //
 // Only a real provider is ever written. "manual" is the portfolio.yaml
 // fallback: persisting it would mean the first failed Robinhood refresh after a
-// restart overwrites the good snapshot with a near-empty one — destroying
+// restart overwrites the good snapshot with a near-empty one: destroying
 // exactly what this exists to protect.
 export async function persistSnapshot(userId: number, snap: BrokerSnapshot): Promise<void> {
   if (snap.source === "manual") return;
@@ -76,12 +76,12 @@ export async function loadPersisted(userId: number): Promise<BrokerSnapshot | nu
     // A corrupt row must degrade to the yaml path, not throw on a boot request.
     if (!Array.isArray(snap?.holdings)) return null;
     // The last-good rule is enforced on the way in AND on the way out. Nothing
-    // writes a 'manual' row today, but this table outlives any one writer — a
+    // writes a 'manual' row today, but this table outlives any one writer: a
     // migration, a hand-run INSERT, or a future caller that forgets the rule
     // would otherwise get a portfolio.yaml snapshot restored as "last good",
     // which is exactly the silent downgrade persistSnapshot exists to prevent.
     if (snap.source === "manual") {
-      console.warn(`[broker] ignoring persisted 'manual' snapshot for user ${userId} — not a last-good source`);
+      console.warn(`[broker] ignoring persisted 'manual' snapshot for user ${userId}: not a last-good source`);
       return null;
     }
     return snap;
@@ -128,7 +128,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
         `[broker] snapshot via ${snap.source} (user ${userId}): ${snap.holdings.length} positions, ${snap.watchlist.length} watched, ` +
         `${snap.openOrders.length} open orders${snap.account.equity != null ? `, equity $${snap.account.equity.toLocaleString()}` : ""}`
       );
-      // F2b: only ever diff robinhood-vs-robinhood (real fills) — a fallback or
+      // F2b: only ever diff robinhood-vs-robinhood (real fills): a fallback or
       // import snapshot must never touch the baseline. Runs for every account
       // with a live link now (SHARP-29); broker_positions is already keyed by
       // user_id, so the baselines never collided, they were just never written.
@@ -139,7 +139,7 @@ async function doRefresh(userId: number): Promise<BrokerSnapshot> {
     } catch (err) {
       console.error(`[broker] ${p.name} failed for user ${userId}:`, err);
       // A transient failure of a live provider must NOT downgrade the cached
-      // snapshot to a lower-priority source — options/positions would silently
+      // snapshot to a lower-priority source: options/positions would silently
       // vanish from the dashboard until the next successful poll. Serve the
       // last good snapshot instead; stale beats wrong-source.
       //
@@ -210,9 +210,9 @@ async function detectAndRecordCloses(userId: number, snap: BrokerSnapshot): Prom
       }
       const pnl = estPnlPct != null ? ` ~${estPnlPct >= 0 ? "+" : ""}${estPnlPct.toFixed(1)}% (est.)` : "";
       const title = e.kind === "closed"
-        ? `📓 Closed ${e.ticker} (${e.direction})${pnl} — journal it?`
-        : `📓 Trimmed ${e.ticker} ${e.direction} to ${e.nowQty} of ${e.prevQty}${pnl} — journal it?`;
-      // Owned: this is your fill, not a market event — nobody else's Activity
+        ? `📓 Closed ${e.ticker} (${e.direction})${pnl}: journal it?`
+        : `📓 Trimmed ${e.ticker} ${e.direction} to ${e.nowQty} of ${e.prevQty}${pnl}: journal it?`;
+      // Owned: this is your fill, not a market event: nobody else's Activity
       // feed should show it.
       const id = await insertEvent({ ts: Math.floor(Date.now() / 1000), ticker: e.ticker, kind: "position_close", title, detail: { ...e, estPnlPct }, dedupeKey: `brokerclose:${userId}:${seq}`, userId });
       if (id && telegramEnabled()) { try { await notifyTelegram(title + (e.note ? ` (${e.note})` : "")); } catch { /* delivery best-effort */ } }
@@ -301,8 +301,8 @@ export async function positionSizing(
       riskPct: risk.max_risk_per_trade_pct,
       riskDollars: null, shares: null, notional: null, cappedByPositionLimit: false,
       note: equity
-        ? "Stop distance unavailable — cannot size the trade."
-        : "No account equity known (link a broker, import positions, or set risk.account_equity in portfolio.yaml) — express size as % risk instead of shares.",
+        ? "Stop distance unavailable: cannot size the trade."
+        : "No account equity known (link a broker, import positions, or set risk.account_equity in portfolio.yaml): express size as % risk instead of shares.",
     };
   }
   const riskDollars = (equity * risk.max_risk_per_trade_pct) / 100;

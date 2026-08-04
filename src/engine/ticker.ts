@@ -18,7 +18,7 @@ import { computeIndicators, scoreLong, scoreShort, directionOf, isScanRunning, t
 import { fetchCompanyNews } from "../ingest/finnhub";
 
 // Leading ^ allowed for index symbols (^GSPC); 1-6 letters/dot/dash otherwise.
-// Seeded futures symbols (ES=F, CL=F, …) are allowed explicitly — the `=` fails
+// Seeded futures symbols (ES=F, CL=F, …) are allowed explicitly: the `=` fails
 // the regex.
 const VALID = /^\^?[A-Za-z.\-]{1,6}$/;
 export const validTicker = (sym: string) => isFuture(sym) || VALID.test(sym);
@@ -49,7 +49,7 @@ export async function scoreTicker(rawSym: string): Promise<ScoreTickerOutcome> {
   if (!validTicker(sym)) return { ok: false, error: "Invalid ticker", status: 400 };
 
   // During the 10-min screener run, serve stale cache instead of 503ing every
-  // search — stale scores beat a dead search box. True misses still 503.
+  // search: stale scores beat a dead search box. True misses still 503.
   const hit = cache.get(sym);
   if (hit && (Date.now() - hit.ts < TTL_MS || isScanRunning())) return { ok: true, data: hit.data };
 
@@ -83,7 +83,7 @@ export async function scoreTicker(rawSym: string): Promise<ScoreTickerOutcome> {
         .slice(0, 8)
         .map((n) => ({ headline: n.headline, url: n.url, source: n.source, datetime: n.datetime }));
     } catch {
-      /* news is best-effort — price + score still return */
+      /* news is best-effort: price + score still return */
     }
   }
 

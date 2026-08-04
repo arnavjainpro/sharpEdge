@@ -8,7 +8,7 @@ import type { BrokerSnapshot } from "./types";
 // portfolio. These pin the durable copy that replaces it.
 //
 // NOTE: writes to the configured database, using throwaway @example.invalid
-// accounts that are deleted afterwards — same convention as isolation.test.ts.
+// accounts that are deleted afterwards: same convention as isolation.test.ts.
 
 const made: number[] = [];
 async function throwawayUser(): Promise<number> {
@@ -50,7 +50,7 @@ test("a live snapshot is written and comes back whole", async () => {
 // The single most important assertion in SHARP-28. `manual` is the portfolio.yaml
 // fallback: doRefresh reaches it whenever the live provider throws, so if it were
 // persisted, the FIRST failed Robinhood refresh after a restart would overwrite
-// the good snapshot with a near-empty one — destroying the thing this table
+// the good snapshot with a near-empty one: destroying the thing this table
 // exists to protect, silently, and looking like a successful refresh.
 test("a yaml fallback never overwrites the last good live snapshot", async () => {
   const u = await throwawayUser();
@@ -64,7 +64,7 @@ test("a yaml fallback never overwrites the last good live snapshot", async () =>
   expect(back!.account.equity).toBe(9999);
 });
 
-test("an imported snapshot is durable too — only yaml is excluded", async () => {
+test("an imported snapshot is durable too: only yaml is excluded", async () => {
   const u = await throwawayUser();
   await persistSnapshot(u, snap("import", ["TSLA"]));
   expect(await storedSource(u)).toBe("import");
@@ -80,7 +80,7 @@ test("a later live refresh replaces the stored snapshot rather than duplicating 
   expect((await loadPersisted(u))!.holdings.map((h) => h.ticker)).toEqual(["NEW"]);
 });
 
-// A corrupt row must degrade to the yaml path, not throw on a boot request —
+// A corrupt row must degrade to the yaml path, not throw on a boot request -
 // this runs inside doRefresh's failure branch, where throwing would turn a
 // recoverable refresh failure into a dead endpoint.
 test("a corrupt stored snapshot reads as absent instead of throwing", async () => {
@@ -94,8 +94,8 @@ test("a corrupt stored snapshot reads as absent instead of throwing", async () =
 });
 
 // The last-good rule is enforced on read as well as on write. persistSnapshot
-// is not the only thing that can put a row in this table over its lifetime — a
-// migration, a hand-run INSERT, or a future caller that forgets could — and a
+// is not the only thing that can put a row in this table over its lifetime: a
+// migration, a hand-run INSERT, or a future caller that forgets could: and a
 // restored portfolio.yaml snapshot is exactly the silent downgrade the rule
 // exists to prevent.
 test("a 'manual' row already in the table is refused on read", async () => {

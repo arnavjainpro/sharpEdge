@@ -1,7 +1,7 @@
 // Black-Scholes pricing + payoff/stress for multi-leg options structures.
 // Pure math, no deps. Two jobs:
 //   1. Stress-test the swing analyzer's proposed legs (spot/IV/time shocks).
-//   2. Model-price options in backtests — there is NO historical option-quote
+//   2. Model-price options in backtests: there is NO historical option-quote
 //      feed, so legs are repriced along the underlying's path. Results are
 //      model-based, not replays of real quotes: label them as such in the UI.
 // Run `bun src/engine/optionsMath.ts` to execute the self-check.
@@ -119,5 +119,5 @@ if (import.meta.main) {
   console.assert(credit > 0, "iron condor should be a net credit");
   console.assert(Math.abs(st.maxLoss - expectedMaxLoss) < 5, `IC max loss ${st.maxLoss} vs ${expectedMaxLoss}`);
   console.assert(st.breakevens.length === 2, `IC should have 2 breakevens, got ${st.breakevens.length}`);
-  console.log(`optionsMath self-check OK — parity=${parity.toExponential(1)}, IC credit=$${credit.toFixed(2)}, maxLoss=$${st.maxLoss.toFixed(2)}`);
+  console.log(`optionsMath self-check OK: parity=${parity.toExponential(1)}, IC credit=$${credit.toFixed(2)}, maxLoss=$${st.maxLoss.toFixed(2)}`);
 }

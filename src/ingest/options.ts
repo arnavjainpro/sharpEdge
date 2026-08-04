@@ -1,7 +1,7 @@
 // Options chain context via Yahoo's public options API (cookie + crumb
 // bootstrap, no key). Provides implied-volatility context, expected move, and
 // candidate strike/expiry ranges for options-aware idea analysis. Degrades
-// gracefully — callers must treat null as "IV data unavailable, reason
+// gracefully: callers must treat null as "IV data unavailable, reason
 // qualitatively about premium risk".
 
 const UA = { "User-Agent": "Mozilla/5.0 (Macintosh) sharpEdge personal-use" };
@@ -101,7 +101,7 @@ function summarizeExpiry(spot: number, expiryUnix: number, calls: Contract[], pu
   );
   const atmIv = ivs.length ? ivs.reduce((a, b) => a + b, 0) / ivs.length : null;
 
-  // Strike ladder: ~7 strikes nearest spot, with live bid/ask/IV for each side —
+  // Strike ladder: ~7 strikes nearest spot, with live bid/ask/IV for each side -
   // lets the model choose real, priced contracts and build spreads.
   const callBy = new Map(calls.map((c) => [c.strike, c]));
   const putBy = new Map(puts.map((c) => [c.strike, c]));
@@ -157,12 +157,12 @@ export async function fetchOptionsSummary(ticker: string): Promise<OptionsSummar
     monthIv == null
       ? "IV unavailable for this chain."
       : monthIv > 0.8
-        ? `Very high IV (~${(monthIv * 100).toFixed(0)}%): options are expensive — buying premium needs a big move to profit; defined-risk spreads or selling premium usually make more sense.`
+        ? `Very high IV (~${(monthIv * 100).toFixed(0)}%): options are expensive: buying premium needs a big move to profit; defined-risk spreads or selling premium usually make more sense.`
         : monthIv > 0.45
           ? `Elevated IV (~${(monthIv * 100).toFixed(0)}%): premium is rich; favor spreads over naked long options, and mind IV crush after catalysts.`
           : monthIv > 0.25
             ? `Moderate IV (~${(monthIv * 100).toFixed(0)}%): premium reasonably priced for directional plays.`
-            : `Low IV (~${(monthIv * 100).toFixed(0)}%): premium is cheap — long calls/puts are viable if a real catalyst or move is expected.`;
+            : `Low IV (~${(monthIv * 100).toFixed(0)}%): premium is cheap: long calls/puts are viable if a real catalyst or move is expected.`;
 
   return { ticker, spot, expiries, ivNote };
 }
@@ -170,9 +170,9 @@ export async function fetchOptionsSummary(ticker: string): Promise<OptionsSummar
 // Compact text block for AI prompts.
 export function optionsContextText(o: OptionsSummary | null): string {
   if (!o) return "OPTIONS DATA: unavailable (treat premium/IV considerations qualitatively).";
-  const px = (n: number | null) => (n != null ? "$" + n.toFixed(2) : "—");
-  const iv = (n: number | null) => (n != null ? (n * 100).toFixed(0) + "%" : "—");
-  const lines = [`OPTIONS DATA for ${o.ticker} (spot $${o.spot.toFixed(2)}) — live chain (Yahoo, ~15-min delayed):`];
+  const px = (n: number | null) => (n != null ? "$" + n.toFixed(2) : "N/A");
+  const iv = (n: number | null) => (n != null ? (n * 100).toFixed(0) + "%" : "N/A");
+  const lines = [`OPTIONS DATA for ${o.ticker} (spot $${o.spot.toFixed(2)}): live chain (Yahoo, ~15-min delayed):`];
   for (const e of o.expiries) {
     lines.push(
       `\n${e.expiry} (${e.daysToExpiry}d): ATM IV ${iv(e.atmIv)}, implied move ±${e.expectedMovePct?.toFixed(1) ?? "n/a"}%`

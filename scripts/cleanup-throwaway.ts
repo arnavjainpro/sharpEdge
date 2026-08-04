@@ -30,7 +30,7 @@ if (!safe) {
 }
 
 if (!confirmed) {
-  console.log("\nDry run — nothing deleted. Re-run with --yes to actually do it.");
+  console.log("\nDry run: nothing deleted. Re-run with --yes to actually do it.");
   process.exit(0);
 }
 

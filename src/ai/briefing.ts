@@ -23,7 +23,7 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
 
   const since = Math.floor(Date.now() / 1000) - 24 * 3600;
   // Events are public market fact, so the global list is the right raw material.
-  // Signals are this account's own prior calls — scoped, or the briefing would
+  // Signals are this account's own prior calls: scoped, or the briefing would
   // recap advice that was written for somebody else's positions.
   const events = await db
     .query(`SELECT ticker, kind, title, severity FROM events WHERE ts > ? AND severity IN ('critical','high') ORDER BY ts DESC LIMIT 25`)
@@ -41,7 +41,7 @@ export async function generateBriefing(kind: "open" | "close", portfolio: Portfo
     if (!snap) return "";
     const leading = snap.sectors.filter((s) => s.state === "leading").map((s) => s.sector);
     const lagging = snap.sectors.filter((s) => s.state === "lagging").map((s) => s.sector);
-    return `Sector rotation: leading — ${leading.join(", ") || "none"}; lagging — ${lagging.join(", ") || "none"}.`;
+    return `Sector rotation: leading: ${leading.join(", ") || "none"}; lagging: ${lagging.join(", ") || "none"}.`;
   })();
   const marketCtx = await marketContextText();
 

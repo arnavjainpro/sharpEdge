@@ -9,7 +9,7 @@ import {
 // Exercises the freemium chokepoint against the real database, using throwaway
 // @example.invalid accounts that are deleted afterwards. The one thing that
 // truly matters here: a fresh account is 'free', and the ceilings actually bite
-// — a gate that silently passes gives the paid product away.
+//: a gate that silently passes gives the paid product away.
 
 const userIds: number[] = [];
 async function freshUser(): Promise<number> {
@@ -19,7 +19,7 @@ async function freshUser(): Promise<number> {
   return id;
 }
 
-// One statement per table over the whole set — the suite runs against remote
+// One statement per table over the whole set: the suite runs against remote
 // Postgres and a cleanup that overruns the hook budget strands throwaway rows.
 afterAll(async () => {
   if (!userIds.length) return;
@@ -30,7 +30,7 @@ afterAll(async () => {
   await db.query(`DELETE FROM users WHERE id IN (${ph})`).run(...userIds);
 }, 60_000);
 
-test("a fresh account is on the free plan — nobody is silently granted Pro", async () => {
+test("a fresh account is on the free plan: nobody is silently granted Pro", async () => {
   const id = await freshUser();
   expect(await planFor(id)).toBe("free");
 });
@@ -64,7 +64,7 @@ test("metering one feature does not spend another's allowance", async () => {
   const id = await freshUser();
   await meter(id, "backtest"); // one backtest used
   expect(await usageThisPeriod(id, "backtest")).toBe(1);
-  // ai_validation is untouched — separate counter.
+  // ai_validation is untouched: separate counter.
   expect(await usageThisPeriod(id, "ai_validation")).toBe(0);
   expect((await checkMetered(id, "ai_validation")).ok).toBe(true);
 });
@@ -77,7 +77,7 @@ test("Pro lifts every ceiling and never meters", async () => {
   // Pro-only feature now allowed.
   expect((await checkProFeature(id, "chat_advisor")).ok).toBe(true);
 
-  // Metered feature is unlimited, and meter() is a no-op — no row written.
+  // Metered feature is unlimited, and meter() is a no-op: no row written.
   for (let i = 0; i < FREE_LIMITS.ai_validation + 5; i++) {
     expect((await checkMetered(id, "ai_validation")).ok).toBe(true);
     await meter(id, "ai_validation");

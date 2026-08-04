@@ -22,13 +22,13 @@ export async function refreshEarnings(tickers: string[]): Promise<void> {
       const rows = await fetchEarningsCalendar(from, to, t);
       const next = rows.filter((r) => r.symbol === t).map((r) => r.date).sort()[0];
       if (next) earningsDates.set(t, next); else earningsDates.delete(t);
-    } catch { /* calendar endpoint hiccup — keep last known */ }
+    } catch { /* calendar endpoint hiccup: keep last known */ }
     await Bun.sleep(1100); // finnhub free-tier pacing
   }
   if (earningsDates.size) console.log(`[earnings] upcoming: ${[...earningsDates.entries()].map(([t, d]) => `${t} ${d}`).join(", ")}`);
 }
 
-// {ticker: date} for just the requested tickers — shipped on /api/state.
+// {ticker: date} for just the requested tickers: shipped on /api/state.
 export function earningsFor(tickers: string[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const t of tickers) { const d = earningsDates.get(t); if (d) out[t] = d; }
@@ -52,12 +52,12 @@ export async function checkOptionExpiries(portfolio: Portfolio, userId: number):
     const threshold = dte <= 1 ? 1 : dte <= 7 ? 7 : null;
     if (threshold == null || dte < 0) continue;
     const o = h.option;
-    const title = `⏳ ${o.underlying} $${o.strike} ${o.type} expires ${dte <= 1 ? "TODAY/tomorrow" : `in ${dte} days`} (${o.expiry}) — you hold ${Math.abs(h.shares)} contract${Math.abs(h.shares) === 1 ? "" : "s"}`;
+    const title = `⏳ ${o.underlying} $${o.strike} ${o.type} expires ${dte <= 1 ? "TODAY/tomorrow" : `in ${dte} days`} (${o.expiry}): you hold ${Math.abs(h.shares)} contract${Math.abs(h.shares) === 1 ? "" : "s"}`;
     const id = await insertEvent({
       ts: Math.floor(Date.now() / 1000), ticker: h.ticker, kind: "option_expiry",
       title, detail: { dte, ...o }, dedupeKey: `optexp:${userId}:${h.ticker}:${threshold}`, userId,
     });
-    if (id) { // first time this warning fires — push it
+    if (id) { // first time this warning fires: push it
       console.log(`[insights] ${title}`);
       const results = await Promise.allSettled([
         telegramEnabled() ? notifyTelegram(title) : Promise.resolve(),
@@ -111,8 +111,8 @@ export const SCORE_DIMENSIONS = [
 ] as const;
 
 // One replayed idea: outcome + realized R + the six dimension scores. R is
-// deterministic from the outcome — a win hit the target (planned R:R), a loss
-// hit the stop (-1R) — so no need to thread the touched price back out.
+// deterministic from the outcome: a win hit the target (planned R:R), a loss
+// hit the stop (-1R): so no need to thread the touched price back out.
 export interface IdeaReplay {
   rating: string; direction: string;
   outcome: "win" | "loss" | "open";
@@ -120,7 +120,7 @@ export interface IdeaReplay {
   scores: Record<string, number> | null;
 }
 
-// Per-user, matching the Map<userId,...> pattern in broker/index.ts — a
+// Per-user, matching the Map<userId,...> pattern in broker/index.ts: a
 // single-slot cache would thrash (and re-fetch every ticker's candles) any
 // time two users' calls interleave. Both ideaScoreboard and calibration read
 // this one cache, so the paced Yahoo fetches run once per hour, not twice.
@@ -153,7 +153,7 @@ export async function replayUserIdeas(userId: number): Promise<{ ideas: IdeaRepl
     if (!levels) { skipped++; continue; }
     if (!candleCache.has(idea.ticker)) {
       // Same politeness pacing as the screener's Yahoo fetch loop (screener.ts)
-      // — an unthrottled burst on a cold cache risks a 429 that then nulls out
+      //: an unthrottled burst on a cold cache risks a 429 that then nulls out
       // every remaining ticker for the rest of this hour's cache window.
       if (candleCache.size) await Bun.sleep(180);
       try { candleCache.set(idea.ticker, await fetchDailyCandlesBulk(idea.ticker, "1y", 30)); } catch { candleCache.set(idea.ticker, null); }
@@ -257,9 +257,9 @@ export async function calibration(userId: number): Promise<Calibration> {
   const resolved = resolvedIdeas.length;
   if (strong?.hitRate != null && weak?.hitRate != null) {
     const sp = Math.round(strong.hitRate * 100), wp = Math.round(weak.hitRate * 100);
-    verdict = sp > wp + 5 ? `Strong ideas hit ${sp}% vs weak ${wp}% — the rubric has edge.`
-      : sp < wp - 5 ? `Strong ideas hit ${sp}% vs weak ${wp}% — the rubric is inverted, investigate.`
-        : `Strong ${sp}% vs weak ${wp}% — no clear separation yet.`;
+    verdict = sp > wp + 5 ? `Strong ideas hit ${sp}% vs weak ${wp}%: the rubric has edge.`
+      : sp < wp - 5 ? `Strong ideas hit ${sp}% vs weak ${wp}%: the rubric is inverted, investigate.`
+        : `Strong ${sp}% vs weak ${wp}%: no clear separation yet.`;
   } else if (strong?.hitRate != null) {
     verdict = `Strong ideas hit ${Math.round(strong.hitRate * 100)}% (need ${MIN_N}+ resolved weak ideas to compare).`;
   } else {

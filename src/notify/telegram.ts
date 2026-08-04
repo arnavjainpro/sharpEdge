@@ -1,4 +1,4 @@
-// Optional Telegram push — active only when both env vars are set.
+// Optional Telegram push: active only when both env vars are set.
 import { config } from "../config";
 
 export const telegramEnabled = () => !!(config.telegramToken && config.telegramChatId);

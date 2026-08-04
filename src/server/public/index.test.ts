@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { relative } from "path";
+import { fileURLToPath } from "url";
 
 describe("dashboard shell", () => {
   test("all inline scripts parse", async () => {
@@ -18,5 +20,24 @@ describe("dashboard shell", () => {
       .map((match) => match[1]);
 
     expect([...new Set(listenerIds.filter((id) => !ids.has(id)))]).toEqual([]);
+  });
+
+  test("runtime copy contains no em dashes", async () => {
+    const root = fileURLToPath(new URL("../../../", import.meta.url));
+    const emDash = String.fromCodePoint(0x2014);
+    const offenders: string[] = [];
+
+    for (const dir of ["src", "scripts", "config"]) {
+      const glob = new Bun.Glob("**/*.{ts,html,yaml,sql}");
+      for await (const file of glob.scan({ cwd: `${root}/${dir}`, absolute: true, onlyFiles: true })) {
+        // Local portfolio.yaml is private, gitignored user data rather than app
+        // copy. The committed portfolio.example.yaml is still checked.
+        if (relative(root, file) === "config/portfolio.yaml") continue;
+        const text = await Bun.file(file).text();
+        if (text.includes(emDash)) offenders.push(relative(root, file));
+      }
+    }
+
+    expect(offenders).toEqual([]);
   });
 });

@@ -1,4 +1,4 @@
-// Transactional email — the one and only outbound mail path, used to prove
+// Transactional email: the one and only outbound mail path, used to prove
 // someone controls an address before it becomes a login. Resend's HTTP API over
 // plain fetch, no dependency, same shape as telegram.ts.
 //
@@ -10,12 +10,12 @@ import { config } from "../config";
 
 export const emailEnabled = () => !!(config.resendKey && config.emailFrom);
 
-// Returns false rather than throwing — callers must be able to tell "the mail
+// Returns false rather than throwing: callers must be able to tell "the mail
 // never went out" from "the mail went out", because pretending it sent leaves
 // someone staring at an inbox waiting for a link that isn't coming.
 export async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<boolean> {
   if (!emailEnabled()) {
-    console.error("[notify:email] not configured — set RESEND_API_KEY (see .env.example)");
+    console.error("[notify:email] not configured: set RESEND_API_KEY (see .env.example)");
     return false;
   }
   try {
@@ -48,14 +48,14 @@ export async function sendEmail(to: string, subject: string, text: string, html?
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 // Signup verification. The code is the only interpolated value and it is six
-// digits from a CSPRNG, but it still goes through esc() — a template built by
+// digits from a CSPRNG, but it still goes through esc(): a template built by
 // concatenation is exactly where that habit stops mattering the day someone
 // parameterises it.
 //
 // Layout is table-based with inline styles on purpose. Outlook renders through
 // Word's HTML engine: no flexbox, no grid, and <style> is dropped entirely by
 // Gmail's clipped view and several webmail clients. The one <style> block holds
-// only the media queries, which are a progressive enhancement — the mail is
+// only the media queries, which are a progressive enhancement: the mail is
 // already readable at 320px without them because the outer table is width:100%
 // with a max-width, not a fixed 600px.
 export function verificationEmail(code: string): { subject: string; text: string; html: string } {
@@ -71,7 +71,7 @@ export function verificationEmail(code: string): { subject: string; text: string
       "",
       "Enter it in the sign-up form to finish creating your account.",
       "The code expires in 15 minutes and can only be used once.",
-      "If you didn't sign up for sharpEdge, ignore this email — no account was created.",
+      "If you didn't sign up for sharpEdge, ignore this email: no account was created.",
     ].join("\n"),
     html: `<!doctype html>
 <html lang="en">
@@ -125,7 +125,7 @@ export function verificationEmail(code: string): { subject: string; text: string
               </p>
               <hr style="border:none; border-top:1px solid #e4e6eb; margin:0 0 20px;">
               <p class="se-muted" style="margin:0; font-size:13px; line-height:1.6; color:#6b7280;">
-                If you didn't sign up for sharpEdge, ignore this email — no account was created and no further mail will be sent. Never share this code with anyone.
+                If you didn't sign up for sharpEdge, ignore this email: no account was created and no further mail will be sent. Never share this code with anyone.
               </p>
             </td>
           </tr>

@@ -5,7 +5,7 @@ import { join } from "path";
 import { config, asRiskAppetite, type RiskAppetite } from "./config";
 
 if (!config.databaseUrl) {
-  throw new Error("DATABASE_URL is not set — point it at your Supabase Postgres connection string (see .env.example).");
+  throw new Error("DATABASE_URL is not set: point it at your Supabase Postgres connection string (see .env.example).");
 }
 
 // Single pooled Postgres client (Supabase). Bun's native SQL client.
@@ -13,7 +13,7 @@ export const sql = new SQL(config.databaseUrl);
 
 // Transaction routing: db.transaction(fn) runs fn inside `sql.begin`, and the
 // shim below routes every query issued within that async context through the
-// transaction connection — so existing call sites need no changes beyond `await`.
+// transaction connection: so existing call sites need no changes beyond `await`.
 const txStore = new AsyncLocalStorage<any>();
 const conn = () => txStore.getStore() ?? sql;
 
@@ -86,7 +86,7 @@ export interface RiskPrefs {
 export async function getRiskPrefs(userId: number): Promise<RiskPrefs | null> {
   const row = await db.query(`SELECT account_equity, max_risk_per_trade_pct, max_position_pct, target_rr_ratio, risk_appetite FROM risk_prefs WHERE user_id = ?`).get<RiskPrefs>(userId);
   // Rows written before the column existed default to 'balanced' at the DB level,
-  // but coerce anyway — this value selects which structures the analyzer may propose.
+  // but coerce anyway: this value selects which structures the analyzer may propose.
   return row && { ...row, risk_appetite: asRiskAppetite(row.risk_appetite) };
 }
 
@@ -146,7 +146,7 @@ export async function deleteArtifact(userId: number, id: number): Promise<boolea
 
 // ── chat threads: saved advisor conversations ────────────────────────────────
 // A title is derived, never asked for: the first user message, collapsed and
-// truncated. Deterministic and free — naming a thread with a model call would
+// truncated. Deterministic and free: naming a thread with a model call would
 // double the cost of the cheapest turn in the conversation.
 export const CHAT_TITLE_MAX = 60;
 export const chatTitleFrom = (question: string) => {
@@ -176,7 +176,7 @@ export async function listChatThreads(userId: number, limit = 30): Promise<ChatT
   ).all(userId, limit) as ChatThreadRow[];
 }
 
-// Returns null for "not yours" and for "does not exist" alike — the caller
+// Returns null for "not yours" and for "does not exist" alike: the caller
 // turns both into a 404, so a probe can't confirm that someone else's thread id
 // is real.
 export async function chatThread(userId: number, id: number): Promise<ChatThreadRow | null> {
@@ -216,7 +216,7 @@ export async function deleteChatThread(userId: number, id: number): Promise<bool
 
 // Validated ideas and intraday plans live in `ideas`, the other half of the
 // history feed. Without this they could only be dismissed from the DOM and came
-// straight back on reload — which is what "I can't delete it" meant.
+// straight back on reload: which is what "I can't delete it" meant.
 //
 // trade_outcomes.idea_id and tracked_trades.idea_id reference this row with no
 // ON DELETE rule, so they're detached first, inside one transaction. The journal
@@ -252,7 +252,7 @@ export async function scoreHistory(userId: number, limit = 30): Promise<{ ts: nu
 // or loops forever (with `<=`). `src` is a literal 'a'/'i' per branch, which
 // makes the composite a total order across both tables.
 //
-// UNION ALL, not UNION: plain UNION would dedupe across the big text payload —
+// UNION ALL, not UNION: plain UNION would dedupe across the big text payload -
 // wrong (rows are never equal) and expensive. Each branch orders and limits
 // before the union so idx_ideas_user_ts / idx_artifacts_user_ts get used.
 export interface HistoryCursor { ts: number; src: string; id: number }
@@ -280,7 +280,7 @@ export async function historyFeed(
   }
   if (wantArtifacts) {
     const ks = kinds?.filter((k) => (ARTIFACT_KINDS as readonly string[]).includes(k)) ?? null;
-    // Placeholder COUNT is interpolated, never the values — and ks is already
+    // Placeholder COUNT is interpolated, never the values: and ks is already
     // filtered to the ARTIFACT_KINDS allowlist, so nothing user-supplied can
     // reach the SQL text. Expanded IN (?,?) rather than = ANY(?) to avoid
     // depending on array-parameter binding.
@@ -321,7 +321,7 @@ export interface EventRow {
 }
 
 // userId is for the rare event that is about ONE account rather than the market
-// — a detected position close, an expiry warning naming your contract count.
+//: a detected position close, an expiry warning naming your contract count.
 // Leave it unset for market facts so every watcher shares the one row (and the
 // one round of detection). An owned event MUST also carry the user in its
 // dedupeKey, or the first account to trigger it silences the rest.
@@ -354,7 +354,7 @@ export async function monitoredUserIds(): Promise<number[]> {
 // events.severity is the GLOBAL reading: how significant this event was to
 // whoever it mattered most to. It stays because the AI context builders
 // (analyst, advisor, briefing) query "what happened recently that mattered" and
-// an event is public market fact — there's nothing private in the headline.
+// an event is public market fact: there's nothing private in the headline.
 // Per-user severity, which weighs the event against that user's holdings, is a
 // separate row: see setTriageFor.
 export async function setTriage(eventId: number, severity: string, rationale: string) {
@@ -365,7 +365,7 @@ export async function setTriage(eventId: number, severity: string, rationale: st
   );
 }
 
-// One user's reading of one event. Re-triage overwrites rather than stacking —
+// One user's reading of one event. Re-triage overwrites rather than stacking -
 // a repeat run for the same (event, user) is a correction, not a second opinion.
 export async function setTriageFor(eventId: number, userId: number, severity: string, rationale: string) {
   await db.query(

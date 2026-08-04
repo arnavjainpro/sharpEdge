@@ -33,7 +33,7 @@ test("a mark adrift in padding is trimmed to the mark", () => {
 
 test("padding is reclaimed only on the sides that have it", () => {
   // The NVIDIA case: full-bleed horizontally, letterboxed vertically. The left
-  // and right edges must survive — trimming them would crop the artwork.
+  // and right edges must survive: trimming them would crop the artwork.
   const out = trimBorder(png(250, 250, WHITE, { x: 0, y: 41, w: 250, h: 166 }));
   expect(size(out!)).toEqual([250, 166]);
 });

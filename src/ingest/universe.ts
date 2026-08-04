@@ -57,7 +57,7 @@ async function fetchNasdaq(path: string): Promise<any[]> {
   });
   if (!res.ok) throw new Error(`nasdaq ${path} ${res.status}`);
   const data = (await res.json()) as any;
-  // stocks nests rows at data.rows; the etf endpoint at data.data.rows — accept either.
+  // stocks nests rows at data.rows; the etf endpoint at data.data.rows: accept either.
   return data?.data?.rows ?? data?.data?.data?.rows ?? [];
 }
 
@@ -78,7 +78,7 @@ async function fetchNasdaqScreener(): Promise<UniverseRow[]> {
     }));
 }
 
-// ETFs: stored for search/on-demand scoring, never scanned (unless held/watched —
+// ETFs: stored for search/on-demand scoring, never scanned (unless held/watched -
 // dollar-volume ranking would let SPY/QQQ crowd stocks out of the scan slots).
 // Feed has no sector/marketCap; field names differ from the stocks feed.
 async function fetchNasdaqEtfs(): Promise<UniverseRow[]> {
@@ -142,14 +142,14 @@ export async function refreshUniverse(portfolio: Portfolio): Promise<string[]> {
     all = await fetchNasdaqScreener();
     console.log(`[universe] NASDAQ feed: ${all.length} listed stocks`);
   } catch (err) {
-    console.warn("[universe] NASDAQ feed failed — falling back to S&P 500 + config:", err);
+    console.warn("[universe] NASDAQ feed failed: falling back to S&P 500 + config:", err);
   }
   let etfs: UniverseRow[] = [];
   try {
     etfs = await fetchNasdaqEtfs();
     console.log(`[universe] NASDAQ ETF feed: ${etfs.length} ETFs`);
   } catch (err) {
-    console.warn("[universe] NASDAQ ETF feed failed — ETFs skipped this refresh:", err);
+    console.warn("[universe] NASDAQ ETF feed failed: ETFs skipped this refresh:", err);
   }
 
   const bySymbol = new Map(all.map((r) => [r.ticker, r]));

@@ -41,21 +41,21 @@ const SPEC_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-const SYSTEM = `You translate a trading strategy description into a strict JSON spec for a backtester. You do NOT evaluate or judge the strategy — only translate it.
+const SYSTEM = `You translate a trading strategy description into a strict JSON spec for a backtester. You do NOT evaluate or judge the strategy: only translate it.
 
 The ONLY available rules:
-- sma_cross {fast, slow, dir: above|below} — fast SMA crosses above/below slow SMA.
-- price_vs_sma {period, dir: above|below} — price above/below its SMA(period).
-- rsi {period, level, dir: above|below} — RSI(period) above/below level.
-- breakout {lookback, dir: up|down} — price breaks above the highest high / below the lowest low of the last {lookback} bars.
-- macd_cross {dir: above|below} — MACD histogram above/below zero.
+- sma_cross {fast, slow, dir: above|below}: fast SMA crosses above/below slow SMA.
+- price_vs_sma {period, dir: above|below}: price above/below its SMA(period).
+- rsi {period, level, dir: above|below}: RSI(period) above/below level.
+- breakout {lookback, dir: up|down}: price breaks above the highest high / below the lowest low of the last {lookback} bars.
+- macd_cross {dir: above|below}: MACD histogram above/below zero.
 
 Rules:
 - Fill only the fields a rule uses; set the others to null.
 - entry rules are AND-ed; exit rules are OR-ed. If the user gives no explicit exit, mirror the entry (e.g. exit on the opposite cross) or rely on stop_atr/target_atr.
 - Convert vague risk language to ATR multiples (e.g. "wide stop" → stop_atr 3, "tight" → 1).
 - If the description cannot be represented with these rules (e.g. references candlestick patterns, fundamentals, or indicators not listed), set clarification to ONE specific question and leave direction/entry/exit null. Do not force a bad approximation.
-- Daily bars only. Be faithful to the user's numbers; if they imply tuning ("around 50", "roughly oversold"), still emit a single representative value — the backtester explores a range around it.`;
+- Daily bars only. Be faithful to the user's numbers; if they imply tuning ("around 50", "roughly oversold"), still emit a single representative value: the backtester explores a range around it.`;
 
 export interface ParsedStrategy { spec?: StrategySpec; clarification?: string; error?: string; }
 
@@ -73,7 +73,7 @@ function toRule(raw: any): Rule | null {
 }
 
 export async function parseStrategy(ticker: string, description: string, image?: string): Promise<ParsedStrategy> {
-  if (!haikuBreaker.allow()) return { error: "AI circuit breaker is tripped — reset it from the dashboard status bar." };
+  if (!haikuBreaker.allow()) return { error: "AI circuit breaker is tripped: reset it from the dashboard status bar." };
   const content: Anthropic.ContentBlockParam[] = [];
   if (image) {
     const m = image.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,(.+)$/s);

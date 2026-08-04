@@ -8,18 +8,18 @@
   <link rel="icon" type="image/png" href="/assets/favicon.png">
   <!-- Stamp the stored theme before first paint. The app script runs at the end of
        <body>, so without this a user whose saved choice contradicts their OS sees a
-       flash of the wrong theme — very visible now that light mode is sage, not white. -->
+       flash of the wrong theme: very visible now that light mode is sage, not white. -->
   <script>
     try {
       var t = localStorage.getItem("theme");
       if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
-    } catch (e) { /* storage blocked — fall back to prefers-color-scheme */ }
+    } catch (e) { /* storage blocked: fall back to prefers-color-scheme */ }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-    /* Design tokens from the sharpEdge design system — light-first structure preserved so the
+    /* Design tokens from the sharpEdge design system: light-first structure preserved so the
      existing theme JS (System / Light / Dark) keeps working; dark values live in
      the prefers-color-scheme + [data-theme="dark"] blocks below. */
     :root {
@@ -36,12 +36,12 @@
       --green-ink: #0b7c48;
       --green-soft: rgba(14, 159, 92, .1);
       /* brand leans pine/teal so it stays tellable apart from market --green in
-         both themes — a pure forest hue collides with it once lightened for dark */
+         both themes: a pure forest hue collides with it once lightened for dark */
       --brand: #14684c;
       --brand-ink: #0f5039;
       --brand-soft: rgba(20, 104, 76, .1);
       /* ink that sits ON a --brand fill. Flips with the theme because dark-mode
-         brand is a light mint — white text on it would fail contrast. */
+         brand is a light mint: white text on it would fail contrast. */
       --on-brand: #ffffff;
       --red: #c8453a;
       --red-soft: rgba(200, 69, 58, .09);
@@ -58,7 +58,7 @@
       --hover: var(--surface-2);
       --card-alt: var(--surface-2);
       --header-bg: color-mix(in srgb, var(--bg) 86%, transparent);
-      /* radius ramp — hierarchy instead of uniform rounding */
+      /* radius ramp: hierarchy instead of uniform rounding */
       --radius: 14px;
       --radius-lg: 20px;
       --radius-sm: 10px;
@@ -88,14 +88,14 @@
       --shadow-lg: 0 4px 14px rgba(20, 30, 24, .07), 0 28px 64px -28px rgba(20, 30, 24, .24);
       /* focus ring */
       --ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--brand);
-      /* chart tokens — single source of truth for every SVG stroke/fill */
+      /* chart tokens: single source of truth for every SVG stroke/fill */
       --chart-up: var(--green);
       --chart-down: var(--red);
       --chart-ref: var(--faint);
       /* large area charts draw the line in ink and reserve up/down colour for the
-         gradient wash — the direction is already stated in the delta text above */
+         gradient wash: the direction is already stated in the delta text above */
       --chart-hero: var(--text);
-      /* categorical data-viz slots — fixed order, never cycled. Validated for CVD
+      /* categorical data-viz slots: fixed order, never cycled. Validated for CVD
          separation and contrast against the card surface in both themes; light-mode
          slots 3/4/5 sit under 3:1, so every chart using them ships direct labels. */
       --series-1: #2a78d6;
@@ -111,7 +111,7 @@
      which the toggle stamps and which must win. */
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
-        /* MUST match the :root[data-theme="dark"] block below — edit both together */
+        /* MUST match the :root[data-theme="dark"] block below: edit both together */
         --bg: #0e1211;
         --surface: #161b19;
         --surface-2: #1c2220;
@@ -149,7 +149,7 @@
     }
 
     :root[data-theme="dark"] {
-      /* MUST match the media-query block above — edit both together */
+      /* MUST match the media-query block above: edit both together */
       --bg: #0e1211;
       --surface: #161b19;
       --surface-2: #1c2220;
@@ -325,7 +325,7 @@
     }
 
     /* Theme-swapped logo art. Two <img> toggled by CSS rather than <picture
-       media>, because the in-app Light/Dark toggle must beat the OS setting —
+       media>, because the in-app Light/Dark toggle must beat the OS setting -
        same scoping rule as the colour tokens. */
     .logo-dark {
       display: none;
@@ -358,7 +358,7 @@
     }
 
     /* Sidebar: the full lockup when expanded, the bare mark on the collapsed
-       rail. The lockup's tagline is cropped out — at this width it renders a
+       rail. The lockup's tagline is cropped out: at this width it renders a
        few pixels tall and reads as noise. */
     .side-lockup {
       width: 132px;
@@ -446,7 +446,7 @@
       justify-content: center;
       /* gap:0 matters as much as centering here. The label collapses to
          max-width:0 but stays a flex item, so its 10px gap survives and
-         justify-content centres icon+gap — leaving the icon visibly left of
+         justify-content centres icon+gap: leaving the icon visibly left of
          the rail's midline with dead space on the right. */
       gap: 0;
     }
@@ -466,7 +466,7 @@
       font-weight: 600;
     }
 
-    /* .ndot is now the icon slot (name kept — markup/JS still reference it) */
+    /* .ndot is now the icon slot (name kept: markup/JS still reference it) */
     #nav button .ndot {
       display: inline-flex;
       align-items: center;
@@ -523,7 +523,7 @@
        rail has no horizontal budget for two labelled segments (~28px each, under
        the 44px touch floor), and stacking them vertically made the workspace
        read as two more nav items sitting above the nav items. So this shows the
-       workspace you are in and swaps to the other on click — the swap glyph is
+       workspace you are in and swaps to the other on click: the swap glyph is
        what says it is a control rather than a label. Always filled, so it never
        reads as a peer of #nav's --brand-soft active tab. */
     #section-switch {
@@ -534,7 +534,7 @@
       width: 100%;
       /* Same box as a #nav row (9px 12px → 34px tall). It was 44px for the touch
          floor, but nav rows are 34px and set the rail's rhythm, so the switcher
-         just read as an oversized outlier — worst in the collapsed rail, where
+         just read as an oversized outlier: worst in the collapsed rail, where
          there is no label to fill the extra height. The fill carries the
          distinction; the height does not need to. */
       padding: 11px 12px;
@@ -828,7 +828,7 @@
 
       #sidebar:not(.collapsed) #nav button {
         justify-content: center;
-        /* Same dead-gap fix as the .collapsed rule — see there. */
+        /* Same dead-gap fix as the .collapsed rule: see there. */
         gap: 0;
       }
 
@@ -909,7 +909,7 @@
       color: var(--dim);
     }
 
-    /* .search-ring is now the search-icon slot (name kept — markup references it) */
+    /* .search-ring is now the search-icon slot (name kept: markup references it) */
     .search-ring {
       display: inline-flex;
       align-items: center;
@@ -1056,7 +1056,7 @@
 
     /* Watchlist toggle in the quick-search header. Pushed to the trailing edge
        so it never crowds the symbol or company name, and self-aligned because
-       .tm-head is baseline-aligned — a button left on the text baseline sits
+       .tm-head is baseline-aligned: a button left on the text baseline sits
        visibly low against the 20px symbol. */
     .tm-star {
       margin-left: auto;
@@ -1223,7 +1223,7 @@
       width: 100%;
       margin-inline: auto;
       /* Extra bottom room so the fixed chat launcher never sits on top of the
-         last row of a pane — on Portfolio and Ideas that row is real data. */
+         last row of a pane: on Portfolio and Ideas that row is real data. */
       padding: 28px 28px 104px;
       display: flex;
       flex-direction: column;
@@ -1266,7 +1266,7 @@
       margin-top: 6px;
     }
 
-    /* timeframe switcher — segmented control on the stock chart */
+    /* timeframe switcher: segmented control on the stock chart */
     .tf-bar {
       display: inline-flex;
       gap: 2px;
@@ -1299,7 +1299,7 @@
       color: var(--on-brand);
     }
 
-    /* portfolio hero — flagship card (Stripe balance-card treatment) */
+    /* portfolio hero: flagship card (Stripe balance-card treatment) */
     section#portfolio {
       background: var(--surface);
       border: none;
@@ -1621,7 +1621,7 @@
       background: var(--surface-2);
     }
 
-    /* Filled when complete, hollow when not — the row's whole progress story. */
+    /* Filled when complete, hollow when not: the row's whole progress story. */
     .lesson-tick {
       width: 20px;
       height: 20px;
@@ -1803,7 +1803,7 @@
 
     /* Technicals overlay. Each level is a labelled HTML rule rather than an SVG
        line so the label survives the chart's non-uniform stretch. Every line is
-       identified by BOTH a dash pattern and a direct text label — colour alone is
+       identified by BOTH a dash pattern and a direct text label: colour alone is
        never the identifier, matching the rule the sector donut already follows. */
     .drill-level {
       position: absolute;
@@ -1963,7 +1963,7 @@
     }
 
     /* Criterion rows: the label carries the meaning, the bar carries the score.
-       Never colour these by outcome — process is judged on its own. */
+       Never colour these by outcome: process is judged on its own. */
     .crit {
       margin-bottom: 12px;
     }
@@ -2112,7 +2112,7 @@
     }
 
     /* allocation: donut + direct-labelled legend. The legend IS the contrast
-       relief the light-mode series slots require — never ship the ring alone. */
+       relief the light-mode series slots require: never ship the ring alone. */
     .donut-wrap {
       display: flex;
       align-items: center;
@@ -2270,7 +2270,7 @@
       margin: 6px 0;
     }
 
-    /* cards & rows — borderless: white surfaces separate themselves against the
+    /* cards & rows: borderless: white surfaces separate themselves against the
        sage canvas, so a hairline border only muddies the edge */
     .card {
       border: none;
@@ -2342,7 +2342,7 @@
       border-bottom: none;
     }
 
-    /* Company logos. One <img> per symbol, served by our own /api/logo proxy —
+    /* Company logos. One <img> per symbol, served by our own /api/logo proxy -
        see ingest/logos.ts for why the image CDN is never contacted from the
        browser. Symbols with no artwork 404 and pick up .is-missing, which drops
        them out of flex layout entirely rather than leaving a hole and a gap. */
@@ -2616,7 +2616,7 @@
       min-height: 16px;
     }
 
-    /* Same slot, non-alarming colour — "we mailed you a link" is not an error. */
+    /* Same slot, non-alarming colour: "we mailed you a link" is not an error. */
     #auth-error.ok {
       color: var(--dim);
     }
@@ -2662,7 +2662,7 @@
       align-items: flex-end;
     }
 
-    /* display:flex above outranks the UA [hidden] rule — without this the
+    /* display:flex above outranks the UA [hidden] rule: without this the
        email-confirm row would be visible no matter what the .hidden flag says. */
     .settings-row[hidden] {
       display: none;
@@ -2809,7 +2809,7 @@
     }
 
     #filters-modal {
-      /* explicit centering — the page's CSS reset zeroes the UA's margin:auto */
+      /* explicit centering: the page's CSS reset zeroes the UA's margin:auto */
       position: fixed;
       inset: 0;
       margin: auto;
@@ -2844,7 +2844,7 @@
       backdrop-filter: blur(2px);
     }
 
-    /* Paywall — shown whenever a paid endpoint answers 402. Same centred-dialog
+    /* Paywall: shown whenever a paid endpoint answers 402. Same centred-dialog
        shape as the filters modal, styled up a notch because it's an upgrade moment. */
     #paywall-modal {
       position: fixed;
@@ -2991,7 +2991,7 @@
     }
 
     /* Axis + hover overlay for the full-width charts. Every chart SVG is
-       preserveAspectRatio="none", which stretches a 100-unit viewBox to ~600x200 —
+       preserveAspectRatio="none", which stretches a 100-unit viewBox to ~600x200 -
        an SVG <text> would come out 6x wide and 2x tall. So the labels are HTML,
        positioned in percent, which that same stretch maps 1:1 onto the data. */
     .chart-plot {
@@ -3124,12 +3124,12 @@
     }
 
     /* rotation heatmap (F6b): sectors × trailing weeks. Colour carries the
-       state, the printed number carries the value — never colour alone. */
+       state, the printed number carries the value: never colour alone. */
 
     /* .card is a zero-padding, overflow:hidden, 20px-radius box, built for
        tables that bleed to the edge. The legend is not a table: its first
        swatch landed exactly in the bottom-left corner and the radius clipped
-       it, so "leading" showed a half-swatch. Pad the whole box — every child
+       it, so "leading" showed a half-swatch. Pad the whole box: every child
        then clears the corners, not just the one that was visibly wrong. */
     #rotation-heatmap {
       padding: 14px 16px;
@@ -3948,8 +3948,8 @@
 
     /* ── chat widget ──────────────────────────────────────────────────────
        Anchored bottom-right, which #toast-stack used to own outright. That
-       collision is spatial, not a stacking order — no z-index makes two things
-       share a rectangle — so the toast stack moves up by the height of the
+       collision is spatial, not a stacking order: no z-index makes two things
+       share a rectangle: so the toast stack moves up by the height of the
        launcher (see its rule below) and the launcher keeps the corner.
 
        z-index ladder in this file, in full: header 20, chat 40, ⌘K modal 50,
@@ -4026,7 +4026,7 @@
        reach affordance, not a reading one, so the panel can take over the
        screen when the answer earns it. */
     /* An explicit height, not just a raised max-height: the panel is otherwise
-       content-sized, so lifting the cap alone made Expand *shorter* — the extra
+       content-sized, so lifting the cap alone made Expand *shorter*: the extra
        width reflowed the log into fewer lines. */
     #chat-panel.expanded {
       width: min(920px, 92vw);
@@ -4045,7 +4045,7 @@
       width: 18px;
       height: 18px;
       cursor: nwse-resize;
-      /* Above #chat-head, which the global `header` rule hands z-index:20 — at
+      /* Above #chat-head, which the global `header` rule hands z-index:20: at
          z-index:1 the grip painted underneath it and no pointerdown ever
          reached it, so the drag was dead for a real mouse. */
       z-index: 21;
@@ -4053,8 +4053,8 @@
       border-top: 2px solid transparent;
       border-left: 2px solid transparent;
       /* No border-radius of its own: the panel's overflow:hidden already clips
-         the corner, and a radius here made the outermost few pixels — the
-         natural place to grab — untargetable. */
+         the corner, and a radius here made the outermost few pixels: the
+         natural place to grab: untargetable. */
     }
 
     #chat-grip:hover {
@@ -4062,7 +4062,7 @@
       border-left-color: var(--brand);
     }
 
-    /* Full-screen sheet on small viewports — nothing to resize. */
+    /* Full-screen sheet on small viewports: nothing to resize. */
     @media (max-width: 720px) {
       #chat-grip {
         display: none;
@@ -4186,7 +4186,7 @@
 
     @media (max-width: 720px) {
 
-      /* At this width the sidebar is already a 64px icon rail — the app has
+      /* At this width the sidebar is already a 64px icon rail: the app has
          admitted it is in a narrow layout, so a 380px "floating" panel would
          cover most of the viewport while pretending not to. Full sheet. */
       #chat-panel {
@@ -4699,8 +4699,8 @@
   <section id="auth-screen" hidden>
     <form id="auth-card">
       <div class="auth-logo">
-        <img class="logo-light" src="/assets/logo-lockup.png" alt="sharpEdge — Make Sharper Decisions">
-        <img class="logo-dark" src="/assets/logo-lockup-dark.png" alt="sharpEdge — Make Sharper Decisions">
+        <img class="logo-light" src="/assets/logo-lockup.png" alt="sharpEdge: Make Sharper Decisions">
+        <img class="logo-dark" src="/assets/logo-lockup-dark.png" alt="sharpEdge: Make Sharper Decisions">
       </div>
       <p id="auth-blurb">Sign in to your account.</p>
       <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
@@ -4718,13 +4718,13 @@
 
   <div id="ticker-modal" hidden>
     <div class="tm-card" role="dialog" aria-label="Ticker search">
-      <input id="ticker-search" type="text" placeholder="Search by symbol or name — AAPL, Apple, Nvidia…"
+      <input id="ticker-search" type="text" placeholder="Search by symbol or name: AAPL, Apple, Nvidia…"
         autocomplete="off" spellcheck="false" maxlength="48" role="combobox" aria-autocomplete="list"
         aria-expanded="false" aria-controls="ticker-suggest">
       <div id="ticker-suggest" role="listbox" hidden></div>
       <div id="ticker-result">
-        <div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news — jump to
-          the full page or TradingView.</div>
+        <div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news. From there,
+          jump to the full page or TradingView.</div>
       </div>
     </div>
   </div>
@@ -4741,7 +4741,7 @@
       <!-- Workspace switcher. Trading is live money and live data; Learning is
            training against past charts. One button: it names the workspace you
            are in and swaps to the other on click. data-section is the CURRENT
-           section, written by applySection() — the click handler reads it to
+           section, written by applySection(): the click handler reads it to
            decide where to go, so the button is the single source of truth and
            can never disagree with the visible tabs. -->
       <button id="section-switch" type="button">
@@ -4839,7 +4839,7 @@
                 </svg> Refresh</button>
             </div>
           </div>
-          <div id="portfolio-value">$—</div>
+          <div id="portfolio-value">Loading…</div>
           <div id="portfolio-day"></div>
           <div id="pf-score-trend"></div>
           <div class="hero-grid">
@@ -4947,7 +4947,7 @@
 
         <section id="sectors-section" data-pane="market">
           <div class="section-head">
-            <h2>Sectors — rotation</h2>
+            <h2>Sectors: rotation</h2>
             <div style="display:flex;gap:8px;align-items:center">
               <span id="sector-meta" style="font-size:12px;color:var(--faint)"></span>
               <button class="refresh-btn" id="market-refresh" title="Re-pull regime and sector data"><svg class="ic"
@@ -4971,7 +4971,7 @@
 
         <section id="heatmap-section" data-pane="market">
           <div class="section-head">
-            <h2>Sectors — rotation history</h2>
+            <h2>Sectors: rotation history</h2>
             <span id="heatmap-meta" style="font-size:12px;color:var(--faint)"></span>
           </div>
           <div class="card">
@@ -5087,7 +5087,7 @@
                   <label>Max risk per trade %<input type="number" id="rp-risk" min="0.1" max="10" step="0.1"></label>
                   <label>Max position %<input type="number" id="rp-pos" min="1" max="100" step="1"></label>
                   <label>Target reward : risk<input type="number" id="rp-rr" min="1" max="10" step="0.5"
-                      title="Minimum reward-to-risk for a setup here to rate 'strong' — raise it and the analyzer grades setups more harshly"></label>
+                      title="Minimum reward-to-risk for a setup here to rate 'strong': raise it and the analyzer grades setups more harshly"></label>
                   <label>Risk appetite<select id="rp-appetite"
                       title="Which options structures the swing analyzer may propose, and how much confirmation it wants before an entry">
                       <option value="conservative">Conservative</option>
@@ -5099,7 +5099,7 @@
                 <div class="settings-msg" id="risk-msg"></div>
                 <p style="font-size:12px;color:var(--faint)" id="appetite-note"></p>
                 <p style="font-size:12px;color:var(--faint)"><span id="equity-note"></span> Position sizing is against
-                  your available buying power. These settings only affect this analyzer — not the Ideas tab, not your
+                  your available buying power. These settings only affect this analyzer, not the Ideas tab or your
                   portfolio.</p>
               </form>
             </details>
@@ -5114,7 +5114,7 @@
               </select>
             </div>
             <div id="drop-zone" tabindex="0">Paste (Ctrl+V) or drop a chart screenshot anywhere in this panel, or click
-              to browse — optional, but the analysis always cross-checks it against live data</div>
+              to browse. A screenshot is optional, and the analysis always cross-checks it against live data.</div>
             <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp" hidden>
             <div id="img-preview-wrap"><button id="img-clear" class="img-x" title="remove screenshot"><svg class="ic" width="12"
                   height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
@@ -5128,12 +5128,12 @@
                 <div class="swing-slot" data-label="1M"><span>1-Month chart</span></div>
                 <div class="swing-slot" data-label="OPTIONS-CHAIN"><span>Options chain (optional)</span></div>
               </div>
-              <div id="swing-tray" hidden><span class="tray-hint">Pasted — drag each one into the box it
+              <div id="swing-tray" hidden><span class="tray-hint">Pasted: drag each one into the box it
                   belongs in ↑</span></div>
               <div class="hint" style="font-size:11.5px;color:var(--faint);margin-top:6px">Drop or click a box to fill
                 it directly. Pasted screenshots (Ctrl+V) land in the tray above so you choose which box each one goes
                 in. Drag a filled box onto another to move it there (they swap if both are filled). The × removes a
-                screenshot. Upload any subset of daily/weekly/monthly candlestick charts. Swing mode pulls the live options chain automatically — upload
+                screenshot. Upload any subset of daily/weekly/monthly candlestick charts. Swing mode pulls the live options chain automatically. Upload
                 a screenshot of your broker's chain only if you want it to price against those exact quotes. It proposes
                 a concrete contract or spread with stress-tested max loss/gain.</div>
             </div>
@@ -5155,9 +5155,9 @@
                 ≥5y of history exists.</span>
             </div>
             <textarea id="bt-desc" spellcheck="false"
-              placeholder="Describe the strategy in plain English — e.g. &quot;buy when the 50-day average crosses above the 200-day, sell on the cross back down, 2xATR stop&quot;. Or upload a chart below and I'll infer the setup."></textarea>
-            <div id="bt-drop" tabindex="0" class="dropzone">Optional: paste, drop, or click to add a chart — the setup
-              will be read off it</div>
+              placeholder="Describe the strategy in plain English: e.g. &quot;buy when the 50-day average crosses above the 200-day, sell on the cross back down, 2xATR stop&quot;. Or upload a chart below and I'll infer the setup."></textarea>
+            <div id="bt-drop" tabindex="0" class="dropzone">Optional: paste, drop, or click to add a chart. The setup
+              will be read from it.</div>
             <input type="file" id="bt-file" accept="image/png,image/jpeg,image/webp" hidden>
             <div id="bt-img-wrap"><button id="bt-img-clear" class="img-x" title="remove screenshot"><svg class="ic" width="12" height="12"
                   viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"
@@ -5188,7 +5188,7 @@
             <div id="drill-body">
               <div class="empty" id="drill-intro">A real chart from the past with the future hidden. Read it, commit
                 to a plan, then see what actually happened. You are scored on the quality of the plan and on the
-                outcome — separately, because a good plan can still lose.</div>
+                outcome separately, because a good plan can still lose.</div>
             </div>
             <button class="advise-btn" id="drill-new">Start a drill</button>
           </div>
@@ -5218,7 +5218,7 @@
           <div class="inner">
             <div id="briefing">
               <div class="empty">No brief yet today. It’s written automatically before the market opens and after it
-                closes — or tap Generate.</div>
+                closes, or tap Generate.</div>
             </div>
           </div>
         </details>
@@ -5241,7 +5241,7 @@
           <form class="settings-card" id="profile-form">
             <div class="settings-row">
               <label>Email<input type="email" id="pf-email" maxlength="254"
-                  title="This is what you sign in with — changing it needs your current password"></label>
+                  title="This is what you sign in with: changing it needs your current password"></label>
               <label>Full name<input type="text" id="pf-name" maxlength="120" placeholder="optional"></label>
               <label>Phone<input type="tel" id="pf-phone" maxlength="32" placeholder="optional"></label>
               <button type="submit" class="advise-btn" style="margin-top:0">Save</button>
@@ -5289,7 +5289,7 @@
             </div>
             <div class="settings-msg" id="link-msg"></div>
             <p style="font-size:12px;color:var(--faint)">Read-only: sharpEdge never places or cancels orders. Your
-              password goes straight to Robinhood and is never stored — only the returned access tokens are.
+              password goes straight to Robinhood and is never stored: only the returned access tokens are.
               A linked account takes priority over the manual position import.</p>
           </div>
         </section>
@@ -5366,7 +5366,7 @@
               <label>Exit $<input type="number" id="jr-exit" step="0.01" placeholder="optional"></label>
             </div>
             <textarea id="journal-notes"
-              placeholder="What actually happened — what went right or wrong, in your own words. The AI reads this history when validating future setups (e.g. “chased the breakout with no volume confirmation, stopped out at the pivot”)."></textarea>
+              placeholder="What actually happened: what went right or wrong, in your own words. The AI reads this history when validating future setups (e.g. “chased the breakout with no volume confirmation, stopped out at the pivot”)."></textarea>
             <div class="settings-row">
               <button type="submit" class="advise-btn" style="margin-top:0">Log trade</button>
               <span class="settings-msg" id="journal-msg"></span>
@@ -5434,7 +5434,7 @@
   <!-- Chat widget. Deliberately a direct child of <body>, outside #app-shell
        and outside every [data-pane]: showPane() hides by the data-pane
        attribute, so anything mounted inside a pane would vanish on tab switch.
-       Ids are the ones the old Chat pane used, and that pane is gone — two
+       Ids are the ones the old Chat pane used, and that pane is gone: two
        copies of #chat-log would make $() return whichever came first. -->
   <button id="chat-fab" type="button" aria-expanded="false" aria-controls="chat-panel"
     aria-label="Ask Jawa" title="Ask Jawa (Ctrl+J)">
@@ -5470,7 +5470,7 @@
     const $ = (s) => document.querySelector(s);
     const chevSvg = `<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>`;
 
-    /* ── inline icon set (stroke-based, currentColor — no external assets).
+    /* ── inline icon set (stroke-based, currentColor: no external assets).
        icon() output is trusted static markup: never interpolate user data into it. ── */
     const ICONS = {
       "search": '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>',
@@ -5515,7 +5515,7 @@
     function icon(name, size = 16) {
       return `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ""}</svg>`;
     }
-    // Fill each nav button's .ndot with its tab icon (class name stays — CSS targets it).
+    // Fill each nav button's .ndot with its tab icon (class name stays: CSS targets it).
     document.querySelectorAll("#nav [data-tab]").forEach((b) => {
       const d = b.querySelector(".ndot");
       if (d) d.innerHTML = icon(b.dataset.tab, 16);
@@ -5527,7 +5527,7 @@
     // (Declared early: a cold deep-link to #stock/X runs esc() during boot.)
     const ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
     const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ESC_MAP[c]);
-    // Escaping can't neutralise a javascript:/data: scheme — an href needs its own gate.
+    // Escaping can't neutralise a javascript:/data: scheme: an href needs its own gate.
     const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? String(u) : "#");
 
     // Company logo. Points at our own proxy, never the image CDN directly: a
@@ -5538,7 +5538,7 @@
       `<img class="tkr-logo${cls ? " " + cls : ""}" src="/api/logo/${encodeURIComponent(String(ticker ?? ""))}" alt="" aria-hidden="true" loading="lazy" decoding="async">`;
 
     // Symbols with no artwork (futures, fresh listings) 404 by design. `error`
-    // does not bubble, so this listens in the capture phase — one handler covers
+    // does not bubble, so this listens in the capture phase: one handler covers
     // every logo, including the many injected later through innerHTML.
     document.addEventListener("error", (e) => {
       const el = e.target;
@@ -5605,7 +5605,7 @@
       return resp.json();
     }
     $("#pw-dismiss").addEventListener("click", () => $("#paywall-modal").close());
-    // Until Stripe checkout is wired, the upgrade CTA records interest — a
+    // Until Stripe checkout is wired, the upgrade CTA records interest: a
     // pre-launch demand signal worth more right now than the payment itself.
     $("#pw-upgrade").addEventListener("click", async () => {
       const btn = $("#pw-upgrade");
@@ -5615,9 +5615,9 @@
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ feature: pwUpgrade?.feature ?? null, reason: pwUpgrade?.reason ?? null }),
         });
-        toast("You're on the list — Pro billing is launching soon.");
+        toast("You're on the list: Pro billing is launching soon.");
       } catch {
-        toast("Couldn't reach the server — try again.", "err");
+        toast("Couldn't reach the server: try again.", "err");
       } finally {
         btn.disabled = false;
         $("#paywall-modal").close();
@@ -5625,8 +5625,8 @@
     });
 
     // Ticker is required by every analysis entry point. The model can read a
-    // symbol off a screenshot, but every data pull behind the plan — intraday
-    // bars, daily structure, the options chain, news, position sizing — keys off
+    // symbol off a screenshot, but every data pull behind the plan: intraday
+    // bars, daily structure, the options chain, news, position sizing: keys off
     // the typed ticker, so a blank one quietly downgrades the answer to a guess
     // about a picture. Returns the symbol, or null after warning the trader.
     function requireTicker(sel) {
@@ -5635,7 +5635,7 @@
       if (t) { el.classList.remove("field-err"); return t; }
       el.classList.add("field-err");
       el.focus();
-      toast("Enter a ticker first — the analysis needs a symbol to pull live data.", "err");
+      toast("Enter a ticker first: the analysis needs a symbol to pull live data.", "err");
       return null;
     }
     $("#search-kbd").textContent = /Mac|iPhone|iPad|iPod/i.test((navigator.platform || "") + " " + (navigator.userAgent || "")) ? "⌘K" : "Ctrl K";
@@ -5655,7 +5655,7 @@
       ideas: "AI-validated long & short setups", analyze: "Chart + live data → a plan",
       backtest: "Plain-English strategy → out-of-sample results",
       learn: "Twelve lessons, wired to your own numbers",
-      practice: "Blind chart drills — graded on process, not P&L",
+      practice: "Blind chart drills: graded on process, not P&L",
       "learn-progress": "Lessons done & every drill you've graded",
       activity: "Briefings & live events", history: "Trade journal & past analyses", settings: "Risk profile & appearance"
     };
@@ -5667,8 +5667,8 @@
 
        The section is always DERIVED from the tab (TAB_SECTION), never the other
        way round, and the derivation happens inside showPane(). That matters
-       because showPane has eleven call sites — search results, watchlist rows,
-       event rows, heatmap cells, the drill-to-lesson link, the journal save —
+       because showPane has eleven call sites: search results, watchlist rows,
+       event rows, heatmap cells, the drill-to-lesson link, the journal save -
        and syncing the switcher in the #nav click handler instead would leave
        every one of those showing the wrong section. ── */
     const SECTIONS = {
@@ -5696,7 +5696,7 @@
       b.querySelector(".slabel").textContent = me.label;
       // The label alone says where you are, not that this is a control, and not
       // where clicking lands you. The title carries both.
-      b.title = `${me.label} — ${me.blurb}. Click to switch to ${next.label}.`;
+      b.title = `${me.label}: ${me.blurb}. Click to switch to ${next.label}.`;
       b.setAttribute("aria-label", b.title);
       document.querySelectorAll("#nav button[data-tab]").forEach((n) => {
         n.hidden = TAB_SECTION[n.dataset.tab] !== section;
@@ -5740,7 +5740,7 @@
       }
       if (!PANES.includes(name)) name = "portfolio";
       // Settings belongs to no section, so it leaves the rail on whichever one
-      // you came from — the same treatment #stock/TICKER gets — rather than
+      // you came from: the same treatment #stock/TICKER gets: rather than
       // claiming a workspace it isn't part of.
       if (name !== "settings") {
         const section = TAB_SECTION[name] ?? "trading";
@@ -5792,7 +5792,7 @@
     window.addEventListener("hashchange", () => { const { name, param } = parseHash(); showPane(name, param); });
     /* Deferred by one microtask, deliberately.
        showPane() dispatches into per-pane loaders, and those loaders read consts
-       declared much further down this script — HIST_FEEDS is ~2,000 lines below
+       declared much further down this script: HIST_FEEDS is ~2,000 lines below
        this line. Calling showPane() synchronously here means a cold load on
        #history or #learn-progress reaches those consts while they are still in
        the temporal dead zone, throws ReferenceError inside an async loader, and
@@ -5824,7 +5824,7 @@
 
     /* ── theme: prefers-color-scheme is the free baseline; a stored choice overrides.
        Theme control lives only in Settings → Appearance (no header/sidebar toggle, by design).
-       The brand token is fixed in CSS — there is no runtime accent override. ── */
+       The brand token is fixed in CSS: there is no runtime accent override. ── */
     function applyTheme(t) {
       if (t === "dark" || t === "light") document.documentElement.setAttribute("data-theme", t);
       else document.documentElement.removeAttribute("data-theme");
@@ -5842,7 +5842,7 @@
     // Opens clean every time: the old query, its rendered result, and the cached
     // symbol are all cleared. Previously .select() only highlighted the last
     // search, so reopening showed stale text and a stale result card.
-    const TM_HINT = `<div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news — jump to the full page or TradingView.</div>`;
+    const TM_HINT = `<div class="tm-hint">Type a symbol. You get its live price, your sharpEdge score, and recent news. From there, jump to the full page or TradingView.</div>`;
     function openTickerModal() {
       tickerSearch.value = "";
       tickerResult.innerHTML = TM_HINT;
@@ -5856,7 +5856,7 @@
     $("#search-open").addEventListener("click", openTickerModal);
     document.addEventListener("keydown", (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openTickerModal(); }
-      // ⌘K is taken, so chat gets J. The FAB is last in DOM order — without a
+      // ⌘K is taken, so chat gets J. The FAB is last in DOM order: without a
       // shortcut, reaching a global control means tabbing the whole page.
       else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") { e.preventDefault(); chatToggle(); }
       // Escape order matters: the search modal is checked first, so one press
@@ -5910,11 +5910,11 @@
       let data;
       try {
         const res = await fetch(`/api/ticker?sym=${encodeURIComponent(sym)}`);
-        if (res.status === 503) { if (seq === tickerSeq) tickerResult.innerHTML = `<div class="tm-hint">Market scan in progress — try again in a moment.</div>`; return; }
+        if (res.status === 503) { if (seq === tickerSeq) tickerResult.innerHTML = `<div class="tm-hint">Market scan in progress: try again in a moment.</div>`; return; }
         data = await res.json();
-      } catch { if (seq === tickerSeq) tickerResult.innerHTML = `<div class="tm-hint">Network error — try again.</div>`; return; }
+      } catch { if (seq === tickerSeq) tickerResult.innerHTML = `<div class="tm-hint">Network error: try again.</div>`; return; }
       if (seq !== tickerSeq) return;
-      if (data.error) { lastTickerData = null; tickerResult.innerHTML = `<div class="tm-hint">${esc(data.error)} — check the symbol.</div>`; return; }
+      if (data.error) { lastTickerData = null; tickerResult.innerHTML = `<div class="tm-hint">${esc(data.error)}: check the symbol.</div>`; return; }
       lastTickerData = data;
       tickerResult.innerHTML = renderTickerDetail(data);
       wireWatchStar(tickerResult.querySelector("#tm-star"), data.ticker ?? sym);
@@ -5923,7 +5923,7 @@
     }
 
     // Watchlist toggle for the quick-search header. Same contract as the stock
-    // page's "☆ Watch" button — POST, then reload state so `portfolio` and the
+    // page's "☆ Watch" button: POST, then reload state so `portfolio` and the
     // watchlist card update together rather than drifting out of sync.
     function wireWatchStar(btn, ticker) {
       if (!btn || !ticker) return;
@@ -5953,7 +5953,7 @@
           await loadState();
           toast(action === "add" ? `${ticker} added to watchlist` : `${ticker} removed from watchlist`);
         } catch {
-          toast("Couldn't update the watchlist — try again.");
+          toast("Couldn't update the watchlist: try again.");
         } finally {
           btn.disabled = false;
           sync();   // re-read from state, so a failed call shows the truth
@@ -6020,7 +6020,7 @@
         const recurring = !!box.querySelector(".alert-recurring")?.checked;
         const res = await (await fetch("/api/alerts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticker, kind, threshold, recurring }) })).json();
         if (res.error) { msg.textContent = res.error; msg.classList.add("err"); toast(res.error, "err"); }
-        else { msg.classList.remove("err"); msg.textContent = "Alert set — you'll get notified when it crosses."; toast(`Alert set on ${ticker}`); }
+        else { msg.classList.remove("err"); msg.textContent = "Alert set: you'll get notified when it crosses."; toast(`Alert set on ${ticker}`); }
         loadAlertList(ticker, box);
       } else if (delBtn) {
         await fetch(`/api/alerts?id=${delBtn.dataset.alertDel}`, { method: "DELETE" });
@@ -6034,17 +6034,17 @@
       const dirTone = d.direction === "long" ? "buy" : d.direction === "short" ? "sell" : "calm";
       const priceStr = d.price != null
         ? (String(d.ticker).startsWith("^") ? d.price.toLocaleString("en-US", { maximumFractionDigits: 2 }) : money(d.price))
-        : "—";
+        : "N/A";
       const scoreLine = d.long_score != null
         ? `<span class="chip buy">Long ${d.long_score}</span> <span class="chip sell">Short ${d.short_score}</span> ${d.direction && d.direction !== "none" ? `<span class="chip ${dirTone}">${esc(d.direction)}</span>` : `<span class="chip calm">no setup</span>`}`
         : "";
-      const f = (v, dec = 1) => (v != null ? Number(v).toFixed(dec) : "—");
+      const f = (v, dec = 1) => (v != null ? Number(v).toFixed(dec) : "N/A");
       const stats = i ? `
     <div class="stats" style="margin-top:10px">
       <div class="stat"><div class="k">vs 200-day</div><div class="v">${signed(i.pctVs200, 1)}%</div></div>
       <div class="stat"><div class="k">3-mo</div><div class="v">${signed(i.mom3m, 1)}%</div></div>
       <div class="stat"><div class="k">RSI (14d)</div><div class="v">${f(i.rsi14, 0)}</div></div>
-      <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "—"}</div></div>
+      <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "N/A"}</div></div>
     </div>` : "";
       return `
     <div class="tm-head">${logoImg(d.ticker, "lg")}<span class="tm-sym">${esc(d.ticker)}</span>${d.name ? `<span class="tm-name">${esc(d.name)}</span>` : ""}${d.sector ? `<span class="chip calm sm">${esc(d.sector)}</span>` : ""}<button type="button" class="tm-star" id="tm-star" aria-pressed="false"></button></div>
@@ -6098,7 +6098,7 @@
     }
 
     // marked passes raw HTML straight through, and everything rendered here is
-    // model output built from third-party news headlines and chat input — so it
+    // model output built from third-party news headlines and chat input: so it
     // must not reach innerHTML unfiltered. Parse into an inert <template>
     // first: nothing inside a template fragment executes or fetches, so the
     // scrub happens before the markup is ever live.
@@ -6113,7 +6113,7 @@
         for (const { name, value } of [...el.attributes]) {
           const n = name.toLowerCase();
           // on* handlers, style (marked never emits one), and any URL attribute
-          // whose scheme we don't vouch for — javascript:, data:, vbscript:.
+          // whose scheme we don't vouch for: javascript:, data:, vbscript:.
           if (n.startsWith("on") || n === "style" || (MD_URL_ATTRS.has(n) && !MD_SAFE_URL.test(String(value).trim()))) {
             el.removeAttribute(name);
           }
@@ -6130,7 +6130,7 @@
     // as bare symbols); everything else is a plain ticker.
     const tvLink = (sym) => `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(String(sym).replace(/^\^/, ""))}`;
     // Dashboard market row: real indices instead of ETF proxies. Keys match the
-    // market_snapshot benchmarks map (^ stripped). VIX stays — it's a regime signal.
+    // market_snapshot benchmarks map (^ stripped). VIX stays: it's a regime signal.
     const INDEX_DISPLAY = [["DJI", "Dow", "DJI"], ["GSPC", "S&P 500", "SPX"], ["IXIC", "Nasdaq", "IXIC"], ["RUT", "Russell 2000", "RUT"], ["VIX", "VIX", "VIX"]];
 
     // Axis ticks stay terse; the hover readout takes `long` for the fuller form.
@@ -6151,7 +6151,7 @@
 
     // Wrap a chart SVG in the overlay scaffold, once. The frame outlives every
     // re-render (timeframe switch, SSE portfolio push), so the pointer handlers are
-    // bound here and read plot._cfg at event time — re-binding per render would
+    // bound here and read plot._cfg at event time: re-binding per render would
     // stack duplicate listeners.
     function chartFrame(el) {
       if (el.parentElement?.classList.contains("chart-plot")) return el.parentElement;
@@ -6160,7 +6160,7 @@
       const plot = document.createElement("div");
       plot.className = "chart-plot";
       // The layout margin moves to the wrapper so .chart-plot is exactly the plot
-      // box — otherwise every percent below is off by the margin.
+      // box: otherwise every percent below is off by the margin.
       const cs = getComputedStyle(el);
       wrap.style.margin = `${cs.marginTop} ${cs.marginRight} ${cs.marginBottom} ${cs.marginLeft}`;
       el.style.margin = "0";
@@ -6207,7 +6207,7 @@
     }
 
     // No-data state. This used to be an SVG <text>, which the same non-uniform
-    // stretch smeared to ~6x width — it's an HTML overlay for the same reason the
+    // stretch smeared to ~6x width: it's an HTML overlay for the same reason the
     // axis labels are. chartAxes clears both the stale axes and any earlier note.
     function chartMessage(el, text) {
       el.innerHTML = "";
@@ -6217,7 +6217,7 @@
     }
 
     let sparkGradSeq = 0;
-    // opts: { axes: true, timestamps } opts in to the axis/hover overlay — the
+    // opts: { axes: true, timestamps } opts in to the axis/hover overlay: the
     // mini row sparklines and the search-panel preview are too small for it.
     function sparkSvg(el, values, big = false, opts = null) {
       if (!values || values.length < 2) { el.innerHTML = ""; chartAxes(el, null); return; }
@@ -6300,7 +6300,7 @@
     }
 
     /* ── donut: part-to-whole by sector. Slices are separated by a 2px surface
-       gap and every slice is direct-labelled in the legend beside it — the light
+       gap and every slice is direct-labelled in the legend beside it: the light
        series slots sit under 3:1 on white, so the ring is never identity-alone. ── */
     const SERIES_SLOTS = 6;
     function donutSvg(el, parts, centerLabel) {
@@ -6314,7 +6314,7 @@
         const len = Math.max(0, (p.value / total) * circ - gap);
         arcs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${p.color}"
           stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}"
-          stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(p.name)} — ${((p.value / total) * 100).toFixed(1)}%</title></circle>`;
+          stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"><title>${esc(p.name)}: ${((p.value / total) * 100).toFixed(1)}%</title></circle>`;
         offset += (p.value / total) * circ;
       }
       el.innerHTML = `${arcs}<text x="${cx}" y="${cy + 1}" text-anchor="middle" dominant-baseline="middle"
@@ -6367,18 +6367,18 @@
       if (!sc) return `<p class="empty">No scan data yet for ${esc(ticker)}.</p>`;
       const i = sc.indicators;
       const plain = [];
-      if (i.crossStatus === "golden_formed") plain.push("Its short-term trend just rose above its long-term trend (a “golden cross”) — historically a positive sign.");
-      if (i.crossStatus === "golden_soon") plain.push(`A golden cross is forming — ${esc(i.crossDetail)}.`);
-      if (i.crossStatus === "death_formed") plain.push("Its short-term trend dropped below its long-term trend (a “death cross”) — historically a caution sign.");
-      plain.push(i.pctVs200 >= 0 ? `Trading ${i.pctVs200.toFixed(0)}% above its one-year average price — the long-term trend is up.` : `Trading ${Math.abs(i.pctVs200).toFixed(0)}% below its one-year average price — the long-term trend is down.`);
+      if (i.crossStatus === "golden_formed") plain.push("Its short-term trend just rose above its long-term trend (a “golden cross”): historically a positive sign.");
+      if (i.crossStatus === "golden_soon") plain.push(`A golden cross is forming: ${esc(i.crossDetail)}.`);
+      if (i.crossStatus === "death_formed") plain.push("Its short-term trend dropped below its long-term trend (a “death cross”): historically a caution sign.");
+      plain.push(i.pctVs200 >= 0 ? `Trading ${i.pctVs200.toFixed(0)}% above its one-year average price: the long-term trend is up.` : `Trading ${Math.abs(i.pctVs200).toFixed(0)}% below its one-year average price: the long-term trend is down.`);
       if (i.rangeState === "breakout") plain.push(`Just broke above its recent range${i.rangeVolConfirmed ? " on strong volume" : " (volume unconvincing)"}.`);
       if (i.rangeState === "breakdown") plain.push(`Just broke below its recent range${i.rangeVolConfirmed ? " on heavy volume" : " (volume unconvincing)"}.`);
       if (i.rsSpy1m != null && Math.abs(i.rsSpy1m) > 3) plain.push(`It has ${i.rsSpy1m > 0 ? "outperformed" : "lagged"} the S&P 500 by ${Math.abs(i.rsSpy1m).toFixed(0)} points over the past month.`);
       if (Math.abs(i.mom3m) > 5) plain.push(`${i.mom3m > 0 ? "Up" : "Down"} ${Math.abs(i.mom3m).toFixed(0)}% over the last 3 months.`);
-      if (i.volTrend != null && i.volTrend > 1.15) plain.push(`Volume is running about ${Math.round((i.volTrend - 1) * 100)}% above its recent average — participation is picking up.`);
+      if (i.volTrend != null && i.volTrend > 1.15) plain.push(`Volume is running about ${Math.round((i.volTrend - 1) * 100)}% above its recent average: participation is picking up.`);
       if (i.rsi14 != null && i.rsi14 > 75) plain.push("It has risen fast recently and may be due for a breather (overbought).");
-      if (i.rsi14 != null && i.rsi14 < 30) plain.push("It has fallen hard recently (oversold) — sometimes a bounce setup.");
-      const f = (v, d = 2) => v != null ? Number(v).toFixed(d) : "—";
+      if (i.rsi14 != null && i.rsi14 < 30) plain.push("It has fallen hard recently (oversold): sometimes a bounce setup.");
+      const f = (v, d = 2) => v != null ? Number(v).toFixed(d) : "N/A";
       return `
     <p>${plain.join(" ")}</p>
     <div class="klabel">Pro detail</div>
@@ -6388,12 +6388,12 @@
       <div class="stat"><div class="k">vs 200-day avg</div><div class="v">${signed(i.pctVs200, 1)}%</div></div>
       <div class="stat"><div class="k">3-mo return</div><div class="v">${signed(i.mom3m, 1)}%</div></div>
       <div class="stat"><div class="k">RSI (14d)</div><div class="v">${f(i.rsi14, 0)}</div></div>
-      <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "—"}</div></div>
-      <div class="stat"><div class="k">vs sector (1m)</div><div class="v">${i.rsSector1m != null ? signed(i.rsSector1m, 1) + "pp" : "—"}</div></div>
+      <div class="stat"><div class="k">vs S&amp;P (1m)</div><div class="v">${i.rsSpy1m != null ? signed(i.rsSpy1m, 1) + "pp" : "N/A"}</div></div>
+      <div class="stat"><div class="k">vs sector (1m)</div><div class="v">${i.rsSector1m != null ? signed(i.rsSector1m, 1) + "pp" : "N/A"}</div></div>
       <div class="stat"><div class="k">Volatility (ATR)</div><div class="v">${f(i.atrPct, 1)}%</div></div>
-      <div class="stat"><div class="k">Support</div><div class="v">${i.support ? "$" + f(i.support) : "—"}</div></div>
-      <div class="stat"><div class="k">Resistance</div><div class="v">${i.resistance ? "$" + f(i.resistance) : "—"}</div></div>
-      <div class="stat"><div class="k">Structure</div><div class="v" style="font-size:12px">${esc((i.structure || "—").replace("_", " "))}</div></div>
+      <div class="stat"><div class="k">Support</div><div class="v">${i.support ? "$" + f(i.support) : "N/A"}</div></div>
+      <div class="stat"><div class="k">Resistance</div><div class="v">${i.resistance ? "$" + f(i.resistance) : "N/A"}</div></div>
+      <div class="stat"><div class="k">Structure</div><div class="v" style="font-size:12px">${esc((i.structure || "N/A").replace("_", " "))}</div></div>
       <div class="stat"><div class="k">Volume trend</div><div class="v">${f(i.volTrend)}×</div></div>
     </div>
     ${actions ? `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -6452,7 +6452,7 @@
         );
         // Sparks are all tails of the same session calendar, so the shared
         // timestamp array is aligned by taking the same-length tail. Only used
-        // when the lengths agree — a mismatched axis would date the curve wrong,
+        // when the lengths agree: a mismatched axis would date the curve wrong,
         // and sparkSvg already drops the date row when they don't line up.
         balanceTs = sparkTs.length >= len ? sparkTs.slice(sparkTs.length - len) : [];
       }
@@ -6462,7 +6462,7 @@
 
     /* ── balance chart + range tabs ────────────────────────────────────────
        Ranges slice the series we actually hold. A range longer than the data
-       is disabled rather than quietly returning a shorter window — a control
+       is disabled rather than quietly returning a shorter window: a control
        that lies about its window is worse than one that admits the limit. */
     let balanceSeries = [];
     let balanceTs = [];
@@ -6472,7 +6472,7 @@
       const n = balanceSeries.length;
       // The series is ~30 DOWNSAMPLED points covering ~90 sessions, so one point
       // is roughly three sessions. data-range is in days, so slicing by index
-      // made "1M" render about four months of history — invisible until the date
+      // made "1M" render about four months of history: invisible until the date
       // axis landed and started contradicting the button. Slice by time instead.
       const haveTs = balanceTs.length === n && n > 0;
       const lastTs = haveTs ? balanceTs[n - 1] : 0;
@@ -6508,17 +6508,17 @@
        first two tiles answer the next questions a trader should ask at a glance:
        "how concentrated am I?" and "how hard does this book move vs the market?" */
     function renderKpis() {
-      // Spendable cash (buying power), not account equity — equity would
+      // Spendable cash (buying power), not account equity: equity would
       // double-count the positions already in the value above.
       const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
       // An open order reserves buying power, so this legitimately reads $0 while
       // money is still sitting in the account. The count belongs next to the
-      // number that it explains — down in the broker line on its own it reads as
+      // number that it explains: down in the broker line on its own it reads as
       // a replacement for the cash figure rather than the reason for it.
       const orders = brokerInfo?.openOrders?.length ?? 0;
       const ordersNote = `${orders} open order${orders === 1 ? "" : "s"}`;
       // "link a broker" is wrong copy when one IS linked and simply returned no
-      // balance — that sends you to re-link something that is already working.
+      // balance: that sends you to re-link something that is already working.
       const linked = brokerInfo?.source === "robinhood" || brokerInfo?.source === "import";
       const positions = portfolio.holdings.filter((h) => h.asset_class !== "crypto").length;
       const largest = concentrationInfo?.positions?.[0];
@@ -6542,18 +6542,18 @@
               text: `${esc(largest.key)}${largestWarn ? " · above your limit" : " of portfolio"}`,
               cls: largestWarn ? "down" : "",
             }, "", "Your largest single exposure as a share of stock and option value. Options are grouped with their underlying stock.")
-          : tile("Largest position", "—", { text: concentrationInfo === undefined ? "calculating risk…" : "not available" }),
+          : tile("Largest position", "N/A", { text: concentrationInfo === undefined ? "calculating risk…" : "not available" }),
         beta != null
           ? tile("Portfolio beta", beta.toFixed(2), {
               text: `${betaNote} · ${concentrationInfo.betaCoveragePct.toFixed(0)}% covered`,
             }, "", "Estimated sensitivity to the S&P 500. A beta of 1.00 moves roughly with the market; above 1 tends to swing more, below 1 less. Coverage shows how much portfolio value had a known beta.")
-          : tile("Portfolio beta", "—", { text: concentrationInfo === undefined ? "calculating risk…" : betaNote }),
+          : tile("Portfolio beta", "N/A", { text: concentrationInfo === undefined ? "calculating risk…" : betaNote }),
         tile("Positions", String(positions), { text: positions === 1 ? "holding" : "holdings" }),
-        // portfolio.yaml carries no cash figure — say so rather than leaving a
+        // portfolio.yaml carries no cash figure: say so rather than leaving a
         // hole in the two-column grid.
         cash != null
-          ? tile("Cash", money(cash), { text: orders ? `available now · ${ordersNote}` : "available to invest" }, "", "Buying power — what's actually spendable, not settled cash and not equity (equity would double-count the positions). An open order reserves buying power, so this can read $0 while cash is still in the account.")
-          : tile("Cash", "—", { text: linked ? (orders ? `no balance reported · ${ordersNote}` : "no balance reported") : "link a broker to track" }),
+          ? tile("Cash", money(cash), { text: orders ? `available now · ${ordersNote}` : "available to invest" }, "", "Buying power: what's actually spendable, not settled cash and not equity (equity would double-count the positions). An open order reserves buying power, so this can read $0 while cash is still in the account.")
+          : tile("Cash", "N/A", { text: linked ? (orders ? `no balance reported · ${ordersNote}` : "no balance reported") : "link a broker to track" }),
       ].join("");
     }
 
@@ -6591,7 +6591,7 @@
       return `<span class="chip warn sm" title="These positions were last confirmed with your broker ${relAge(age)}. A refresh is in progress or the broker is unreachable.">as of ${relAge(age)}</span>`;
     }
 
-    // "Updated 3:42:07 PM" under the portfolio — stamped whenever state/quotes
+    // "Updated 3:42:07 PM" under the portfolio: stamped whenever state/quotes
     // reload. This is the time WE last fetched, which is not the same thing as
     // the time the positions were true: when the broker snapshot is older than
     // the fetch, say so here rather than let the fresh timestamp imply the
@@ -6619,7 +6619,7 @@
       const h = new Date().getHours();
       const part = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
       const who = ($("#user-name")?.textContent || "").split(/[\s@]/)[0];
-      $("#greet-line").textContent = who && who !== "—" ? `${part}, ${who}` : part;
+      $("#greet-line").textContent = who && who !== "N/A" ? `${part}, ${who}` : part;
       $("#greet-sub").textContent = new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
     }
     renderGreeting();
@@ -6631,7 +6631,7 @@
     });
     $("#pf-refresh").addEventListener("click", () => withSpin($("#pf-refresh"), async () => {
       // A swallowed broker failure used to still toast "refreshed" while nothing
-      // changed — say which source answered, or that it didn't.
+      // changed: say which source answered, or that it didn't.
       let src = null;
       try {
         const r = await (await fetch("/api/broker/refresh", { method: "POST" })).json();
@@ -6641,7 +6641,7 @@
       await loadQuotes(true);   // fresh=1: bypass the 60s quote cache, else prices look frozen
       await loadScreener();
       loadConcentration();
-      toast(src ? `Portfolio refreshed (${src})` : "Broker refresh failed — showing last known positions");
+      toast(src ? `Portfolio refreshed (${src})` : "Broker refresh failed: showing last known positions");
     }));
 
     $("#import-go").addEventListener("click", async () => {
@@ -6657,7 +6657,7 @@
     });
     $("#import-clear").addEventListener("click", async () => {
       await fetch("/api/broker/import/clear", { method: "POST" });
-      $("#import-msg").textContent = "Import cleared — back to YAML/linked source.";
+      $("#import-msg").textContent = "Import cleared: back to YAML/linked source.";
       loadState();
     });
 
@@ -6708,8 +6708,8 @@
       </button>
       <div class="detail">
         <div class="klabel">Why</div><p>${esc(e.thesis)}</p>
-        <div class="klabel">What would change this advice</div><p>${esc(e.invalidation || "—")}</p>
-        <div class="klabel">Your position</div><p>${esc(e.portfolio_impact || "—")}</p>
+        <div class="klabel">What would change this advice</div><p>${esc(e.invalidation || "N/A")}</p>
+        <div class="klabel">Your position</div><p>${esc(e.portfolio_impact || "N/A")}</p>
         <div class="klabel">Triggered by</div><p style="color:var(--dim)">${esc(e.title)}</p>
         ${screener[e.ticker] ? factorDetail(e.ticker) : ""}
       </div>`;
@@ -6720,7 +6720,7 @@
       }
     }
 
-    /* ── your stocks & options (crypto is not shown — equity/options tool) ── */
+    /* ── your stocks & options (crypto is not shown: equity/options tool) ── */
     /* A position is a tile, not a table row: symbol + price + today's move read
        at a glance, with the spark and status chip underneath. Same click target
        (the full stock page) and same data as the old row. */
@@ -6734,7 +6734,7 @@
       const mult = isOpt ? 100 : 1;
       // Options carry their own market value; equities are quote-priced.
       const gain = h.market_value != null ? h.market_value - h.cost_basis * h.shares * mult : q ? (q.c - h.cost_basis) * h.shares : 0;
-      const priceCell = h.market_value != null ? money(h.market_value) : q ? money(q.c) : "—";
+      const priceCell = h.market_value != null ? money(h.market_value) : q ? money(q.c) : "N/A";
       const o = h.option;
       const sym = isOpt && o ? o.underlying : h.ticker;
       const qty = isOpt && o
@@ -6808,7 +6808,7 @@
 
     /* ── learn ────────────────────────────────────────────────────────────
        Twelve lessons. Each one is served with its live callout already resolved
-       against this reader's portfolio, so nothing here computes anything — it
+       against this reader's portfolio, so nothing here computes anything: it
        renders what the server sent and tracks which ones are done. */
     let lessons = [];
     let lessonLevels = [];
@@ -6937,7 +6937,7 @@
 
     /* ── practice drills ──────────────────────────────────────────────────
        A real past chart with the future hidden. The server holds the ticker and
-       the as-of bar, so nothing here can look ahead — this module only ever
+       the as-of bar, so nothing here can look ahead: this module only ever
        renders what /new sent, and the reveal only ever comes from /submit. */
     let drill = null;   // { id, atr, bars } while a drill is open
 
@@ -6954,7 +6954,7 @@
         },
       });
       // chartAxes clears .chart-y/.chart-note but not these, so drop stale ones
-      // before re-adding — a second drill would otherwise stack dividers.
+      // before re-adding: a second drill would otherwise stack dividers.
       const plot = el.parentElement;
       plot.querySelectorAll(".drill-split, .drill-future, .drill-level").forEach((n) => n.remove());
       if (splitFrac != null) {
@@ -6963,7 +6963,7 @@
           `<div class="drill-future" style="left:${pct}%"></div><div class="drill-split" style="left:${pct}%"></div>`);
       }
       /* Levels are HTML overlays, not SVG. The chart is drawn with
-         preserveAspectRatio="none", which stretches the viewBox non-uniformly —
+         preserveAspectRatio="none", which stretches the viewBox non-uniformly -
          the same reason chartAxes and the no-data note are HTML (see the comment
          above chartMessage). An SVG <text> label here would smear horizontally. */
       if (levels?.length) {
@@ -7002,7 +7002,7 @@
             <button class="advise-btn" id="drill-submit" style="margin-top:0">Commit plan</button>
             <button class="advise-btn ghost" id="drill-pass" style="margin-top:0">No trade</button>
           </div>
-          <div class="widget-note">Last close ${money(d.bars.closes[d.bars.closes.length - 1])} · ATR ${money(d.atr)}. Passing is a real answer — it is scored on whether the setup was worth taking.</div>`;
+          <div class="widget-note">Last close ${money(d.bars.closes[d.bars.closes.length - 1])} · ATR ${money(d.atr)}. Passing is a real answer: it is scored on whether the setup was worth taking.</div>`;
         drillChart($("#drill-svg"), d.bars, null);
         let dir = "long";
         $("#drill-dir").addEventListener("click", (e) => {
@@ -7033,7 +7033,7 @@
     async function submitDrill(plan) {
       if (!drill) return;
       if (plan.direction !== "no_trade" && ![plan.entry, plan.stop, plan.target].every(Number.isFinite)) {
-        toast("Fill in entry, stop, and target — or pick No trade.", "bad"); return;
+        toast("Fill in entry, stop, and target, or pick No trade.", "bad"); return;
       }
       const btns = document.querySelectorAll("#drill-submit, #drill-pass");
       btns.forEach((b) => b.disabled = true);
@@ -7053,7 +7053,7 @@
 
     function renderGrade(g) {
       const [label, tone] = OUTCOME_LABEL[g.outcome] || ["Graded", "calm"];
-      const rTxt = g.rMultiple != null ? `${g.rMultiple >= 0 ? "+" : ""}${g.rMultiple.toFixed(2)}R` : "—";
+      const rTxt = g.rMultiple != null ? `${g.rMultiple >= 0 ? "+" : ""}${g.rMultiple.toFixed(2)}R` : "N/A";
       const outcomeNote = g.outcome === "open" ? "Neither stop nor target was reached in the window."
         : g.netAtr != null ? `Price moved ${g.netAtr.toFixed(2)}x ATR over the window.`
           : g.outcome === "win" ? "Target reached before the stop." : "Stop reached before the target.";
@@ -7080,7 +7080,7 @@
         <div class="score-pair">
           <div><div class="k">Process</div><div class="v">${g.process.score}<span style="font-size:15px;color:var(--faint)">/100</span></div>
             <div class="n">How good the plan was, before anyone knew the outcome</div></div>
-          <div><div class="k">Outcome</div><div class="v ${g.outcome === "win" || g.outcome === "pass_correct" ? "up" : g.outcome === "loss" ? "down" : ""}">${rTxt === "—" ? label : rTxt}</div>
+          <div><div class="k">Outcome</div><div class="v ${g.outcome === "win" || g.outcome === "pass_correct" ? "up" : g.outcome === "loss" ? "down" : ""}">${rTxt === "N/A" ? label : rTxt}</div>
             <div class="n">${esc(outcomeNote)}</div></div>
         </div>
         <div style="margin-bottom:var(--sp-4)"><span class="chip ${tone}">${esc(label)}</span></div>
@@ -7091,11 +7091,11 @@
           <div class="widget-head" style="margin-top:var(--sp-5)">
             <h3 style="font-size:var(--fs-data)">What was readable at decision time</h3>
           </div>
-          <div class="widget-note" style="margin-bottom:6px">Every number below comes only from bars at or before the moment you committed — nothing here uses what happened next.</div>
+          <div class="widget-note" style="margin-bottom:6px">Every number below comes only from bars at or before the moment you committed: nothing here uses what happened next.</div>
           ${readable}` : ""}`;
 
       // Draw history + future together. The y-axis rescales here, which is fine
-      // — the plan is already committed, and pre-scaling to include the future
+      //: the plan is already committed, and pre-scaling to include the future
       // would have leaked the range before the answer.
       const h = g.history, f = g.forward;
       const join = (k) => [...h[k], ...f[k]];
@@ -7117,17 +7117,17 @@
         const s = await (await fetch("/api/practice/stats")).json();
         if (!s.ok || !s.attempts) { $("#practice-stats-card").style.display = "none"; return; }
         $("#practice-stats-card").style.display = "";
-        const pct = (v) => (v == null ? "—" : `${(v * 100).toFixed(0)}%`);
+        const pct = (v) => (v == null ? "N/A" : `${(v * 100).toFixed(0)}%`);
         const tile = (k, v, n) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
-        $("#stats-note").textContent = s.enough ? `${s.attempts} drills` : `${s.attempts} of ${5} drills — stats unlock at 5`;
+        $("#stats-note").textContent = s.enough ? `${s.attempts} drills` : `${s.attempts} of ${5} drills: stats unlock at 5`;
         const c = s.cohort;
         $("#practice-cohort").textContent = c
           ? `${c.interval} bars · ${c.visibleBars}-bar read · ${c.horizon}-bar outcome · grading v${c.gradingVersion}`
           : "";
         $("#practice-kpis").innerHTML = [
-          tile("Avg process", s.avgProcess == null ? "—" : Math.round(s.avgProcess), "out of 100"),
+          tile("Avg process", s.avgProcess == null ? "N/A" : Math.round(s.avgProcess), "out of 100"),
           tile("Hit rate", pct(s.hitRate), `${s.taken} taken`),
-          tile("Avg R", s.avgR == null ? "—" : `${s.avgR >= 0 ? "+" : ""}${s.avgR.toFixed(2)}`, "per resolved trade"),
+          tile("Avg R", s.avgR == null ? "N/A" : `${s.avgR >= 0 ? "+" : ""}${s.avgR.toFixed(2)}`, "per resolved trade"),
           tile("Pass accuracy", pct(s.passAccuracy), `${s.passed} passed`),
         ].join("");
       } catch { $("#practice-stats-card").style.display = "none"; }
@@ -7137,11 +7137,11 @@
 
     /* Reset archives rather than deletes: it moves a marker so these stats start
        fresh, and every drill you took is still on record. That is why a plain
-       confirm is proportionate here — nothing is being destroyed. */
+       confirm is proportionate here: nothing is being destroyed. */
     $("#practice-reset").addEventListener("click", async () => {
       const btn = $("#practice-reset");
       const n = Number($("#stats-note").textContent.match(/^\d+/)?.[0] ?? 0);
-      if (!confirm(`Start a new practice record?\n\n${n} drill${n === 1 ? "" : "s"} will stop counting toward your averages. Nothing is deleted — your past drills stay in History.`)) return;
+      if (!confirm(`Start a new practice record?\n\n${n} drill${n === 1 ? "" : "s"} will stop counting toward your averages. Nothing is deleted. Your past drills stay in History.`)) return;
       btn.disabled = true;
       const orig = btn.textContent;
       btn.textContent = "Resetting…";
@@ -7151,7 +7151,7 @@
         // The stats card hides itself once the new record is empty, so the
         // confirmation has to live outside it.
         $("#practice-reset-msg").textContent = `New record started. ${r.archived} earlier drill${r.archived === 1 ? "" : "s"} archived.`;
-        toast(`New record started — ${r.archived} earlier drill${r.archived === 1 ? "" : "s"} archived, none deleted.`);
+        toast(`New record started: ${r.archived} earlier drill${r.archived === 1 ? "" : "s"} archived, none deleted.`);
         await loadPracticeStats();
       } catch {
         toast("Could not reach the server.", "bad");
@@ -7163,7 +7163,7 @@
     /* ── watchlist (starred in the UI; merged with broker/YAML lists) ── */
     function renderWatchlist() {
       const list = portfolio.watchlist || [];
-      // The widget holds its grid column even when empty — hiding it would leave
+      // The widget holds its grid column even when empty: hiding it would leave
       // the positions card stranded beside a gap.
       if (!list.length) {
         $("#watchlist-card").innerHTML = `<div class="empty">Nothing watched yet. Open any stock and hit ★ Watch.</div>`;
@@ -7174,7 +7174,7 @@
         return `
         <div class="wl-row" data-watch-open="${esc(t)}">
           ${logoImg(t, "sm")}<span class="wl-sym">${esc(t)}</span>
-          <span class="wl-px">${q?.c != null ? money(q.c) : "—"}</span>
+          <span class="wl-px">${q?.c != null ? money(q.c) : "N/A"}</span>
           <span class="wl-dp ${q && q.dp >= 0 ? "up" : "down"}">${q?.dp != null ? signed(q.dp) + "%" : ""}</span>
           <button class="wl-x" data-watch-remove="${esc(t)}" title="Remove from watchlist" aria-label="Remove ${esc(t)}">${icon("close", 13)}</button>
         </div>`;
@@ -7188,7 +7188,7 @@
         loadState();
         return;
       }
-      // Row click opens the stock page — checked after remove so the ✕ wins.
+      // Row click opens the stock page: checked after remove so the ✕ wins.
       const open = e.target.closest("[data-watch-open]");
       if (open) showPane("stock", open.dataset.watchOpen);
     });
@@ -7220,12 +7220,12 @@
     <div class="bench-grid">${bench}</div>`;
     }
 
-    /* ── F6b: rotation heatmap — sectors × trailing weeks ── */
+    /* ── F6b: rotation heatmap: sectors × trailing weeks ── */
     const HEAT_COLOR = { leading: "var(--green)", improving: "var(--blue)", weakening: "var(--amber)", lagging: "var(--red)" };
     const weekLabel = (ts) => new Date(ts * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
 
     // Colour says which state, saturation says how strongly. |rel1m| is clamped
-    // at 8pp — past that the differences stop being visually legible anyway.
+    // at 8pp: past that the differences stop being visually legible anyway.
     function heatFill(state, rel1m) {
       const base = HEAT_COLOR[state] ?? "var(--faint)";
       const pct = 18 + Math.min(Math.abs(rel1m ?? 0), 8) / 8 * 62;
@@ -7241,10 +7241,10 @@
         box.innerHTML = `<div class="empty">No rotation history yet. A row is written for each sector as the market context refreshes; the first column appears once a week of readings exists, and the grid grows one column per week from there.</div>`;
         return;
       }
-      // Honest about a young grid — this fills in weekly and the first month
+      // Honest about a young grid: this fills in weekly and the first month
       // genuinely doesn't have much to show.
       meta.textContent = hm.weeks.length < 4
-        ? `${hm.weeks.length} week${hm.weeks.length === 1 ? "" : "s"} so far — one new column per week`
+        ? `${hm.weeks.length} week${hm.weeks.length === 1 ? "" : "s"} so far: one new column per week`
         : `last ${hm.weeks.length} weeks · week-ending state`;
 
       const head = hm.weeks.map((w) => `<th>${esc(weekLabel(w))}</th>`).join("");
@@ -7276,20 +7276,20 @@
       <th>Sector</th><th>State</th><th>1w</th><th>1m</th><th>vs SPY</th><th>Breadth</th>
     </tr>` + boards.map((bd) => {
         const rot = bd.rotation;
-        const stateChip = rot ? `<span class="chip ${SECTOR_STATE_TONE[rot.state] ?? "calm"} sm">${rot.state}</span>` : `<span class="chip calm sm">—</span>`;
+        const stateChip = rot ? `<span class="chip ${SECTOR_STATE_TONE[rot.state] ?? "calm"} sm">${rot.state}</span>` : `<span class="chip calm sm">N/A</span>`;
         return `
       <tr>
         <td>${esc(bd.sector)}${bd.etf ? ` <span style="color:var(--faint);font-weight:400">· ${esc(bd.etf)}</span>` : ""}</td>
         <td>${stateChip}</td>
-        <td class="${rot && rot.ret1w >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1w, 1) + "%" : "—"}</td>
-        <td class="${rot && rot.ret1m >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1m, 1) + "%" : "—"}</td>
-        <td class="${rot && rot.rel1m >= 0 ? "up" : "down"}">${rot ? signed(rot.rel1m, 1) + "pp" : "—"}</td>
-        <td>${bd.breadthPct != null ? bd.breadthPct.toFixed(0) + "%" : "—"}</td>
+        <td class="${rot && rot.ret1w >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1w, 1) + "%" : "N/A"}</td>
+        <td class="${rot && rot.ret1m >= 0 ? "up" : "down"}">${rot ? signed(rot.ret1m, 1) + "%" : "N/A"}</td>
+        <td class="${rot && rot.rel1m >= 0 ? "up" : "down"}">${rot ? signed(rot.rel1m, 1) + "pp" : "N/A"}</td>
+        <td>${bd.breadthPct != null ? bd.breadthPct.toFixed(0) + "%" : "N/A"}</td>
       </tr>`;
       }).join("");
     }
 
-    /* ── idea filters: everything lives in the ⚙ Filters dialog — numeric
+    /* ── idea filters: everything lives in the ⚙ Filters dialog: numeric
        score/cap thresholds plus custom metric rules, all client-side and
        persisted per-browser. Active rules render as removable chips. ── */
     const CUSTOM_METRICS = {
@@ -7306,17 +7306,17 @@
       score: { label: "Score", get: (i, item, isLong) => (isLong ? item.long_score : item.short_score) },
       mcapB: { label: "Mkt cap $B", get: (i, item) => { const c = screener[item.ticker]?.market_cap; return c != null ? c / 1e9 : null; } },
     };
-    // Corrupt localStorage must not throw at top level — that would blank the whole
+    // Corrupt localStorage must not throw at top level: that would blank the whole
     // dashboard with no recovery path. Bad JSON just means "no saved preference".
     const readStoredSet = (key) => { try { return new Set(JSON.parse(localStorage.getItem(key) || "[]")); } catch { return new Set(); } };
     const collapsedSectors = readStoredSet("collapsedSectors");
     const saveCollapsed = () => localStorage.setItem("collapsedSectors", JSON.stringify([...collapsedSectors]));
     // One filter mechanism, not two. "Minimum score" and "Minimum market cap"
     // used to be a separate `numFilters` store with its own localStorage key,
-    // chip type, and removal handler — duplicating CUSTOM_METRICS.score and
+    // chip type, and removal handler: duplicating CUSTOM_METRICS.score and
     // .mcapB, which already existed but were hidden from the dropdown. They're
     // now exposed as ordinary rules and numFilters is gone.
-    // Four comparisons for continuous metrics was three too many — "at least"
+    // Four comparisons for continuous metrics was three too many: "at least"
     // vs "above" is the same intent on a float, and picking between them was
     // pure friction. The dialog now offers only > and <. ≥/≤ stay here so rules
     // saved (or preset-shared) before the change keep evaluating as written.
@@ -7335,7 +7335,7 @@
       if (Array.isArray(raw)) customFilters = raw.filter(validRule);
     } catch { }
     // One-time migration of the retired numeric thresholds. `>=` preserves the
-    // old "Minimum" semantics exactly — migrating to `>` would silently start
+    // old "Minimum" semantics exactly: migrating to `>` would silently start
     // excluding rows that sat exactly on the threshold.
     function migrateNumFilters(nf) {
       const out = [];
@@ -7374,7 +7374,7 @@
     function renderFilterBar() {
       const html = filterChipsHtml();
       $("#active-filter-chips").innerHTML = html;
-      $("#modal-filter-chips").innerHTML = html || `<span style="color:var(--faint)">No filters active — everything setup-grade shows.</span>`;
+      $("#modal-filter-chips").innerHTML = html || `<span style="color:var(--faint)">No filters active: everything setup-grade shows.</span>`;
       $("#filters-btn-label").textContent = customFilters.length ? `Filters (${customFilters.length})` : "Filters";
     }
     // Chip removal, delegated at document level so bar + dialog share it.
@@ -7386,7 +7386,7 @@
         renderFilterBar(); renderIdeas();
       }
     });
-    // The metric dropdown is generated from CUSTOM_METRICS — it used to be a
+    // The metric dropdown is generated from CUSTOM_METRICS: it used to be a
     // hand-maintained <option> list that had already drifted ("Market cap $B"
     // in the dialog, "Mkt cap $B" on the chip).
     $("#cf-metric").innerHTML = Object.entries(CUSTOM_METRICS)
@@ -7413,12 +7413,12 @@
       const round = (n) => (Math.abs(n) >= 100 ? n.toFixed(0) : n.toFixed(1));
       if (!r) {
         val.placeholder = "value";
-        $("#cf-hint").textContent = "Stack as many rules as you like — they all have to pass.";
+        $("#cf-hint").textContent = "Stack as many rules as you like: they all have to pass.";
         return;
       }
       val.placeholder = round(r.mid);
       $("#cf-hint").textContent =
-        `${CUSTOM_METRICS[metric].label} across the ${r.n} ${ideasTab} setups on screen: ${round(r.min)} to ${round(r.max)}, middle ${round(r.mid)}. Stack as many rules as you like — they all have to pass.`;
+        `${CUSTOM_METRICS[metric].label} across the ${r.n} ${ideasTab} setups on screen: ${round(r.min)} to ${round(r.max)}, middle ${round(r.mid)}. Stack as many rules as you like: they all have to pass.`;
     }
     $("#cf-metric").addEventListener("change", syncCfHint);
 
@@ -7438,7 +7438,7 @@
       // One lower bound and one upper bound per metric, no more. Matching on the
       // direction rather than the exact operator is what lets a new "Score > 80"
       // replace a legacy "Score ≥ 70" instead of stacking two rules that say the
-      // same thing — the redundancy this dialog kept accumulating.
+      // same thing: the redundancy this dialog kept accumulating.
       const bound = (o) => (o === ">" || o === ">=" ? "min" : "max");
       const dup = customFilters.findIndex((f) => f.metric === metric && bound(f.op) === bound(op));
       if (dup >= 0) customFilters[dup] = { metric, op, value };
@@ -7468,7 +7468,7 @@
     function renderPresetChips() {
       const box = $("#preset-chips");
       if (!box) return;
-      if (!filterPresets.length) { box.innerHTML = `<span style="color:var(--faint)">No saved presets yet — set filters below, name them, and save.</span>`; return; }
+      if (!filterPresets.length) { box.innerHTML = `<span style="color:var(--faint)">No saved presets yet: set filters below, name them, and save.</span>`; return; }
       box.innerHTML = filterPresets.map((p, i) =>
         `<span style="display:inline-flex;align-items:center"><button class="filter-chip" data-preset="${i}" title="Apply this preset">${esc(p.name)}</button><button class="filter-chip" data-preset-del="${i}" title="Delete preset" style="padding:4px 6px">${icon("close", 12)}</button></span>`).join(" ");
     }
@@ -7494,7 +7494,7 @@
       const existing = filterPresets.findIndex((p) => p.name.toLowerCase() === name.toLowerCase());
       if (existing >= 0) filterPresets[existing] = preset;
       else {
-        if (filterPresets.length >= 8) { toast("Preset limit is 8 — delete one first", "err"); return; }
+        if (filterPresets.length >= 8) { toast("Preset limit is 8: delete one first", "err"); return; }
         filterPresets.push(preset);
       }
       $("#preset-name").value = "";
@@ -7520,9 +7520,9 @@
       if (!groups.length) {
         const rows = Object.values(screener);
         const msg = anyFilterActive()
-          ? "No ideas match the current filters — loosen them to see more."
+          ? "No ideas match the current filters: loosen them to see more."
           : rows.length
-            ? `No setup-grade ${ideasTab} ideas right now — that's a valid answer, not a bug. The scoring requires confluence (structure + volume + relative strength), not just price movement.`
+            ? `No setup-grade ${ideasTab} ideas right now: that's a valid answer, not a bug. The scoring requires confluence (structure + volume + relative strength), not just price movement.`
             : "Scanning the market… the first full scan takes several minutes after startup.";
         card.innerHTML = `<div class="empty">${msg}</div>`;
         return;
@@ -7618,40 +7618,40 @@
       ${rep.warnings?.length ? `<div class="klabel">Warnings</div><ul class="warn-list">${rep.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
       <div class="klabel">Trade plan</div>
       <div class="stats">
-        <div class="stat"><div class="k">Entry</div><div class="v" style="font-size:12.5px">${esc(tp.entry_zone ?? "—")}</div></div>
-        <div class="stat"><div class="k">Stop</div><div class="v" style="font-size:12.5px">${esc(tp.stop_loss ?? "—")}</div></div>
-        <div class="stat"><div class="k">Risk : reward</div><div class="v">${esc(tp.risk_reward ?? "—")}</div></div>
-        <div class="stat"><div class="k">Holding period</div><div class="v" style="font-size:12.5px">${esc(tp.holding_period ?? "—")}</div></div>
+        <div class="stat"><div class="k">Entry</div><div class="v" style="font-size:12.5px">${esc(tp.entry_zone ?? "N/A")}</div></div>
+        <div class="stat"><div class="k">Stop</div><div class="v" style="font-size:12.5px">${esc(tp.stop_loss ?? "N/A")}</div></div>
+        <div class="stat"><div class="k">Risk : reward</div><div class="v">${esc(tp.risk_reward ?? "N/A")}</div></div>
+        <div class="stat"><div class="k">Holding period</div><div class="v" style="font-size:12.5px">${esc(tp.holding_period ?? "N/A")}</div></div>
       </div>
       ${tp.targets?.length ? `<div class="klabel">Targets</div><ul>${tp.targets.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
       ${rep.rating !== "reject" ? `<button class="advise-btn ghost" data-track="${esc(rep.ticker)}" data-track-dir="${rep.direction === "short" ? "short" : "long"}" data-track-entry="${esc((String(tp.entry_zone ?? "").match(/\d+(?:\.\d+)?/) || [""])[0])}" style="margin-top:8px">${icon("check", 13)} Track this trade</button>` : ""}
       <div class="klabel">Technical case</div>
-      <ul>${(rep.technical_reasons ?? []).map((r) => `<li>${esc(r)}</li>`).join("") || "<li>—</li>"}</ul>
+      <ul>${(rep.technical_reasons ?? []).map((r) => `<li>${esc(r)}</li>`).join("") || "<li>N/A</li>"}</ul>
       <div class="klabel">News & catalyst ${rep.catalyst ? `<span class="chip ${rep.catalyst.quality === "strong" ? "buy" : rep.catalyst.quality === "conflicting" ? "sell" : rep.catalyst.quality === "noisy" ? "warn" : "calm"} sm">${esc(rep.catalyst.quality)}</span>` : ""}</div>
-      <p class="kv">${esc(rep.catalyst?.description ?? "—")}</p>
+      <p class="kv">${esc(rep.catalyst?.description ?? "N/A")}</p>
       ${rep.news_reasons?.length ? `<ul>${rep.news_reasons.map((r) => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
-      <div class="klabel">Invalidation — this idea is wrong if…</div>
-      <p class="kv">${esc(rep.invalidation ?? "—")}</p>
+      <div class="klabel">Invalidation: this idea is wrong if…</div>
+      <p class="kv">${esc(rep.invalidation ?? "N/A")}</p>
       <div class="klabel">Stress tests <span class="chip ${st.survives_risk_off ? "buy" : "sell"} sm">${st.survives_risk_off ? "survives risk-off" : "fails in risk-off"}</span></div>
       <div class="stress">
-        <div class="case c-base"><b>Base case</b>${esc(st.base_case ?? "—")}</div>
-        <div class="case c-bull"><b>If market rallies</b>${esc(st.bull_case ?? "—")}</div>
-        <div class="case c-bear"><b>If market sells off</b>${esc(st.bear_case ?? "—")}</div>
-        <div class="case c-fail"><b>If it fails</b>${esc(st.invalidation_case ?? "—")}</div>
+        <div class="case c-base"><b>Base case</b>${esc(st.base_case ?? "N/A")}</div>
+        <div class="case c-bull"><b>If market rallies</b>${esc(st.bull_case ?? "N/A")}</div>
+        <div class="case c-bear"><b>If market sells off</b>${esc(st.bear_case ?? "N/A")}</div>
+        <div class="case c-fail"><b>If it fails</b>${esc(st.invalidation_case ?? "N/A")}</div>
       </div>
       <p class="kv" style="margin-top:6px;color:var(--dim)">${esc(st.risk_off_note ?? "")} ${esc(st.single_condition_dependency ?? "")}</p>
       <div class="klabel">Sector context</div>
-      <p class="kv">${esc(rep.sector_context ?? "—")}</p>
+      <p class="kv">${esc(rep.sector_context ?? "N/A")}</p>
       <div class="klabel">Position size</div>
-      <p class="kv">${esc(rep.sizing ?? "—")}</p>
+      <p class="kv">${esc(rep.sizing ?? "N/A")}</p>
       <div class="klabel">Exit plan</div>
-      <p class="kv">${esc(rep.exit_plan ?? "—")}</p>
+      <p class="kv">${esc(rep.exit_plan ?? "N/A")}</p>
       ${ideaOptionsHtml(rep.options_view)}
     </div>`;
     }
 
     // Options structure on an idea report: strategy label + concrete legs, with
-    // server-computed (Black-Scholes) max loss/gain/breakevens — never model math.
+    // server-computed (Black-Scholes) max loss/gain/breakevens: never model math.
     function ideaOptionsHtml(ov) {
       if (!ov) return "";
       const BULL = ["long_call", "vertical_call_debit", "vertical_put_credit", "cash_secured_put"];
@@ -7664,13 +7664,13 @@
       }
       const pr = ov.pricing;
       if (pr) {
-        const usd = (n) => (n == null ? "—" : (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 }));
+        const usd = (n) => (n == null ? "N/A" : (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 }));
         html += `
       <div class="stats">
         <div class="stat"><div class="k">${pr.entryCost >= 0 ? "Net debit" : "Net credit"}</div><div class="v" style="font-size:12.5px">${usd(Math.abs(pr.entryCost))}</div></div>
         <div class="stat"><div class="k">Max loss</div><div class="v" style="font-size:12.5px">${usd(pr.maxLoss)}</div></div>
         <div class="stat"><div class="k">Max gain</div><div class="v" style="font-size:12.5px">${usd(pr.maxGain)}</div></div>
-        <div class="stat"><div class="k">Breakeven</div><div class="v" style="font-size:12.5px">${(pr.breakevens || []).map((b) => "$" + b.toFixed(2)).join(", ") || "—"}</div></div>
+        <div class="stat"><div class="k">Breakeven</div><div class="v" style="font-size:12.5px">${(pr.breakevens || []).map((b) => "$" + b.toFixed(2)).join(", ") || "N/A"}</div></div>
       </div>
       <p class="kv" style="color:var(--faint);font-size:11.5px">${esc(pr.note || "")}</p>`;
       }
@@ -7680,7 +7680,7 @@
     }
 
     // A report that came back with an `id` is a stored row (the stock page's
-    // "Past analyses"), so its ✕ deletes it for real — closing one used to drop
+    // "Past analyses"), so its ✕ deletes it for real: closing one used to drop
     // the node and leave the row sitting in history. A freshly generated report
     // has no id yet and keeps the old dismiss-only behaviour.
     function showReport(rep, container) {
@@ -7715,7 +7715,7 @@
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticker: btn.dataset.track, direction: btn.dataset.trackDir, entry_price: btn.dataset.trackEntry || null }),
         })).json();
-        if (res.ok) { btn.innerHTML = `${icon("check", 13)} Tracking — close it in the journal`; toast(`Tracking ${btn.dataset.track} — it'll be waiting in your journal`); }
+        if (res.ok) { btn.innerHTML = `${icon("check", 13)} Tracking: close it in the journal`; toast(`Tracking ${btn.dataset.track}: it'll be waiting in your journal`); }
         else { btn.disabled = false; toast(`Track failed: ${res.error}`, "err"); }
       } catch { btn.disabled = false; toast("Track failed", "err"); }
     });
@@ -7750,7 +7750,7 @@
       setIdeasBusy(true);
       btn.textContent = "Validating top setups… (1-3 min)";
       try {
-        // minScore is now just a rule like any other — pull the tightest lower
+        // minScore is now just a rule like any other: pull the tightest lower
         // bound the user set on `score` so the server-side candidate pick still
         // respects it. (`tickers` below already encodes the full rule set; this
         // is the fallback when no rules are active.)
@@ -7801,7 +7801,7 @@
 
     /* Free re-scan of the ideas board. Both this and the paid validate mutate
        `screener`/`market`, so they are mutually exclusive rather than racing.
-       On failure the existing ideas stay on screen — a refresh that silently
+       On failure the existing ideas stay on screen: a refresh that silently
        empties the board is worse than one that admits it failed. */
     let ideasBusy = false;
     function setIdeasBusy(busy) {
@@ -7822,7 +7822,7 @@
         await loadMarket();
         stampUpdated();
       } catch {
-        toast("Could not refresh ideas — showing the last scan.", "err");
+        toast("Could not refresh ideas: showing the last scan.", "err");
       } finally {
         btn.classList.remove("spinning");
         btn.innerHTML = orig;
@@ -7832,7 +7832,7 @@
 
     /* ── history: past validated ideas ── */
 
-    /* ── F3: portfolio concentration — deterministic risk read ($0 AI) ── */
+    /* ── F3: portfolio concentration: deterministic risk read ($0 AI) ── */
     async function loadConcentration() {
       const sec = $("#concentration-section");
       try {
@@ -7849,11 +7849,11 @@
         const money0 = (v) => "$" + Math.round(v).toLocaleString();
 
         // Top 5 sectors keep their own slot; the tail folds into "Other" rather
-        // than generating a 7th hue — the palette is a fixed order, never cycled.
+        // than generating a 7th hue: the palette is a fixed order, never cycled.
         const sorted = [...d.sectors].sort((a, b) => b.value - a.value);
         const head = sorted.slice(0, SERIES_SLOTS - 1);
         const tail = sorted.slice(SERIES_SLOTS - 1);
-        // Slot assignment is keyed to the sector NAME, not its rank — otherwise a
+        // Slot assignment is keyed to the sector NAME, not its rank: otherwise a
         // sector overtaking another would repaint both on the next refresh.
         // Display order stays value-ranked; only the colour is stable.
         const slotOf = new Map([...head].sort((a, b) => a.sector.localeCompare(b.sector))
@@ -7876,16 +7876,16 @@
             <span class="alloc-val">${money0(x.value)}</span>
           </div>`).join("");
 
-        // Beta is the one number the donut can't show — it rides in the header.
+        // Beta is the one number the donut can't show: it rides in the header.
         $("#alloc-beta").innerHTML = d.portfolioBeta == null
           ? `<span class="term" title="Beta needs scored holdings; none of yours have a beta yet.">beta unknown</span>`
           : `<span class="term" title="Beta compares your portfolio's swings to the market's. 1.00 moves with the market; above 1 swings harder, below 1 swings less.">beta</span> <b style="color:var(--text)">${d.portfolioBeta.toFixed(2)}</b><span> · covers ${d.betaCoveragePct.toFixed(0)}% of value${d.excludedNoBeta ? ` · ${d.excludedNoBeta} without a beta` : ""}</span>`;
 
         const top = parts[0];
         const betaRead = d.portfolioBeta == null ? ""
-          : ` ${d.portfolioBeta > 1.15 ? "It swings harder than the market — bigger gains, bigger drops." : d.portfolioBeta < 0.85 ? "It moves less than the market — steadier, slower." : "It moves roughly in step with the market."}`;
+          : ` ${d.portfolioBeta > 1.15 ? "It swings harder than the market: bigger gains, bigger drops." : d.portfolioBeta < 0.85 ? "It moves less than the market: steadier, slower." : "It moves roughly in step with the market."}`;
         $("#alloc-note").innerHTML = (top.pct >= 40
-          ? `Most of your money — <b>${top.pct.toFixed(0)}%</b> — sits in ${esc(top.name)}. When one sector moves, most of your portfolio moves with it.`
+          ? `<b>${top.pct.toFixed(0)}%</b> of your money sits in ${esc(top.name)}. When one sector moves, most of your portfolio moves with it.`
           : `Your largest slice is ${esc(top.name)} at <b>${top.pct.toFixed(0)}%</b>, so no single sector dominates the portfolio.`)
           + betaRead
           + ` <span style="color:var(--faint)">Across ${money0(d.totalValue)} of stock positions (options excluded). Deterministic, no AI.</span>`;
@@ -7896,7 +7896,7 @@
       }
     }
 
-    /* ── F0: validator calibration — does the rubric predict outcomes? ── */
+    /* ── F0: validator calibration: does the rubric predict outcomes? ── */
     const DIM_LABEL = {
       technical: "Technical", catalyst: "Catalyst", market_alignment: "Market fit",
       news_sentiment: "News / sentiment", risk_reward: "Risk / reward", invalidation_clarity: "Invalidation",
@@ -7907,10 +7907,10 @@
         const d = await (await fetch("/api/calibration")).json();
         if (!d.ok) { box.innerHTML = `<div class="empty">${esc(d.error || "Calibration unavailable.")}</div>`; return; }
         if (!d.total) {
-          box.innerHTML = `<div class="empty">No validated ideas yet — validate a few and check back. Once ideas resolve against real prices, this measures whether higher ratings actually win more.</div>`;
+          box.innerHTML = `<div class="empty">No validated ideas yet: validate a few and check back. Once ideas resolve against real prices, this measures whether higher ratings actually win more.</div>`;
           return;
         }
-        const faint = `<span style="color:var(--faint)">—</span>`;
+        const faint = `<span style="color:var(--faint)">N/A</span>`;
         const tone = /has edge/.test(d.verdict) ? "up" : /inverted/.test(d.verdict) ? "down" : "";
         const pct = (b) => b.hitRate == null ? faint : `<b>${Math.round(b.hitRate * 100)}%</b>`;
         const rr = (b) => b.avgR == null ? faint : `<span class="${b.avgR >= 0 ? "up" : "down"}">${b.avgR >= 0 ? "+" : ""}${b.avgR.toFixed(2)}R</span>`;
@@ -7936,14 +7936,14 @@
             ${d.byDirection.map((b) => bucketRow(esc(b.key), b)).join("")}
           </table>
           <details style="margin-top:12px">
-            <summary style="cursor:pointer;font-size:13px;font-weight:600">Dimension breakdown — which scores predict wins</summary>
+            <summary style="cursor:pointer;font-size:13px;font-weight:600">Dimension breakdown: which scores predict wins</summary>
             <table class="sectors" style="width:100%;margin-top:8px">
               <tr><th>Dimension</th><th>Avg (wins)</th><th>Avg (losses)</th><th>Edge</th></tr>
               ${d.dimensions.map(dimRow).join("")}
             </table>
             <p style="font-size:11px;color:var(--faint);margin:6px 0 0">Mean 0–10 score on ideas that won vs lost. Positive edge = higher scores on this dimension went with wins. Each side needs 5+ resolved trades to show a number.</p>
           </details>
-          <p style="font-size:11.5px;color:var(--faint);margin:12px 0 0">${d.resolved} resolved of ${d.total} validated ideas (last 120 days).${d.skipped ? ` ${d.skipped} skipped (no parseable levels).` : ""} Stats need 5+ resolved trades to display — small samples stay blank rather than mislead. Refreshes hourly.</p>`;
+          <p style="font-size:11.5px;color:var(--faint);margin:12px 0 0">${d.resolved} resolved of ${d.total} validated ideas (last 120 days).${d.skipped ? ` ${d.skipped} skipped (no parseable levels).` : ""} Stats need 5+ resolved trades to display: small samples stay blank rather than mislead. Refreshes hourly.</p>`;
       } catch {
         box.innerHTML = `<div class="empty">Could not load calibration.</div>`;
       }
@@ -7956,10 +7956,10 @@
         const d = await (await fetch("/api/ideas/scoreboard")).json();
         if (!d.ok) { box.innerHTML = `<div class="empty">${esc(d.error || "Scoreboard unavailable.")}</div>`; return; }
         if (!d.rows.length) {
-          box.innerHTML = `<div class="empty">No trackable ideas yet — validate a few and check back. Ideas are replayed against real prices: stop hit = loss, first target hit = win.</div>`;
+          box.innerHTML = `<div class="empty">No trackable ideas yet: validate a few and check back. Ideas are replayed against real prices: stop hit = loss, first target hit = win.</div>`;
           return;
         }
-        const pct = (r) => r.wins + r.losses ? `${Math.round(r.wins / (r.wins + r.losses) * 100)}%` : "—";
+        const pct = (r) => r.wins + r.losses ? `${Math.round(r.wins / (r.wins + r.losses) * 100)}%` : "N/A";
         box.innerHTML = `
           <table class="sectors" style="width:100%">
             <tr><th>Rating</th><th>Direction</th><th>Wins</th><th>Losses</th><th>Still open</th><th>Hit rate</th></tr>
@@ -7990,7 +7990,7 @@
     });
 
     // Score trend lives in the portfolio hero, where the question is actually
-    // asked — not as a chart per history row, which would re-render the same
+    // asked: not as a chart per history row, which would re-render the same
     // series N times and wreck the row rhythm.
     async function loadScoreTrend() {
       const el = $("#pf-score-trend");
@@ -8016,8 +8016,8 @@
     }
 
     /* ── History feed: ideas, intraday analyses, portfolio scores, backtests in
-       one time-sorted list. Every row uses the SAME grammar — kind dot, primary
-       label, one metric chip, right-aligned time — because four different row
+       one time-sorted list. Every row uses the SAME grammar: kind dot, primary
+       label, one metric chip, right-aligned time: because four different row
        shapes with three blank slots each read as ragged. ── */
     const HIST_KINDS = {
       all: { label: "All", param: "" },
@@ -8028,10 +8028,10 @@
     };
     const HIST_EMPTY = {
       all: "Nothing yet. Validate a ticker, analyze a chart, or score your portfolio and it'll show up here.",
-      idea: "No validated ideas yet — validate a ticker or generate ideas.",
-      intraday: "No chart analyses yet — run one from the Analyze tab.",
-      portfolio_score: "No portfolio scores yet — score your portfolio from the Portfolio tab.",
-      backtest: "No backtests yet — run one from the Backtest tab.",
+      idea: "No validated ideas yet: validate a ticker or generate ideas.",
+      intraday: "No chart analyses yet: run one from the Analyze tab.",
+      portfolio_score: "No portfolio scores yet: score your portfolio from the Portfolio tab.",
+      backtest: "No backtests yet: run one from the Backtest tab.",
     };
     // Progress shows drills only. Lessons cannot join this feed: completion is
     // stored as a bare array of lesson ids in a settings row (engine/learn.ts)
@@ -8042,7 +8042,7 @@
       practice: { label: "Drills", param: "practice" },
     };
     const PROGRESS_EMPTY = {
-      practice: "No graded drills yet — start one from the Practice tab.",
+      practice: "No graded drills yet: start one from the Practice tab.",
     };
 
     function relTime(ts) {
@@ -8061,7 +8061,7 @@
       // A graded drill is a record of how you decided, and the stats card on
       // Practice is computed from practice_attempts, not from this row. Deleting
       // one here would silently disagree with your own scoreboard, so it isn't
-      // offered — unlike an idea or a backtest, which are outputs you can redo.
+      // offered: unlike an idea or a backtest, which are outputs you can redo.
       const del = it.deletable && it.kind !== "practice"
         ? `<button class="hist-del" data-hid="${it.id}" data-hsrc="${esc(it.src ?? "a")}" title="Delete this entry">${icon("close", 12)}</button>` : "";
       let label, metric;
@@ -8069,23 +8069,23 @@
         label = "Portfolio";
         metric = it.score != null ? `<span class="chip info sm">${it.score}/100</span>` : `<span class="chip calm sm">scored</span>`;
       } else if (it.kind === "backtest") {
-        label = esc(it.ticker ?? "—");
+        label = esc(it.ticker ?? "N/A");
         metric = `<span class="chip calm sm">${esc(it.summary ?? "backtest")}</span>`;
       } else if (it.kind === "practice") {
         // historyFeed returns NULL direction/rating for every artifact row, so
         // without this branch a drill fell through to the idea renderer below
         // and rendered an em-dash chip and an empty rating badge. It looked
         // broken rather than throwing, which is worse.
-        label = esc(it.ticker ?? "—");
+        label = esc(it.ticker ?? "N/A");
         // No separate score chip: server.ts writes the summary as
         // "NVDA long · +1.4R · process 72", so it already carries the score and
         // adding one printed "process 72" twice in the same row.
         metric = `<span class="chip calm sm">${esc(it.summary ?? "drill")}</span>`;
       } else {
         const dirTone = it.direction === "long" ? "buy" : it.direction === "short" ? "sell" : "calm";
-        label = esc(it.ticker ?? "—");
-        metric = `<span class="chip ${dirTone} sm">${esc(it.direction ?? "—").replace("_", " ")}</span>
-                  <span class="rbadge ${esc(it.rating ?? "")}">${esc(it.rating ?? "—")}</span>`;
+        label = esc(it.ticker ?? "N/A");
+        metric = `<span class="chip ${dirTone} sm">${esc(it.direction ?? "N/A").replace("_", " ")}</span>
+                  <span class="rbadge ${esc(it.rating ?? "")}">${esc(it.rating ?? "N/A")}</span>`;
       }
       return `<summary><svg class="chev2" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 6 6 6-6 6"/></svg>
         ${dot}${it.ticker ? logoImg(it.ticker, "sm") : ""}<span class="hist-label">${label}</span>${metric}${open}${del}${time}</summary>`;
@@ -8119,27 +8119,27 @@
         const p = it.payload;
         const pl = p.plan ?? {};
         const pr = p.process ?? {};
-        const num = (v, d = 2) => (v == null ? "—" : Number(v).toFixed(d));
+        const num = (v, d = 2) => (v == null ? "N/A" : Number(v).toFixed(d));
         const outcomeTone = p.outcome === "win" || p.outcome === "pass_correct" ? "buy"
           : p.outcome === "loss" || p.outcome === "pass_missed" ? "sell" : "calm";
         return `<div style="font-size:13px">
           <div class="klabel">Your plan</div>
           <div class="stats">
-            <div><b>${esc(pl.direction ?? p.direction ?? "—").replace("_", " ")}</b><span>direction</span></div>
+            <div><b>${esc(pl.direction ?? p.direction ?? "N/A").replace("_", " ")}</b><span>direction</span></div>
             <div><b>${num(pl.entry)}</b><span>entry</span></div>
             <div><b>${num(pl.stop)}</b><span>stop</span></div>
             <div><b>${num(pl.target)}</b><span>target</span></div>
           </div>
           <div class="klabel" style="margin-top:10px">Graded</div>
           <div class="stats">
-            <div><b>${p.process?.score ?? it.score ?? "—"}</b><span>process</span></div>
-            <div><b><span class="chip ${outcomeTone} sm">${esc(p.outcome ?? "—").replace("_", " ")}</span></b><span>outcome</span></div>
-            <div><b>${p.rMultiple != null ? num(p.rMultiple, 2) + "R" : "—"}</b><span>planned R</span></div>
+            <div><b>${p.process?.score ?? it.score ?? "N/A"}</b><span>process</span></div>
+            <div><b><span class="chip ${outcomeTone} sm">${esc(p.outcome ?? "N/A").replace("_", " ")}</span></b><span>outcome</span></div>
+            <div><b>${p.rMultiple != null ? num(p.rMultiple, 2) + "R" : "N/A"}</b><span>planned R</span></div>
           </div>
           ${Array.isArray(pr.criteria) && pr.criteria.length ? `
             <div class="klabel" style="margin-top:10px">Per-criterion</div>
             <ul style="margin:4px 0 0;padding-left:18px;color:var(--dim)">
-              ${pr.criteria.map((c) => `<li>${esc(c.label ?? c.key ?? "criterion")} — ${c.passed ? "met" : "missed"}</li>`).join("")}
+              ${pr.criteria.map((c) => `<li>${esc(c.label ?? c.key ?? "criterion")}: ${c.passed ? "met" : "missed"}</li>`).join("")}
             </ul>` : ""}
           <p style="font-size:11.5px;color:var(--faint);margin:8px 0 0">Process and outcome are scored separately: a good plan can still lose. Your running record lives on the Practice tab.</p>
         </div>`;
@@ -8152,7 +8152,7 @@
     /* ── history feeds ────────────────────────────────────────────────────
        Two feeds now share this code: the trading History tab and the Learning
        Progress tab. They must not share STATE, and the trap is not the module
-       variables — it is that the chips, the Load-more button and the retry link
+       variables: it is that the chips, the Load-more button and the retry link
        were matched on `document` and addressed by id. Duplicating `#history-more`
        in a second pane would make $() return whichever came first in document
        order, so the Progress pane's button would silently drive the trading feed.
@@ -8256,8 +8256,8 @@
       await loadHistory(HIST_FEEDS.trading);
     }
 
-    // Learning ▸ Progress. The lesson block is a checklist, not a feed — see the
-    // note on PROGRESS_KINDS — and the running score stays on Practice so there
+    // Learning ▸ Progress. The lesson block is a checklist, not a feed: see the
+    // note on PROGRESS_KINDS: and the running score stays on Practice so there
     // is one place, not two, that answers "how am I doing".
     async function loadProgress() {
       const box = $("#progress-lessons");
@@ -8311,11 +8311,11 @@
         })).json();
         if (res.ok) {
           showPendingEmail(null);
-          msg.textContent = "Email confirmed — sign in with the new address next time.";
+          msg.textContent = "Email confirmed: sign in with the new address next time.";
           toast("Email updated");
           await loadProfile();
         } else {
-          // Wrong/expired codes are the normal case here, not an exception —
+          // Wrong/expired codes are the normal case here, not an exception -
           // the server's message already says how many tries are left.
           msg.textContent = res.error;
           toast(res.error, "err");
@@ -8346,7 +8346,7 @@
         // goes back to read-only rather than offering a change that 503s.
         if (emailChangeAvailable === false) {
           $("#pf-email").readOnly = true;
-          $("#pf-email").title = "Changing your sign-in email needs a mail provider — set RESEND_API_KEY (see .env.example)";
+          $("#pf-email").title = "Changing your sign-in email needs a mail provider: set RESEND_API_KEY (see .env.example)";
         }
         $("#pf-name").value = profile.full_name ?? "";
         $("#pf-phone").value = profile.phone ?? "";
@@ -8355,7 +8355,7 @@
           $("#user-name").textContent = profile.full_name || profile.email;
           const initials = (profile.full_name || profile.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join("");
           $("#user-av").textContent = initials || "·";
-          renderGreeting(); // the name lands after boot — restamp the greeting
+          renderGreeting(); // the name lands after boot: restamp the greeting
         }
       } catch { }
     }
@@ -8387,7 +8387,7 @@
         }),
       })).json();
       if (res.ok) {
-        // The email is NOT applied yet when a change was requested — the server
+        // The email is NOT applied yet when a change was requested: the server
         // staged it and mailed a code, so leave the field on the address still
         // signed in with and hand over to the code box.
         if (res.pendingEmail) {
@@ -8416,7 +8416,7 @@
       $("#link-form").style.display = linked ? "none" : "block";
       $("#link-code-row").style.display = state === "need_code" ? "flex" : "none";
       $("#link-msg").textContent = linked && state !== "error" ? "" : (status?.message ?? "");
-      // Only on the transition — this runs every 2s while polling, and re-focusing
+      // Only on the transition: this runs every 2s while polling, and re-focusing
       // would yank the cursor back (and re-open the phone keyboard) each tick.
       if (state === "need_code" && linkPrevState !== "need_code") $("#link-code").focus();
       linkPrevState = state;
@@ -8490,12 +8490,12 @@
     });
 
     /* ── settings: risk prefs ── */
-    // Mirrors APPETITE_PLAYBOOK in src/ai/intraday.ts — the analyzer enforces the
+    // Mirrors APPETITE_PLAYBOOK in src/ai/intraday.ts: the analyzer enforces the
     // list, this only tells the trader what they just picked. Keep them in step.
     const APPETITE_NOTE = {
-      conservative: "Swing analyzer will propose covered calls, cash-secured puts, credit spreads and iron condors — capped downside, premium collected rather than paid.",
-      balanced: "Swing analyzer will propose debit and credit verticals, calendars, covered calls and cash-secured puts — every position has a known worst case.",
-      aggressive: "Swing analyzer will also propose naked long calls/puts, straddles and strangles — full premium at risk for an outsized payoff. Uncovered short calls are never proposed at any setting.",
+      conservative: "Swing analyzer will propose covered calls, cash-secured puts, credit spreads and iron condors. These favor capped downside and premium collection.",
+      balanced: "Swing analyzer will propose debit and credit verticals, calendars, covered calls and cash-secured puts. Every position has a known worst case.",
+      aggressive: "Swing analyzer will also propose naked long calls/puts, straddles and strangles. The full premium is at risk for an outsized payoff. Uncovered short calls are never proposed at any setting.",
     };
     function syncAppetiteNote() {
       $("#appetite-note").textContent = APPETITE_NOTE[$("#rp-appetite").value] ?? "";
@@ -8513,7 +8513,7 @@
         const bp = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
         $("#equity-note").innerHTML = bp != null
           ? `Sizing against your available buying power of <b>${money(bp)}</b>, live from your ${brokerInfo.source === "robinhood" ? "linked Robinhood account" : "imported positions"}.`
-          : `No broker linked — link Robinhood or import positions (Portfolio tab) so sizing has real buying power to work with.`;
+          : `No broker linked: link Robinhood or import positions (Portfolio tab) so sizing has real buying power to work with.`;
       } catch { }
     }
     $("#risk-form").addEventListener("submit", async (ev) => {
@@ -8528,7 +8528,7 @@
         }),
       })).json();
       const msg = $("#risk-msg");
-      msg.textContent = res.ok ? "Saved — the analyzer uses these settings." : `Failed: ${res.error}`;
+      msg.textContent = res.ok ? "Saved: the analyzer uses these settings." : `Failed: ${res.error}`;
       if (res.ok) { toast("Risk settings saved"); loadRiskPrefs(); } else toast(`Save failed: ${res.error}`, "err");
       setTimeout(() => { msg.textContent = ""; }, 5000);
     });
@@ -8550,7 +8550,7 @@
     async function loadJournal() {
       try {
         const { outcomes, tracked = [] } = await (await fetch("/api/journal")).json();
-        // Open trades the user is tracking — Close prefills the form below.
+        // Open trades the user is tracking: Close prefills the form below.
         const tbox = $("#tracked-list");
         if (tracked.length) {
           tbox.style.display = "";
@@ -8616,7 +8616,7 @@
       })).json();
       const msg = $("#journal-msg");
       if (res.ok) {
-        msg.textContent = "Logged — the AI will see this in future analyses.";
+        msg.textContent = "Logged: the AI will see this in future analyses.";
         toast("Trade logged");
         $("#journal-form").reset();
         loadJournal();
@@ -8675,7 +8675,7 @@
       <span style="color:var(--dim);font-size:14px">${esc(m?.name ?? "")}</span>
       ${data.held ? `<span class="chip warn sm">held · ${data.held.shares} @ $${data.held.cost_basis}</span>` : ""}
       <span class="spacer"></span>
-      <span class="px">${q?.c ? money(q.c) : "—"}</span>
+      <span class="px">${q?.c ? money(q.c) : "N/A"}</span>
       ${chg != null ? `<span class="chip ${chg >= 0 ? "buy" : "sell"}">${signed(chg)}% today</span>` : ""}
       <button class="refresh-btn" id="stock-refresh" title="Re-pull quote, chart &amp; news" style="align-self:center">${icon("refresh", 13)} Refresh</button>
     </div>
@@ -8688,8 +8688,8 @@
     </div>
     ${r ? `
       <div style="display:flex;gap:8px;align-items:center;margin:10px 0 6px">
-        <span class="chip buy">Long ${r.long_score ?? "—"}</span>
-        <span class="chip sell">Short ${r.short_score ?? "—"}</span>
+        <span class="chip buy">Long ${r.long_score ?? "N/A"}</span>
+        <span class="chip sell">Short ${r.short_score ?? "N/A"}</span>
         <span style="font-size:12px;color:var(--faint)">scored ${new Date(r.updated_at * 1000).toLocaleString()}</span>
       </div>
       <div class="card" style="padding:12px 16px" id="stock-factors"></div>` : `<p class="empty">Not scored by the screener (outside the scan universe or too little history).</p>`}
@@ -8766,7 +8766,7 @@
     function clearIntradayImage() {
       intradayImage = null;
       $("#img-preview-wrap").style.display = "none";
-      // Swing mode uses the labelled slots, not the single drop zone — clearing
+      // Swing mode uses the labelled slots, not the single drop zone: clearing
       // must not un-hide it there.
       dropZone.style.display = analyzeMode === "swing" ? "none" : "";
     }
@@ -8777,7 +8777,7 @@
 
     // One place that pulls a screenshot out of a paste or a drop. A clipboard or
     // drag payload usually carries the SAME image several times (png + jpeg, or a
-    // file plus an <img> HTML fragment) — taking the first match only is what
+    // file plus an <img> HTML fragment): taking the first match only is what
     // stops one paste/drop from attaching two copies.
     function imageFromEvent(e) {
       const dt = e.clipboardData || e.dataTransfer;
@@ -8794,7 +8794,7 @@
 
     // Drop anywhere in the panel. In swing mode a pasted image can't know which
     // timeframe it is, so it goes to the staging tray for the trader to drag
-    // into the right box — filling 1D/1W/1M in order guessed wrong constantly.
+    // into the right box: filling 1D/1W/1M in order guessed wrong constantly.
     const section = $("#intraday-section");
     async function acceptIntradayFile(file) {
       if (!file || !file.type.startsWith("image/")) return;
@@ -8809,7 +8809,7 @@
 
     // Ctrl+V anywhere on the page, routed to whichever pane is open. A paste
     // event only reaches the element that has focus, so per-section listeners
-    // silently did nothing unless you'd clicked inside that section first —
+    // silently did nothing unless you'd clicked inside that section first -
     // which is why Backtest never accepted a paste at all. A text paste carries
     // no image, so imageFromEvent bails and normal typing is untouched.
     const paneVisible = (name) => !document.querySelector(`[data-pane="${name}"]`)?.hidden;
@@ -8846,7 +8846,7 @@
     }
 
     /* ── ticker autofill: native <datalist>, fed by the same /api/search the
-       header search uses. No custom dropdown — the browser renders it. ── */
+       header search uses. No custom dropdown: the browser renders it. ── */
     const fillTickerOptions = debounce(async (q) => {
       if (!q.trim()) return;
       try {
@@ -8983,7 +8983,7 @@
 
     // Wipe the inputs once an analysis lands, so the next ticker can't inherit
     // the last one's screenshots or notes. The result card is already rendered
-    // and keeps its own copy — nothing here is needed to read it.
+    // and keeps its own copy: nothing here is needed to read it.
     function resetIntradayForm() {
       $("#intraday-ticker").value = "";
       $("#intraday-notes").value = "";
@@ -8998,13 +8998,13 @@
       const legs = s.legs.map((l) => `<li>${esc(l.action)} ${l.quantity}× ${esc(l.right)} $${l.strike} exp ${esc(l.expiry)}</li>`).join("");
       const st = s.stress;
       return `
-    <div class="klabel">Options strategy — ${esc(s.structure).replace(/_/g, " ")}</div>
+    <div class="klabel">Options strategy: ${esc(s.structure).replace(/_/g, " ")}</div>
     <ul>${legs}</ul>
     <div class="stats">
       <div class="stat"><div class="k">Net</div><div class="v" style="font-size:12.5px">${esc(s.net_debit_credit)}</div></div>
       <div class="stat"><div class="k">Max loss</div><div class="v" style="font-size:12.5px">${esc(s.max_loss)}</div></div>
       <div class="stat"><div class="k">Max gain</div><div class="v" style="font-size:12.5px">${esc(s.max_gain)}</div></div>
-      <div class="stat"><div class="k">Breakeven</div><div class="v" style="font-size:12.5px">${(s.breakevens || []).map(esc).join(", ") || "—"}</div></div>
+      <div class="stat"><div class="k">Breakeven</div><div class="v" style="font-size:12.5px">${(s.breakevens || []).map(esc).join(", ") || "N/A"}</div></div>
     </div>
     <p class="kv" style="color:var(--dim)">${esc(s.rationale)}</p>
     ${st ? stressGridHtml(st) : ""}`;
@@ -9037,7 +9037,7 @@
         <div class="stat"><div class="k">Holding period</div><div class="v" style="font-size:12.5px">${esc(p.holding_period)}</div></div>
       </div>
       ${p.targets?.length ? `<div class="klabel">Targets</div><ul>${p.targets.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
-      <div class="klabel">Invalidation — the setup is dead if…</div>
+      <div class="klabel">Invalidation: the setup is dead if…</div>
       <p class="kv">${esc(p.invalidation)}</p>
       <div class="klabel">Exit plan (including bailing early)</div>
       <p class="kv">${esc(p.exit_plan)}</p>
@@ -9064,7 +9064,7 @@
     <div class="fu-log"></div>
     <div class="fu-thumbs"></div>
     <div class="fu-row">
-      <input type="text" class="fu-input" placeholder="Ask what to do now — e.g. 'hit my first target, trim or hold?'">
+      <input type="text" class="fu-input" placeholder="Ask what to do now: e.g. 'hit my first target, trim or hold?'">
       <button class="fu-img" title="add a screenshot">📎</button>
       <button class="advise-btn fu-ask" style="margin-top:0">Ask</button>
     </div>
@@ -9093,7 +9093,7 @@
       wrap.querySelector(".fu-img").addEventListener("click", () => fileInput.click());
       fileInput.addEventListener("change", (e) => addImage(e.target.files[0]));
       // Paste or drop anywhere in the follow-up box. imageFromEvent takes one
-      // image per event — the old loop attached every clipboard flavor of the
+      // image per event: the old loop attached every clipboard flavor of the
       // same screenshot, which is why a single paste showed up twice.
       wrap.addEventListener("paste", (e) => {
         const f = imageFromEvent(e);
@@ -9225,7 +9225,7 @@
 
     function wfHtml(wf) {
       const rows = wf.windows.map((w) => `<tr><td>${esc(w.from)}→${esc(w.to)}</td><td>${pct(w.isReturnPct)}</td><td class="${w.oosReturnPct >= 0 ? "up" : "down"}">${pct(w.oosReturnPct)}</td><td>${w.trades}</td></tr>`).join("");
-      return `<div class="klabel">Walk-forward — out-of-sample verdict</div>
+      return `<div class="klabel">Walk-forward: out-of-sample verdict</div>
     <p class="kv"><b>${esc(wf.verdict)}</b></p>
     <p class="kv">Walk-forward efficiency (out-of-sample ÷ in-sample): <b>${wf.wfEfficiency.toFixed(2)}</b> ${wf.wfEfficiency >= 0.5 ? '<span class="chip buy sm">holds up</span>' : '<span class="chip sell sm">curve-fit risk</span>'}</p>
     <table class="wf-table"><tr><th>Out-of-sample window</th><th>In-sample ann.</th><th>OOS ann.</th><th>Trades</th></tr>${rows}</table>`;
@@ -9233,7 +9233,7 @@
 
     function stressReportHtml(s) {
       const b = s.bootstrap, w = s.worstWindow;
-      return `<div class="klabel">Stress test — worst history + 1,000-path Monte Carlo</div>
+      return `<div class="klabel">Stress test: worst history + 1,000-path Monte Carlo</div>
     <div class="stress">
       ${w ? `<div class="case"><b>Worst window</b>${esc(w.from)}→${esc(w.to)}: ${pct(w.returnPct)}, drawdown -${w.maxDrawdownPct.toFixed(1)}%</div>` : ""}
       <div class="case"><b>Monte Carlo median</b>${pct(b.medianPct)} (5th ${pct(b.p5Pct)} / 95th ${pct(b.p95Pct)})</div>
@@ -9249,9 +9249,9 @@
       const cell = (pl) => { const a = Math.min(0.85, Math.abs(pl) / maxAbs); return `<div class="heatcell" style="background:${pl >= 0 ? `rgba(0,200,5,${a})` : `rgba(230,74,25,${a})`}">${pl >= 0 ? "+" : ""}${Math.round(pl)}</div>`; };
       const header = `<div class="heatcell" style="color:var(--faint)">IV\\Spot</div>` + st.spotShocks.map((s) => `<div class="heatcell" style="color:var(--faint)">${(s * 100).toFixed(0)}%</div>`).join("");
       const rows = st.ivShocks.map((iv, r) => `<div class="heatcell" style="color:var(--faint)">${iv > 0 ? "+" : ""}${(iv * 100).toFixed(0)}%</div>` + st.gridNow[r].map(cell).join("")).join("");
-      return `<div class="klabel">Options stress — P/L in $ (spot move × IV move, at today's time to expiry)</div>
+      return `<div class="klabel">Options stress: P/L in $ (spot move × IV move, at today's time to expiry)</div>
     <div class="heatgrid" style="grid-template-columns:repeat(${cols + 1},1fr)">${header}${rows}</div>
-    <p class="kv" style="color:var(--faint);font-size:11.5px">Max loss ${money(st.maxLoss)} · max gain ${st.maxGain > 1e7 ? "unbounded" : money(st.maxGain)} · breakeven ${(st.breakevens || []).map((b) => "$" + b.toFixed(0)).join(", ") || "—"}. ${esc(st.note)}</p>`;
+    <p class="kv" style="color:var(--faint);font-size:11.5px">Max loss ${money(st.maxLoss)} · max gain ${st.maxGain > 1e7 ? "unbounded" : money(st.maxGain)} · breakeven ${(st.breakevens || []).map((b) => "$" + b.toFixed(0)).join(", ") || "N/A"}. ${esc(st.note)}</p>`;
     }
 
     function backtestResultHtml(d) {
@@ -9266,12 +9266,12 @@
     </div>
     <p class="kv" style="color:var(--dim)">${specSummary(d.spec)}</p>
     ${d.walkForwardError ? `<p class="kv" style="color:var(--amber)">${esc(d.walkForwardError)}</p>` : ""}
-    ${wf ? `<p class="kv" style="font-size:12px;color:var(--faint)">Headline numbers below are OUT-OF-SAMPLE — the honest ones. In-sample averaged ${pct(wf.windows.reduce((s, w) => s + w.isReturnPct, 0) / (wf.windows.length || 1))} annualized.</p>` : ""}
+    ${wf ? `<p class="kv" style="font-size:12px;color:var(--faint)">Headline numbers below are OUT-OF-SAMPLE: the honest ones. In-sample averaged ${pct(wf.windows.reduce((s, w) => s + w.isReturnPct, 0) / (wf.windows.length || 1))} annualized.</p>` : ""}
     ${metricsGrid(headline.metrics, !!wf)}
     ${curveSvg(headline.equityCurve, wf ? null : d.result.buyHoldCurve)}
     ${wf ? wfHtml(wf) : ""}
     ${stressReportHtml(d.stress)}
-    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--dim)">${list.length} trade${list.length === 1 ? "" : "s"} — show list</summary>
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12.5px;color:var(--dim)">${list.length} trade${list.length === 1 ? "" : "s"}: show list</summary>
       <table class="wf-table"><tr><th>Entry</th><th>Exit</th><th>Return</th><th>Reason</th></tr>
       ${list.slice(0, 80).map((t) => `<tr><td>${esc(t.entryDate)}</td><td>${esc(t.exitDate)}</td><td class="${t.retPct >= 0 ? "up" : "down"}">${pct(t.retPct)}</td><td>${esc(t.reason)}</td></tr>`).join("")}</table>
     </details>
@@ -9316,7 +9316,7 @@
         default: return e.title;
       }
     }
-    // Category filter over the event feed — the raw pipeline mixes setups,
+    // Category filter over the event feed: the raw pipeline mixes setups,
     // headlines, filings, and tape noise; letting the user cut it by kind is
     // what makes the feed readable.
     const ACT_CATS = {
@@ -9422,14 +9422,14 @@
 
     // One container, so sending clears the greeting AND the chips together.
     // Removing only the chips left "Ask me anything…" pinned above the
-    // conversation for the rest of the session — and gone after a reload,
+    // conversation for the rest of the session: and gone after a reload,
     // since a reload renders from the database, which was the tell.
     function chatEmptyState() {
       const wrap = document.createElement("div");
       wrap.className = "chat-empty";
       const hello = document.createElement("div");
       hello.className = "msg ai";
-      hello.textContent = "Hi, I'm Jawa! Ask me anything about your money — I'll give you the straight answer, not the comfortable one.";
+      hello.textContent = "Hi, I'm Jawa! Ask me anything about your money: I'll give you the straight answer, not the comfortable one.";
       const chips = document.createElement("div");
       chips.className = "chat-suggest";
       for (const s of SUGGESTIONS) {
@@ -9461,7 +9461,7 @@
         if (!res.messages.length) log.appendChild(chatEmptyState());
         chatScroll();
       } catch {
-        // A thread that 404s was deleted elsewhere — fall back to a new one
+        // A thread that 404s was deleted elsewhere: fall back to a new one
         // rather than leaving a dead panel pointing at nothing.
         chatSetThread(null);
         $("#chat-title").textContent = "New conversation";
@@ -9515,7 +9515,7 @@
         }
       } catch {
         // An empty list and a failed fetch look identical to the user unless
-        // the error says so — "no conversations" when the server is down is a
+        // the error says so: "no conversations" when the server is down is a
         // silent failure.
         box.innerHTML = `<div class="empty">Couldn't load your conversations. <button class="refresh-btn" id="thr-retry">Retry</button></div>`;
         box.querySelector("#thr-retry").addEventListener("click", chatLoadList);
@@ -9584,7 +9584,7 @@
           pending.remove();
           if (res.threadId && !chatThreadId) chatSetThread(res.threadId);
           $("#banner").style.display = "block";
-          toast("AI is paused — resume it from the banner", "err");
+          toast("AI is paused: resume it from the banner", "err");
         } else {
           pending.classList.remove("pending");
           pending.textContent = `Something went wrong: ${res.error}`;
@@ -9616,7 +9616,7 @@
     $("#chat-list-btn").addEventListener("click", () => ($("#chat-threads").hidden ? chatShowList() : chatShowLog()));
     $("#chat-new").addEventListener("click", () => { chatSetThread(null); chatShowLog(); chatLoadThread(); $("#chat-input").focus(); });
     /* Drag-resize to any size. Inline width/height beat the .expanded preset,
-       so a manual size wins until Expand is pressed, which clears it — two
+       so a manual size wins until Expand is pressed, which clears it: two
        controls, one predictable precedence, no third state to reason about.
        Pointer events cover mouse, touch and pen in one path; setPointerCapture
        keeps the drag alive when the cursor outruns the 18px grip. */
@@ -9711,7 +9711,7 @@
       const h = state.health;
       const wsOk = h.ws.connected && (h.ws.staleSec == null || h.ws.staleSec < 120);
       const tripped = h.breakers.some((b) => b.tripped);
-      // A broken feed is the quietest failure in the app — prices simply stop
+      // A broken feed is the quietest failure in the app: prices simply stop
       // being true while everything still looks normal. It gets the pill.
       const broken = (h.canaries ?? []).filter((c) => c.status === "broken");
       const healthy = wsOk && !tripped && !broken.length;
@@ -9724,7 +9724,7 @@
           : "reconnecting…";
       // The pill is small; the detail lives in its tooltip.
       $("#mkt-pill").title = broken.length
-        ? `Data feeds degraded — numbers may be stale or wrong:\n${broken.map((c) => `• ${c.label}: ${c.detail}`).join("\n")}`
+        ? `Data feeds degraded: numbers may be stale or wrong:\n${broken.map((c) => `• ${c.label}: ${c.detail}`).join("\n")}`
         : "system status";
       $("#banner").style.display = tripped ? "block" : "none";
     }
@@ -9751,7 +9751,7 @@
       quotes = await (await fetch(fresh ? "/api/quotes?fresh=1" : "/api/quotes")).json();
       renderPortfolio();
       renderHoldings();
-      renderWatchlist(); // rail prints live prices — loadState ran before quotes existed
+      renderWatchlist(); // rail prints live prices: loadState ran before quotes existed
       stampUpdated();
     }
     async function loadScreener() {
@@ -9772,7 +9772,7 @@
     }
 
     /* ── auth gate ── */
-    /* The SSE stream and all data routes are cookie-gated — only open them once
+    /* The SSE stream and all data routes are cookie-gated: only open them once
        /api/auth/me confirms a session, or the EventSource would 401-retry forever. */
     function bootApp() {
       $("#app-shell").hidden = false;
@@ -9784,7 +9784,7 @@
          had until the 5-minute poll or a manual browser refresh (SHARP-28).
 
          A flapping server can fire onopen repeatedly, and loadState() assigns to
-         the module globals as soon as its response lands — so two overlapping
+         the module globals as soon as its response lands: so two overlapping
          resyncs let the slower, older one write last. This is a mutex rather
          than a version check for that reason: a generation counter compared
          AFTER the fact cannot un-apply state that has already been assigned and
@@ -9817,8 +9817,8 @@
       setInterval(loadMarket, 10 * 60_000);
     }
 
-    // Three states: login, signup, and — when signup staged a pending account
-    // rather than creating one — "confirm", where the form takes the mailed code
+    // Three states: login, signup, and: when signup staged a pending account
+    // rather than creating one: "confirm", where the form takes the mailed code
     // instead of an email and password.
     let authMode = "login";
     let pendingEmail = "";
@@ -9842,7 +9842,7 @@
       if (confirm) { $("#auth-code").value = ""; $("#auth-code").focus(); }
     }
     $("#auth-flip").addEventListener("click", () => {
-      // From confirm, "use a different email" goes back to signup — the pending
+      // From confirm, "use a different email" goes back to signup: the pending
       // row is harmless and expires on its own.
       authMode = authMode === "login" ? "signup" : authMode === "signup" ? "login" : "signup";
       renderAuthMode();
@@ -9861,7 +9861,7 @@
             : { email: $("#auth-email").value, password: $("#auth-password").value }),
         })).json();
         // Signup with a mail transport configured creates nothing yet, so there
-        // is no session to reload into — switch the form to code entry instead
+        // is no session to reload into: switch the form to code entry instead
         // of pretending it succeeded.
         if (res.ok && res.pending) {
           pendingEmail = res.email;
@@ -9873,7 +9873,7 @@
           location.reload(); // rerun the full boot against the new session
         } else {
           // `restart` means the pending signup is gone (expired, or too many
-          // wrong codes) — leaving the code box up would be a dead end.
+          // wrong codes): leaving the code box up would be a dead end.
           if (res.restart) { authMode = "signup"; renderAuthMode(); }
           $("#auth-error").textContent = res.error || "Something went wrong.";
         }

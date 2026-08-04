@@ -70,7 +70,7 @@ export async function gatherFacts(userId: number): Promise<Facts> {
     } catch { /* leave the sector facts null; the callout drops itself */ }
   }
 
-  // A holding we can quote real volatility for, straight off the screener row —
+  // A holding we can quote real volatility for, straight off the screener row -
   // no candle fetch, so a lesson never waits on Yahoo.
   for (const h of holdings) {
     const key = h.ticker.toUpperCase();
@@ -89,7 +89,7 @@ export async function gatherFacts(userId: number): Promise<Facts> {
   // practice_attempts directly: it scopes to the current cohort and to drills
   // taken since the last reset. A raw query here would average a 40-day daily
   // drill together with a 26-bar intraday one and would keep counting drills the
-  // trader has already archived — so a lesson would quote a number the Practice
+  // trader has already archived: so a lesson would quote a number the Practice
   // tab no longer shows.
   try {
     const p = await practiceStats(userId);

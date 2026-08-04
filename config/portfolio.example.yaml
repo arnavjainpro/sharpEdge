@@ -1,4 +1,4 @@
-# Your holdings. Edit anytime — reloaded on restart.
+# Your holdings. Edit anytime: reloaded on restart.
 # cost_basis is per-share average cost in USD.
 # thesis (optional but recommended): why you own it. The AI advisor uses this to
 # judge whether new events break your thesis or are just noise. One sentence each.
@@ -25,7 +25,7 @@ watchlist:
   - TSLA
   - NVDA
 
-# Risk management — drives position-sizing guidance on every validated idea.
+# Risk management: drives position-sizing guidance on every validated idea.
 # account_equity is only a fallback: if a brokerage is linked (Robinhood) or
 # positions were imported with an account block, real equity is used.
 risk:
@@ -35,8 +35,8 @@ risk:
   # Which options structures the swing analyzer may propose, and how much
   # confirmation it wants before an entry. Also settable per-user in the UI
   # (Analyze → Position sizing & risk), which takes priority over this file.
-  #   conservative — covered calls, cash-secured puts, credit spreads, condors
-  #   balanced     — verticals, calendars, covered calls, CSPs (default)
-  #   aggressive   — adds naked long calls/puts, straddles, strangles
+  #   conservative: covered calls, cash-secured puts, credit spreads, condors
+  #   balanced    : verticals, calendars, covered calls, CSPs (default)
+  #   aggressive  : adds naked long calls/puts, straddles, strangles
   # An uncovered short call is never proposed at any setting.
   risk_appetite: balanced

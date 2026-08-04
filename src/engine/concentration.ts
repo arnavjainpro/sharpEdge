@@ -1,4 +1,4 @@
-// F3: portfolio concentration — deterministic risk read, no AI.
+// F3: portfolio concentration: deterministic risk read, no AI.
 // Groups holdings into exposures (a stock and its options on the same underlying
 // are one bet), sums by sector, computes a value-weighted portfolio beta over
 // the holdings whose beta is known, and flags anything over the size limits.

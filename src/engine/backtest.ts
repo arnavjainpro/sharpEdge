@@ -1,5 +1,5 @@
 // Deterministic strategy backtester + walk-forward validator over daily candles.
-// The AI never "backtests" — it only translates intent into a StrategySpec; this
+// The AI never "backtests": it only translates intent into a StrategySpec; this
 // engine executes it. Signals fire on bar close and FILL AT NEXT BAR OPEN (no
 // lookahead). Includes historical-window + bootstrap stress and anchored
 // walk-forward with in-train grid search / out-of-sample testing.
@@ -170,7 +170,7 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
   const trades: Trade[] = [];
   const equity: number[] = [1];
   // Equity marked to market at EVERY bar, used only for drawdown. `equity`
-  // above samples at trade exits, which is what the chart plots — but taking
+  // above samples at trade exits, which is what the chart plots: but taking
   // max drawdown from it hides the entire drawdown inside a losing trade, so a
   // strategy that rode a 40% hole down and closed flat reported ~0% drawdown.
   const marks: number[] = [1];
@@ -182,7 +182,7 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
   for (let i = start; i < to - 1; i++) {
     if (!inTrade) {
       if (spec.entry.length && spec.entry.every((r) => ruleAt(r, b, i))) {
-        entryPx = c.opens[i + 1];               // fill next open — no lookahead
+        entryPx = c.opens[i + 1];               // fill next open: no lookahead
         entryIdx = i + 1;
         inTrade = true;
         const a = atr ? atr[i] : null;
@@ -199,7 +199,7 @@ export function runBacktest(spec: StrategySpec, c: DailyCandles, from = 0, to = 
     // exit rules on close → fill next open.
     let exitPx: number | null = null, reason = "";
     if (!Number.isNaN(stop) && ((longSide && c.lows[i] <= stop) || (!longSide && c.highs[i] >= stop))) {
-      // A bar that GAPS THROUGH the stop never offered the stop price — the
+      // A bar that GAPS THROUGH the stop never offered the stop price: the
       // first tradeable print is the open. Filling at `stop` regardless assumes
       // a fill that could not have happened, which quietly flatters every
       // strategy carrying one, and flatters it most in exactly the crash-gap
@@ -318,7 +318,7 @@ export interface WalkForwardConfig { trainYears: number; testMonths: number; }
 export interface WFWindow { from: string; to: string; isReturnPct: number; oosReturnPct: number; trades: number; params: Record<string, number>; }
 export interface WalkForwardResult {
   windows: WFWindow[];
-  oosResult: BacktestResult;   // concatenated out-of-sample trades — the honest curve
+  oosResult: BacktestResult;   // concatenated out-of-sample trades: the honest curve
   wfEfficiency: number;        // OOS annualized ÷ IS annualized
   paramStability: Record<string, number>; // coefficient of variation per param across windows
   verdict: string;
@@ -361,7 +361,7 @@ function paramGrid(spec: StrategySpec): StrategySpec[] {
   return specs;
 }
 
-// Objective for in-train selection: return per unit of drawdown (robust — raw
+// Objective for in-train selection: return per unit of drawdown (robust: raw
 // return alone picks fragile, over-fit parameters).
 const objective = (m: BacktestMetrics) => m.annualizedPct / (m.maxDrawdownPct + 5);
 
@@ -418,7 +418,7 @@ export function walkForward(spec: StrategySpec, c: DailyCandles, cfg: WalkForwar
   const isAnn = windows.length ? windows.reduce((s, w) => s + w.isReturnPct, 0) / windows.length : 0;
   let peak = 1, maxDD = 0;
   for (const e of oosEquity) { peak = Math.max(peak, e); maxDD = Math.max(maxDD, (peak - e) / peak); }
-  // Buy & hold over the out-of-sample span only — the like-for-like comparison
+  // Buy & hold over the out-of-sample span only: the like-for-like comparison
   // for a curve that starts where training ended.
   const oosFrom = trainBars;
   const oosTo = Math.min(n - 1, trainBars + windows.length * testBars - 1);
@@ -450,11 +450,11 @@ export function walkForward(spec: StrategySpec, c: DailyCandles, cfg: WalkForwar
   const unstable = Object.values(stability).some((cv) => cv > 0.6);
   const greenWindows = windows.filter((w) => w.oosReturnPct > 0).length;
   const verdict =
-    windows.length < 3 ? "Insufficient history for a reliable walk-forward — treat results as indicative only."
+    windows.length < 3 ? "Insufficient history for a reliable walk-forward: treat results as indicative only."
       : wfe >= 0.5 && !unstable && greenWindows >= windows.length / 2 ? "Edge appears to hold out-of-sample. Reasonable to risk small size."
-        : wfe < 0.5 ? "Mostly curve-fit — out-of-sample performance is well below in-sample. Do not size up on this."
-          : unstable ? "Best parameters jump between windows — the edge is unstable, not robust."
-            : "Marginal — out-of-sample is positive but thin. Be skeptical.";
+        : wfe < 0.5 ? "Mostly curve-fit: out-of-sample performance is well below in-sample. Do not size up on this."
+          : unstable ? "Best parameters jump between windows: the edge is unstable, not robust."
+            : "Marginal: out-of-sample is positive but thin. Be skeptical.";
   return { windows, oosResult, wfEfficiency: wfe, paramStability: stability, verdict };
 }
 
@@ -485,7 +485,7 @@ if (import.meta.main) {
   console.assert(wf.windows.length >= 1, "walk-forward should produce windows");
 
   // The OOS block used to hard-code these to 0, and the UI renders Sharpe for
-  // out-of-sample results — so a fabricated 0 read as a measured risk figure.
+  // out-of-sample results: so a fabricated 0 read as a measured risk figure.
   if (wf.oosResult.metrics.trades > 1) {
     const om = wf.oosResult.metrics;
     console.assert(om.sharpe !== 0, "walk-forward OOS sharpe must be computed, not stubbed to 0");
@@ -495,7 +495,7 @@ if (import.meta.main) {
   }
 
   // profitFactor is Infinity when nothing lost money. JSON.stringify turns that
-  // into null, so anything rendering it must survive a non-finite value — the
+  // into null, so anything rendering it must survive a non-finite value: the
   // dashboard used global isFinite(), which passes null straight into .toFixed().
   const allWinners = runBacktest(spec, { ...c, ticker: "W" }, 0, 0).metrics.profitFactor;
   console.assert(allWinners === 0 || Number.isFinite(allWinners) || allWinners === Infinity, "profitFactor must be a number or Infinity");
@@ -527,15 +527,15 @@ if (import.meta.main) {
   if (stopped) {
     console.assert(
       Math.abs(stopped.exit - 70) < 1e-9,
-      `gap-through stop must fill at the open (70), got ${stopped.exit} — filling at the untouched stop price flatters every stopped strategy`
+      `gap-through stop must fill at the open (70), got ${stopped.exit}: filling at the untouched stop price flatters every stopped strategy`
     );
   }
 
   // Max drawdown must come from bar-level marks. A strategy that rides a deep
   // hole and closes flat used to report ~0% because equity was only sampled at
-  // exits — the number people size positions with.
+  // exits: the number people size positions with.
   console.assert(r.metrics.maxDrawdownPct > 0, "max drawdown must be measured intra-trade, not only at exits");
 
   // Overfit detector: a strategy tuned to one training window should have WFE < 1.
-  console.log(`backtest self-check OK — trades=${r.metrics.trades}, totalRet=${r.metrics.totalReturnPct.toFixed(1)}%, WF windows=${wf.windows.length}, WFE=${wf.wfEfficiency.toFixed(2)}, verdict="${wf.verdict}"`);
+  console.log(`backtest self-check OK: trades=${r.metrics.trades}, totalRet=${r.metrics.totalReturnPct.toFixed(1)}%, WF windows=${wf.windows.length}, WFE=${wf.wfEfficiency.toFixed(2)}, verdict="${wf.verdict}"`);
 }

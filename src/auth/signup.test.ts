@@ -52,7 +52,7 @@ test("the right code creates the account, with the password chosen at signup", a
 
   const user = await findUserByEmail(email);
   expect(user).not.toBeNull();
-  // The hash staged at signup is the one that lands — not a re-hash of something else.
+  // The hash staged at signup is the one that lands: not a re-hash of something else.
   expect(await verifyPassword("correct horse battery", user!.password_hash)).toBe(true);
   expect(await pendingSignupExists(email)).toBe(false);
 });
@@ -78,7 +78,7 @@ test("resubmitting a code that already worked is answered gracefully", async () 
   // Double-submit: must not create a second account, must not read as "wrong
   // code", and must send the user to sign in rather than keep typing codes.
   const again = await confirmSignup(email, code);
-  expect(again).toEqual({ ok: false, error: "that address is already verified — sign in instead", restart: true });
+  expect(again).toEqual({ ok: false, error: "that address is already verified: sign in instead", restart: true });
 
   const rows = await db.query(`SELECT id FROM users WHERE email = ?`).all(email);
   expect(rows).toHaveLength(1);
@@ -107,9 +107,9 @@ test("wrong codes are capped, and the fifth discards the signup", async () => {
     expect(res).toMatchObject({ ok: false, restart: false });
     expect(await pendingSignupExists(email)).toBe(true);
   }
-  expect(await confirmSignup(email, wrong)).toEqual({ ok: false, error: "too many wrong codes — create the account again", restart: true });
+  expect(await confirmSignup(email, wrong)).toEqual({ ok: false, error: "too many wrong codes: create the account again", restart: true });
 
-  // Still no account, and the real code is now worthless — this is what stops
+  // Still no account, and the real code is now worthless: this is what stops
   // the 10^6 space being walked.
   expect(await pendingSignupExists(email)).toBe(false);
   expect(await findUserByEmail(email)).toBeNull();
@@ -144,7 +144,7 @@ test("an expired code is dead even though it matches", async () => {
   const code = await startSignup(email, await hashPassword("x".repeat(12)));
   await db.query(`UPDATE pending_signups SET expires_at = extract(epoch from now())::int - 1 WHERE email = ?`).run(email);
 
-  expect(await confirmSignup(email, code)).toEqual({ ok: false, error: "that code expired — create the account again", restart: true });
+  expect(await confirmSignup(email, code)).toEqual({ ok: false, error: "that code expired: create the account again", restart: true });
   expect(await findUserByEmail(email)).toBeNull();
 });
 
@@ -153,7 +153,7 @@ test("an unknown address or empty code confirms nothing", async () => {
   const email = freshEmail();
   await startSignup(email, await hashPassword("x".repeat(12)));
   expect((await confirmSignup(email, "")).ok).toBe(false);
-  // A SQL metacharacter is a value, not syntax — parameters are bound, never spliced.
+  // A SQL metacharacter is a value, not syntax: parameters are bound, never spliced.
   expect((await confirmSignup(email, "' OR 1=1 --")).ok).toBe(false);
   expect(await findUserByEmail(email)).toBeNull();
 });
@@ -203,7 +203,7 @@ test("the email carries the code in the subject and both bodies", async () => {
   expect(mail.subject).toContain("482913");
   expect(mail.text).toContain("482913");
   expect(mail.html).toContain("482913");
-  // Selectable text, not an image — image blocking is on by default in Outlook
+  // Selectable text, not an image: image blocking is on by default in Outlook
   // and Gmail, and an unreadable code is a dead signup.
   expect(mail.html).not.toMatch(/<img/i);
   // Responsive essentials, since an email template silently losing these is

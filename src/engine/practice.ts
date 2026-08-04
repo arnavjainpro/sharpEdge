@@ -7,7 +7,7 @@
 // the two numbers are never averaged together. They are returned separately and
 // stored in separate columns; keep it that way.
 //
-// No AI anywhere in here — grading is arithmetic over real bars, so a drill is
+// No AI anywhere in here: grading is arithmetic over real bars, so a drill is
 // instant, free, and reproducible.
 
 import { db, getSettingFor, setSettingFor } from "../db";
@@ -21,7 +21,7 @@ import { replayIdea, rMultiple } from "./insights";
 // months of daily bars this used to show.
 //
 // Yahoo serves 60 days of 15m history (yahoo.ts:72), which at ~26 bars a session
-// is ~1,500 bars — plenty to pick a random as-of point inside.
+// is ~1,500 bars: plenty to pick a random as-of point inside.
 export const INTERVAL = "15m" as const;
 export const RANGE = "60d";
 export const VISIBLE = 120;   // bars of history the drill shows (~4.6 sessions)
@@ -74,7 +74,7 @@ export function scoreProcess(
   plan: Plan,
   ctx: { atr: number; recentLow: number; recentHigh: number; targetRR: number }
 ): ProcessResult {
-  // Declining to trade is a legitimate, complete decision — there is no entry or
+  // Declining to trade is a legitimate, complete decision: there is no entry or
   // stop to grade. It scores full process marks, and is kept honest by the
   // outcome side (gradePass) plus the pass-rate stat, not by docking process.
   if (plan.direction === "no_trade") {
@@ -92,7 +92,7 @@ export function scoreProcess(
   const entry = num(plan.entry), stop = num(plan.stop), target = num(plan.target);
   const detail: ProcessDetail[] = [];
 
-  // 1. Risk defined — is there a stop, and is it on the losing side of entry?
+  // 1. Risk defined: is there a stop, and is it on the losing side of entry?
   const stopSideOk = entry != null && stop != null && (long ? stop < entry : stop > entry);
   detail.push({
     criterion: "Risk defined",
@@ -103,7 +103,7 @@ export function scoreProcess(
         : "Stop set below entry, so the loss is bounded and known before you enter.",
   });
 
-  // 2. Reward:risk — full marks at the trader's target, ramping from 1.0.
+  // 2. Reward:risk: full marks at the trader's target, ramping from 1.0.
   const risk = entry != null && stop != null ? Math.abs(entry - stop) : 0;
   const reward = entry != null && target != null ? (long ? target - entry : entry - target) : 0;
   const rr = risk > 0 && reward > 0 ? reward / risk : 0;
@@ -118,7 +118,7 @@ export function scoreProcess(
       : `Risking 1 to make ${rr.toFixed(2)}. Your target is ${ctx.targetRR.toFixed(1)}R.`,
   });
 
-  // 3. Stop sanity — distance in ATR. Too tight guarantees a noise stop-out; too
+  // 3. Stop sanity: distance in ATR. Too tight guarantees a noise stop-out; too
   //    wide is not risk management, it is hoping.
   const stopAtr = risk > 0 && ctx.atr > 0 ? risk / ctx.atr : 0;
   const sane = stopAtr >= 0.5 && stopAtr <= 3;
@@ -127,12 +127,12 @@ export function scoreProcess(
     got: stopSideOk && sane ? CRIT_MAX : 0,
     max: CRIT_MAX,
     note: !stopSideOk || stopAtr === 0 ? "No usable stop distance to judge."
-      : stopAtr < 0.5 ? `${stopAtr.toFixed(2)}x ATR — inside the daily noise. This gets hit on a normal day.`
-        : stopAtr > 3 ? `${stopAtr.toFixed(2)}x ATR — wide enough that the stop is not really controlling the loss.`
-          : `${stopAtr.toFixed(2)}x ATR — outside the noise, still a controlled loss.`,
+      : stopAtr < 0.5 ? `${stopAtr.toFixed(2)}x ATR: inside the daily noise. This gets hit on a normal day.`
+        : stopAtr > 3 ? `${stopAtr.toFixed(2)}x ATR: wide enough that the stop is not really controlling the loss.`
+          : `${stopAtr.toFixed(2)}x ATR: outside the noise, still a controlled loss.`,
   });
 
-  // 4. Entry realism — is the fill somewhere price actually traded recently?
+  // 4. Entry realism: is the fill somewhere price actually traded recently?
   const realistic = entry != null && entry >= ctx.recentLow && entry <= ctx.recentHigh;
   detail.push({
     criterion: "Entry realism",
@@ -162,7 +162,7 @@ export function gradePass(
   return { outcome: netAtr < 1 ? "pass_correct" : "pass_missed", netAtr };
 }
 
-// ATR as of a given bar index — slice, then reuse the shared indicator so the
+// ATR as of a given bar index: slice, then reuse the shared indicator so the
 // drill and the screener agree on what volatility means.
 export function atrAt(c: DailyCandles, idx: number): number | null {
   const to = idx + 1;
@@ -254,7 +254,7 @@ export async function createDrill(userId: number): Promise<Drill | { error: stri
      WHERE in_scan = 1 AND market_cap > 1e9
      ORDER BY random() LIMIT 8`
   ).all() as { ticker: string; sector: string | null }[];
-  if (!pool.length) return { error: "No scan universe yet — the first screener pass has not run." };
+  if (!pool.length) return { error: "No scan universe yet: the first screener pass has not run." };
 
   const need = VISIBLE + HORIZON + 1;
   for (const row of pool) {
@@ -295,7 +295,7 @@ export async function createDrill(userId: number): Promise<Drill | { error: stri
       },
     };
   }
-  return { error: "Could not load a chart right now — the market data source may be rate-limiting. Try again in a moment." };
+  return { error: "Could not load a chart right now: the market data source may be rate-limiting. Try again in a moment." };
 }
 
 export interface Grade {
@@ -329,7 +329,7 @@ export async function gradeDrill(userId: number, id: number, plan: Plan, targetR
     asOf = issued.asOf;
   } else {
     // Legacy row from before bars were stored. Fetch at the interval it was
-    // POSED at — a daily drill re-fetched as 15m would never find its as_of_ts
+    // POSED at: a daily drill re-fetched as 15m would never find its as_of_ts
     // and would be permanently ungradeable.
     c = await candlesFor(row.ticker, row.interval ?? "1d");
     if (!c) return { error: "Could not reload the chart to grade it. Try again in a moment." };
@@ -392,7 +392,7 @@ export async function gradeDrill(userId: number, id: number, plan: Plan, targetR
      WHERE id = ? AND user_id = ? AND status = 'open' RETURNING id`
   ).get(plan.direction, num(plan.entry), num(plan.stop), num(plan.target),
     outcome, r, process.score, JSON.stringify(process.detail), id, userId) as { id: number } | null;
-  if (!done) return { error: "This drill is no longer open — it was already graded or the record was reset." };
+  if (!done) return { error: "This drill is no longer open: it was already graded or the record was reset." };
 
   return {
     outcome, rMultiple: r, process, netAtr, ticker: row.ticker, asOfTs: row.as_of_ts, plan, forward, history,
@@ -402,7 +402,7 @@ export async function gradeDrill(userId: number, id: number, plan: Plan, targetR
 
 // ── what was readable at decision time ───────────────────────────────────────
 // Computed ONLY from bars at or before the as-of point, and only ever returned
-// from gradeDrill — the whole drill rests on the reveal describing what could
+// from gradeDrill: the whole drill rests on the reveal describing what could
 // have been read, not what turned out to be true.
 //
 // Every level comes from technicals.ts, so a drill and the screener agree on
@@ -437,7 +437,7 @@ export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan
       plan: stop == null ? "No stop to compare."
         : long
           ? (stop < support ? `Your stop at $${f(stop)} sits below it, so normal defence of the level doesn't take you out.`
-            : `Your stop at $${f(stop)} sits above it — you get stopped out while the level is still holding.`)
+            : `Your stop at $${f(stop)} sits above it: you get stopped out while the level is still holding.`)
           : (target != null && target <= support ? `Your target at $${f(target)} is at or below it, so you're aiming into the level buyers defend.`
             : `Short target is above support, leaving room before the level matters.`),
     });
@@ -448,10 +448,10 @@ export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan
       meant: `Sellers capped price here before. A long has to get through it; a short can lean on it.`,
       plan: target == null ? "No target to compare."
         : long
-          ? (target > resistance ? `Your target at $${f(target)} is beyond it — the trade needs a breakout, not just a bounce.`
+          ? (target > resistance ? `Your target at $${f(target)} is beyond it: the trade needs a breakout, not just a bounce.`
             : `Your target at $${f(target)} stops short of it, which is the higher-probability ask.`)
           : (stop != null && stop > resistance ? `Your stop at $${f(stop)} is above it, so the level has to genuinely fail before you're wrong.`
-            : `Your stop sits below resistance — a normal retest of the level can take you out.`),
+            : `Your stop sits below resistance: a normal retest of the level can take you out.`),
     });
   }
 
@@ -464,7 +464,7 @@ export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan
       meant: `Price was ${above ? "above" : "below"} its ${period}-bar average, so the short-term drift was ${above ? "up" : "down"}.`,
       plan: plan.direction === "no_trade" ? "No direction to compare."
         : long === above ? `Your ${plan.direction} traded with that drift.`
-          : `Your ${plan.direction} traded against it — possible, but it needs a reason beyond the trend.`,
+          : `Your ${plan.direction} traded against it: possible, but it needs a reason beyond the trend.`,
     });
   }
 
@@ -472,12 +472,12 @@ export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan
   if (r != null) {
     out.push({
       label: "RSI 14", value: r.toFixed(0),
-      meant: r > 70 ? "Momentum was strong but stretched — moves starting here often need a pause first."
-        : r < 30 ? "Momentum was weak and stretched — falling knives and bounces both start from here."
+      meant: r > 70 ? "Momentum was strong but stretched: moves starting here often need a pause first."
+        : r < 30 ? "Momentum was weak and stretched: falling knives and bounces both start from here."
           : "Momentum was in its normal band, so it neither helped nor argued against the setup.",
       plan: plan.direction === "no_trade" ? "Passing on an unstretched tape is a defensible read."
         : (r > 70 && long) || (r < 30 && !long)
-          ? "You entered in the direction price had already stretched — the worse half of the entry."
+          ? "You entered in the direction price had already stretched: the worse half of the entry."
           : "Your entry was not chasing a stretched move.",
     });
   }
@@ -510,7 +510,7 @@ export function readableAt(c: DailyCandles, asOf: number, atrValue: number, plan
       meant: `Price was ${Math.abs(dist).toFixed(1)}% ${above ? "above" : "below"} the session's volume-weighted average, so ${above ? "buyers" : "sellers"} held the session.`,
       plan: entry == null ? "No entry to compare."
         : Math.abs((entry - vw) / vw) * 100 < 0.2 ? "You entered right at VWAP, which is where the session is fairly priced."
-          : `You entered ${entry > vw ? "above" : "below"} it — ${((long && entry > vw) || (!long && entry < vw)) ? "paying up rather than waiting for a retest" : "on the favourable side of the session average"}.`,
+          : `You entered ${entry > vw ? "above" : "below"} it: ${((long && entry > vw) || (!long && entry < vw)) ? "paying up rather than waiting for a retest" : "on the favourable side of the session average"}.`,
     });
   }
 
@@ -563,7 +563,7 @@ export async function practiceStats(userId: number, cohort: Cohort = CURRENT_COH
   // nothing.
   //
   // `>=`, not `>`: both timestamps are whole seconds, and resetting then
-  // immediately starting a drill is a normal flow — that drill would land on the
+  // immediately starting a drill is a normal flow: that drill would land on the
   // same second as the marker and be excluded from the record forever.
   const rows = await db.query(
     `SELECT direction, outcome, r_multiple, process_score
@@ -580,7 +580,7 @@ export async function practiceStats(userId: number, cohort: Cohort = CURRENT_COH
   const resolved = taken.filter((r) => r.outcome === "win" || r.outcome === "loss");
   const enough = attempts >= MIN_N;
 
-  // Every derived stat is gated behind MIN_N, matching insights.ts — a hit rate
+  // Every derived stat is gated behind MIN_N, matching insights.ts: a hit rate
   // of "100%" off one trade is worse than no number at all.
   const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
   return {

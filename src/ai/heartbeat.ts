@@ -17,7 +17,7 @@ const client = new Anthropic();
 
 export function startCacheHeartbeat(portfolio: Portfolio) {
   if (process.env.CACHE_HEARTBEAT !== "1") {
-    console.log("[heartbeat] disabled (set CACHE_HEARTBEAT=1 to enable — see src/ai/heartbeat.ts)");
+    console.log("[heartbeat] disabled (set CACHE_HEARTBEAT=1 to enable: see src/ai/heartbeat.ts)");
     return;
   }
   const beat = async () => {
@@ -34,7 +34,7 @@ export function startCacheHeartbeat(portfolio: Portfolio) {
         })
       );
       console.log(
-        `[heartbeat] cache ping — read ${r.usage.cache_read_input_tokens ?? 0}, wrote ${r.usage.cache_creation_input_tokens ?? 0} tokens`
+        `[heartbeat] cache ping: read ${r.usage.cache_read_input_tokens ?? 0}, wrote ${r.usage.cache_creation_input_tokens ?? 0} tokens`
       );
     } catch (err) {
       console.error("[heartbeat] failed:", err);

@@ -1,4 +1,4 @@
-// Full-index catalyst sweep — patches the "two-speed" blind spot.
+// Full-index catalyst sweep: patches the "two-speed" blind spot.
 //
 // The screener covers all ~508 tickers but only every 6 hours; real-time
 // news/filing monitoring covers only holdings+watchlist (Finnhub rate limits).
@@ -84,13 +84,13 @@ export async function sweepIndex(universe: string[], alreadyWatched: Set<string>
       ts: now,
       ticker: m.ticker,
       kind: "market_mover",
-      title: `${m.ticker} is ${m.changePct > 0 ? "up" : "down"} ${Math.abs(m.changePct).toFixed(1)}% today ($${m.price.toFixed(2)}) — abnormal move, now checking its news and filings`,
+      title: `${m.ticker} is ${m.changePct > 0 ? "up" : "down"} ${Math.abs(m.changePct).toFixed(1)}% today ($${m.price.toFixed(2)}): abnormal move, now checking its news and filings`,
       detail: { changePct: m.changePct, price: m.price, promotedFor: "60min" },
       dedupeKey: `mover:${m.ticker}:${today}`,
     });
-    if (id) events.push({ id, ts: now, ticker: m.ticker, kind: "market_mover", title: `${m.ticker} moved ${m.changePct.toFixed(1)}% today — promoted to live monitoring`, detail: { changePct: m.changePct, price: m.price } });
+    if (id) events.push({ id, ts: now, ticker: m.ticker, kind: "market_mover", title: `${m.ticker} moved ${m.changePct.toFixed(1)}% today: promoted to live monitoring`, detail: { changePct: m.changePct, price: m.price } });
   }
-  // Always log — a sweep that quotes 0/508 is a broken feed, not a quiet day.
+  // Always log: a sweep that quotes 0/508 is a broken feed, not a quiet day.
   console.log(`[sweep] ${movers.length}/${universe.length} quoted, ${candidates.length} promoted (active: ${activeDynamicTickers().join(", ") || "none"})`);
   return events;
 }

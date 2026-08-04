@@ -1,4 +1,4 @@
-// Price history via Yahoo's public chart API — free, no key.
+// Price history via Yahoo's public chart API: free, no key.
 // Daily OHLCV is the fallback behind FMP (see ingest/candles.ts) and the only
 // source for the intraday bars the intraday analyzer needs. Polite pacing +
 // 429 backoff. Callers should import from ./candles, not from here.
@@ -14,7 +14,7 @@ async function fetchChart(url: string): Promise<any | null> {
       if (res.status === 429) {
         // Rate-limited: one patient retry, then give up on this symbol.
         if (attempt === 0) {
-          console.warn("[yahoo] 429 rate limit — backing off 30s");
+          console.warn("[yahoo] 429 rate limit: backing off 30s");
           await Bun.sleep(30_000);
           continue;
         }
@@ -49,7 +49,7 @@ function parseBars(data: any): Omit<DailyCandles, "ticker"> | null {
 
 // minBars: reject series too short for the caller's math (e.g. SMA200 needs 210).
 //
-// `range=max` is a trap. Yahoo does not refuse it — it silently drops to
+// `range=max` is a trap. Yahoo does not refuse it: it silently drops to
 // QUARTERLY bars (168 of them for AAPL, 90 days apart) while still saying
 // interval=1d. Every caller asking for the deepest history therefore got a
 // series both too short and too coarse: /api/backtest requires 250 bars and so

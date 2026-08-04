@@ -1,12 +1,12 @@
 // Pending Robinhood logins started from the dashboard (Settings → Brokerage).
 // Robinhood's login helper asks for a verification code inline, but in the web
-// flow that code arrives minutes later in its own HTTP request — so the login
+// flow that code arrives minutes later in its own HTTP request: so the login
 // runs in the background and parks here until the user submits it.
 //
 // linkRobinhood is imported dynamically so this module's static graph stays
 // free of the db/network layer (keeps the state-machine test DB-free).
 //
-// ponytail: in-memory, one per user — a server restart mid-link just means
+// ponytail: in-memory, one per user: a server restart mid-link just means
 //   starting over. Persisting a half-finished login isn't worth a table.
 import type { Ask } from "./robinhood";
 
@@ -53,11 +53,11 @@ export function codeAsk(p: LinkState): Ask {
     });
 }
 
-// Kicks the login off in the background and returns immediately — device
+// Kicks the login off in the background and returns immediately: device
 // approval can take minutes, far longer than one HTTP request should hold.
 export function startLink(userId: number, username: string, password: string): void {
   // Ignore a double submit: replacing a live entry orphans the first flow's code
-  // prompt, since submitLinkCode only ever resolves the newest one — that login
+  // prompt, since submitLinkCode only ever resolves the newest one: that login
   // would then hang until its timeout with no way to answer it.
   const inFlight = pending.get(userId);
   if (inFlight?.state === "working" || inFlight?.state === "need_code") return;

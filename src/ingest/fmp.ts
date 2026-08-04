@@ -1,4 +1,4 @@
-// Daily OHLCV via Financial Modeling Prep — keyed, documented, ToS-clean.
+// Daily OHLCV via Financial Modeling Prep: keyed, documented, ToS-clean.
 // Primary source for daily candles; ingest/candles.ts falls back to Yahoo
 // whenever this returns null, so nothing here is load-bearing on its own.
 //
@@ -45,7 +45,7 @@ export const _clearQuotaBlock = () => {
   quotaBlockedUntil = 0;
 };
 
-// Test seam — the memo is process-lifetime by design, so tests need a reset.
+// Test seam: the memo is process-lifetime by design, so tests need a reset.
 export const _clearRestricted = () => restricted.clear();
 
 // Yahoo range strings, since callers speak Yahoo. "max" leans on FMP's own
@@ -74,7 +74,7 @@ interface EodRow {
 }
 
 // FMP dates carry no time. Yahoo stamps each daily bar at 09:30 ET, and
-// insights.ts/backtest.ts align bars against idea timestamps — so the two
+// insights.ts/backtest.ts align bars against idea timestamps: so the two
 // providers have to agree to the second or a replay can pick the wrong session.
 const barTimestamp = (date: string): number | null => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -99,7 +99,7 @@ function parseRows(rows: EodRow[], ticker: string): DailyCandles | null {
   return out.closes.length ? out : null;
 }
 
-// Daily OHLCV. Null means "ask Yahoo" — never throws, so the router's fallback
+// Daily OHLCV. Null means "ask Yahoo": never throws, so the router's fallback
 // is a plain null check.
 export async function fetchDailyCandlesFmp(
   ticker: string,
@@ -111,8 +111,8 @@ export async function fetchDailyCandlesFmp(
   const qs = new URLSearchParams({ symbol: toFmp(ticker), from, to, apikey: config.fmpKey });
   try {
     const res = await fetch(`${BASE}/historical-price-eod/full?${qs}`, { signal: AbortSignal.timeout(20_000) });
-    // A plan refusal is a 402 carrying BARE PROSE — "Premium Query Parameter: …",
-    // "Restricted Endpoint: …" — which is not valid JSON. So the body has to be
+    // A plan refusal is a 402 carrying BARE PROSE: "Premium Query Parameter: …",
+    // "Restricted Endpoint: …": which is not valid JSON. So the body has to be
     // read as text, and read BEFORE the status check: bailing on !res.ok first
     // would classify a permanent refusal as a transient miss and re-bill a
     // request for that symbol on every screener pass.
@@ -120,14 +120,14 @@ export async function fetchDailyCandlesFmp(
     if (res.status === 429 || QUOTA_RE.test(text)) {
       // Log only on the transition, not once per remaining ticker in the scan.
       if (!fmpQuotaBlocked()) {
-        console.warn(`[fmp] request allowance exhausted — using Yahoo for the next ${QUOTA_COOLDOWN_MS / 60_000} minutes`);
+        console.warn(`[fmp] request allowance exhausted: using Yahoo for the next ${QUOTA_COOLDOWN_MS / 60_000} minutes`);
       }
       quotaBlockedUntil = Date.now() + QUOTA_COOLDOWN_MS;
       return null;
     }
     if (REFUSAL_RE.test(text)) {
       restricted.add(ticker);
-      console.warn(`[fmp] ${ticker} unavailable on this plan — falling back to Yahoo`);
+      console.warn(`[fmp] ${ticker} unavailable on this plan: falling back to Yahoo`);
       return null;
     }
     // Everything else that isn't a bar array (bad key, outage, 5xx) is treated

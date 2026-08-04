@@ -1,5 +1,5 @@
 // Manual providers: portfolio.yaml (always available) and one-shot JSON
-// imports (POST /api/broker/import or the dashboard's Import panel — the
+// imports (POST /api/broker/import or the dashboard's Import panel: the
 // universal fallback for brokers without an API link: export/paste positions).
 import { loadPortfolio, loadRiskConfig } from "../config";
 import { getSettingFor, setSettingFor } from "../db";
@@ -22,10 +22,10 @@ export const yamlProvider: BrokerProvider = {
   },
 };
 
-// Normalized import payload — tolerant of common broker-export field names.
+// Normalized import payload: tolerant of common broker-export field names.
 // Options positions carry asset_class + market_value (and option legs their
 // contract details) so non-equity holdings survive a manual import. Crypto
-// is not supported — a JSON import naming it fails loudly (below) rather
+// is not supported: a JSON import naming it fails loudly (below) rather
 // than importing a position that would then render nowhere in the UI.
 export interface ImportPayload {
   positions?: {
@@ -46,7 +46,7 @@ export async function saveImport(userId: number, payload: ImportPayload): Promis
     .filter((p) => p.asset_class === "crypto")
     .map((p) => String(p.ticker ?? p.symbol ?? "?").toUpperCase());
   if (cryptoTickers.length) {
-    throw new Error(`Crypto isn't supported (this is an equity/options tool) — remove ${cryptoTickers.join(", ")} from the import.`);
+    throw new Error(`Crypto isn't supported (this is an equity/options tool): remove ${cryptoTickers.join(", ")} from the import.`);
   }
   const holdings = (payload.positions ?? [])
     .map((p) => ({

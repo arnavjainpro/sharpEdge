@@ -1,4 +1,4 @@
-// Classic indicators — pure math over OHLCV series. Timeframe-agnostic: the
+// Classic indicators: pure math over OHLCV series. Timeframe-agnostic: the
 // screener feeds daily bars, the intraday analyzer feeds 1m/5m/15m bars.
 
 export interface Bar {

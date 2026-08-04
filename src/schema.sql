@@ -91,7 +91,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 -- Signups awaiting email verification. Deliberately a separate table and NOT a
 -- `verified` flag on `users`: since SHARP-29 every row in users joins
 -- monitoredUserIds(), so an unverified row would immediately start spending
--- Finnhub calls and AI tokens on a portfolio nobody has proven they own — and
+-- Finnhub calls and AI tokens on a portfolio nobody has proven they own: and
 -- it would hold the UNIQUE email slot, letting anyone squat an address they
 -- don't control. Keeping them apart preserves the invariant "a row in users is
 -- a real, verified account", so nothing downstream needs to learn about
@@ -118,11 +118,11 @@ ALTER TABLE pending_signups DROP COLUMN IF EXISTS token;
 DROP INDEX IF EXISTS idx_pending_signups_token;
 
 -- An in-flight email change (SHARP-17). The new address lives here, NOT in
--- users.email, until a code mailed to it comes back — so an unverified or
+-- users.email, until a code mailed to it comes back: so an unverified or
 -- mistyped address can never become the thing you sign in with. At most one
 -- pending change per user, which is why these are columns and not a table like
 -- pending_signups (which needs one row per not-yet-a-user, keyed on the email
--- itself — there's no user id to hang columns off yet).
+-- itself: there's no user id to hang columns off yet).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_code text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_email_expires integer;
@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS tracked_trades (
 );
 CREATE INDEX IF NOT EXISTS idx_tracked_user ON tracked_trades(user_id, opened_at DESC);
 
--- F2b: last-seen broker positions per user — the baseline the close detector
+-- F2b: last-seen broker positions per user: the baseline the close detector
 -- diffs the next Robinhood snapshot against.
 CREATE TABLE IF NOT EXISTS broker_positions (
   user_id integer PRIMARY KEY REFERENCES users(id),
@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS broker_positions (
 
 -- SHARP-28: last GOOD broker snapshot per user, so a restart doesn't blank the
 -- portfolio. `cached` in broker/index.ts is process memory; this is the copy
--- that survives. Only a real provider (robinhood/import) is ever written here —
+-- that survives. Only a real provider (robinhood/import) is ever written here -
 -- persisting a yaml fallback would let one failed refresh destroy the very
 -- snapshot this table exists to protect.
 CREATE TABLE IF NOT EXISTS broker_snapshots (
@@ -271,7 +271,7 @@ CREATE TABLE IF NOT EXISTS alerts (
 --
 -- `score` is nullable on purpose: scorePortfolio() returns markdown, so the
 -- 0-100 is extracted from prose at write time and may legitimately be absent.
--- `summary` is likewise not NOT NULL — never constrain on a value parsed out
+-- `summary` is likewise not NOT NULL: never constrain on a value parsed out
 -- of model output.
 CREATE TABLE IF NOT EXISTS artifacts (
   id serial PRIMARY KEY,
@@ -333,7 +333,7 @@ ALTER TABLE risk_prefs ADD COLUMN IF NOT EXISTS risk_appetite text NOT NULL DEFA
 ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS interval text NOT NULL DEFAULT '1d';
 ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS visible_bars integer NOT NULL DEFAULT 120;
 ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS grading_version integer NOT NULL DEFAULT 1;
--- (horizon is NOT duplicated here — practice_attempts.horizon above already
+-- (horizon is NOT duplicated here: practice_attempts.horizon above already
 --  stores exactly the forward bar count.)
 
 -- The bars the drill was actually posed with, stored at creation.
@@ -347,8 +347,8 @@ ALTER TABLE practice_attempts ADD COLUMN IF NOT EXISTS bars text;
 -- SHARP-29: background monitoring fans out to every account.
 --
 -- `events` stays GLOBAL and is deliberately not given a user_id. An event is a
--- fact about the market — a 6% move on NVDA is the same event no matter who is
--- watching — and dedupe_key is UNIQUE across the table, which is what lets the
+-- fact about the market: a 6% move on NVDA is the same event no matter who is
+-- watching: and dedupe_key is UNIQUE across the table, which is what lets the
 -- detector fetch each ticker once instead of once per user. Duplicating rows
 -- per user would break that dedupe and multiply the Finnhub call budget.
 --
@@ -374,7 +374,7 @@ CREATE TABLE IF NOT EXISTS event_triage (
 );
 CREATE INDEX IF NOT EXISTS idx_event_triage_user ON event_triage(user_id, event_id);
 
--- Signals and briefings are private analysis, not market fact — they name your
+-- Signals and briefings are private analysis, not market fact: they name your
 -- positions and your sizing, so they are owned. NULL means "written before the
 -- fan-out existed", backfilled to user 1 below.
 ALTER TABLE signals ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id);
@@ -384,13 +384,13 @@ CREATE INDEX IF NOT EXISTS idx_briefings_user ON briefings(user_id, ts DESC);
 
 -- One-time backfill: everything written before this change was produced against
 -- the single account the pipeline used to watch.
--- Idempotent — every row inserted from now on carries a user_id, so after the
+-- Idempotent: every row inserted from now on carries a user_id, so after the
 -- first boot this matches nothing.
 --
 -- Resolved rather than hard-coded to 1. Both columns are REFERENCES users(id),
 -- and this file is applied on EVERY boot, so a database whose lowest account id
 -- is not 1 (any environment seeded after the original single-user one) would
--- fail the FK here and take down db.ts import — meaning no boot and no tests.
+-- fail the FK here and take down db.ts import: meaning no boot and no tests.
 -- The EXISTS guard covers a fresh, empty users table for the same reason.
 UPDATE signals   SET user_id = (SELECT min(id) FROM users)
   WHERE user_id IS NULL AND EXISTS (SELECT 1 FROM users);
@@ -398,7 +398,7 @@ UPDATE briefings SET user_id = (SELECT min(id) FROM users)
   WHERE user_id IS NULL AND EXISTS (SELECT 1 FROM users);
 
 -- Saved advisor conversations. Chat was the only AI surface whose output did
--- not survive a refresh — ideas, intraday plans, portfolio scores, backtests
+-- not survive a refresh: ideas, intraday plans, portfolio scores, backtests
 -- and practice drills all persist, chat lived in a JS array.
 --
 -- Two tables rather than one artifacts row per thread: a conversation is
@@ -444,7 +444,7 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, 
 --
 -- The observable symptom was worse than a broken script. The self-cleaning
 -- real-database tests end by deleting their throwaway account, and their
--- cleanup hooks were timing out partway through the manual child deletes —
+-- cleanup hooks were timing out partway through the manual child deletes -
 -- leaving @example.invalid accounts stranded in the live database. Cascading
 -- makes "delete the user" sufficient and correct by construction, so cleanup
 -- is one statement that cannot half-succeed.
@@ -490,8 +490,8 @@ END $$;
 -- above (which only rewrites an existing constraint) never reached them: a
 -- deleted account left its ideas and alerts behind as orphans pointing at an id
 -- that no longer exists. Both columns are NOT NULL DEFAULT 1, and that default
--- is vestigial — every insert in the app passes user_id explicitly
--- (ai/validator.ts, ai/intraday.ts, engine/alerts.ts) — so constraining them
+-- is vestigial: every insert in the app passes user_id explicitly
+-- (ai/validator.ts, ai/intraday.ts, engine/alerts.ts): so constraining them
 -- costs nothing at write time.
 --
 -- Guarded on there being no orphans right now. Adding a foreign key validates
@@ -534,8 +534,8 @@ END $$;
 -- part of the composite primary key, so it can be neither NULL nor a real
 -- users.id. A trigger closes the same gap the cascades close everywhere else.
 --
--- Worth the extra machinery because the alternative is a convention — "remember
--- to delete settings too" — and a forgotten convention is precisely the bug this
+-- Worth the extra machinery because the alternative is a convention: "remember
+-- to delete settings too": and a forgotten convention is precisely the bug this
 -- whole block exists to retire. reset-accounts.ts and the test hooks already do
 -- it by hand; this makes them belt rather than the only line of defence.
 CREATE OR REPLACE FUNCTION public.settings_cleanup_on_user_delete() RETURNS trigger AS $$
@@ -564,7 +564,7 @@ CREATE INDEX IF NOT EXISTS idx_ideas_user_ts ON ideas(user_id, ts DESC);
 -- 'plan' gates the AI-heavy, higher-cost features (validation, backtest, chat
 -- advisor, intraday, briefings, journal-that-learns) and lifts the free-tier
 -- usage ceilings. The DEFAULT is 'free' so every existing account, and every
--- new signup, starts on the free tier — nobody is silently granted Pro. Values:
+-- new signup, starts on the free tier: nobody is silently granted Pro. Values:
 -- 'free' | 'pro'. Billing (Stripe) flips this column via webhook; until then it
 -- is only ever 'free' in practice, which is the safe closed state.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS plan text NOT NULL DEFAULT 'free';
@@ -572,7 +572,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_since integer;
 
 -- Per-user, per-metric usage meter for the free-tier ceilings (e.g. 3 AI
 -- validations and 1 backtest per calendar month). `period` is a coarse bucket
--- string — 'YYYY-MM' for monthly counters — so a new month is simply a new row
+-- string: 'YYYY-MM' for monthly counters: so a new month is simply a new row
 -- and old rows are self-expiring history, no cron sweep needed. The PK makes
 -- the increment an idempotent UPSERT target. Pro accounts never write here;
 -- their ceilings are unlimited so entitlements.ts short-circuits before metering.
@@ -588,7 +588,7 @@ CREATE INDEX IF NOT EXISTS idx_usage_counters_user ON usage_counters(user_id, pe
 -- Every time a free user hits the paywall and clicks "Upgrade to Pro" we log it
 -- here. Until Stripe checkout exists this is the product's most valuable number:
 -- how many people, on which feature, wanted to pay. Append-only; one row per
--- click (a user can appear many times, which is itself signal — they kept trying).
+-- click (a user can appear many times, which is itself signal: they kept trying).
 CREATE TABLE IF NOT EXISTS billing_interest (
   id serial PRIMARY KEY,
   user_id integer NOT NULL REFERENCES users(id),

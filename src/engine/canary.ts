@@ -1,5 +1,5 @@
-// Data-feed canaries (SHARP-9). Every external feed this product stands on —
-// Yahoo's chart API, Finnhub REST + websocket, Robinhood's private endpoints —
+// Data-feed canaries (SHARP-9). Every external feed this product stands on -
+// Yahoo's chart API, Finnhub REST + websocket, Robinhood's private endpoints -
 // can change shape overnight and none of them version their responses. Today
 // that's discovered by symptom: a screener pass that quietly scores nothing, a
 // dashboard whose prices stopped moving. These probes turn it into an alert.
@@ -8,7 +8,7 @@
 //
 // 1. Probes call the app's OWN accessors (fetchDailyCandles, fetchQuote, …),
 //    not hand-rolled requests. A canary that parses the feed independently can
-//    stay green while the real parser breaks — it would be testing a copy.
+//    stay green while the real parser breaks: it would be testing a copy.
 //
 // 2. "Parsed without throwing" is not enough. A silent units change (prices in
 //    cents, timestamps in ms) parses fine and poisons every downstream number,
@@ -80,21 +80,21 @@ export function checkQuoteShape(q: Quote | null): string | null {
   if (!finitePrice(q.c)) return `current price ${q.c} is missing or outside a plausible range`;
   if (!finitePrice(q.pc)) return `previous close ${q.pc} is missing or outside a plausible range`;
   // A >50% daily move on the probe symbol is a units change, not a market event.
-  if (!Number.isFinite(q.dp) || Math.abs(q.dp) > 50) return `daily change ${q.dp}% is implausible — check the units`;
+  if (!Number.isFinite(q.dp) || Math.abs(q.dp) > 50) return `daily change ${q.dp}% is implausible: check the units`;
   // Quote.t is unix SECONDS everywhere in this codebase; ms would be ~1000x too big.
-  if (!Number.isFinite(q.t) || q.t > Math.floor(Date.now() / 1000) + 86400) return `quote timestamp ${q.t} is in the future — seconds vs milliseconds?`;
+  if (!Number.isFinite(q.t) || q.t > Math.floor(Date.now() / 1000) + 86400) return `quote timestamp ${q.t} is in the future: seconds vs milliseconds?`;
   return null;
 }
 
 export function checkNewsShape(items: NewsItem[] | null): string | null {
   if (!Array.isArray(items)) return "company-news did not return an array";
   // An empty week is legitimate for a quiet name, so emptiness alone isn't a
-  // failure — but if there ARE items, the fields the app reads must be there.
+  // failure: but if there ARE items, the fields the app reads must be there.
   if (!items.length) return null;
   const bad = items.find((n) => typeof n.headline !== "string" || !n.headline || typeof n.url !== "string" || !Number.isFinite(n.datetime));
   if (bad) return "a news item is missing headline/url/datetime";
   const newest = Math.max(...items.map((n) => n.datetime));
-  if (newest > Math.floor(Date.now() / 1000) + 86400) return `news datetime ${newest} is in the future — seconds vs milliseconds?`;
+  if (newest > Math.floor(Date.now() / 1000) + 86400) return `news datetime ${newest} is in the future: seconds vs milliseconds?`;
   return null;
 }
 
@@ -127,13 +127,13 @@ async function probeAll(): Promise<CanaryResult[]> {
     fmpEnabled()
       ? probe("fmp_daily", "FMP daily candles", async () => {
           const bars = await fetchDailyCandlesFmp(NEWS_PROBE, "1y", 210);
-          // A spent request allowance is a distinct, self-healing condition —
+          // A spent request allowance is a distinct, self-healing condition -
           // naming it beats the generic "nothing parsed" complaint, which sends
           // you looking for a shape change that isn't there.
-          if (!bars && fmpQuotaBlocked()) return "request allowance exhausted — daily candles are coming from Yahoo until it resets";
+          if (!bars && fmpQuotaBlocked()) return "request allowance exhausted: daily candles are coming from Yahoo until it resets";
           return checkDailyShape(bars);
         })
-      : Promise.resolve(skip("fmp_daily", "FMP daily candles", "FMP_API_KEY not set — daily candles come from Yahoo")),
+      : Promise.resolve(skip("fmp_daily", "FMP daily candles", "FMP_API_KEY not set: daily candles come from Yahoo")),
     probe("finnhub_quote", "Finnhub quotes", async () => checkQuoteShape(await fetchQuote(PROBE))),
     probe("finnhub_news", "Finnhub company news", async () => {
       const iso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
@@ -143,12 +143,12 @@ async function probeAll(): Promise<CanaryResult[]> {
 
   const out = await Promise.all(checks);
 
-  // The websocket isn't a request/response feed — its health IS its liveness,
+  // The websocket isn't a request/response feed: its health IS its liveness,
   // and it only carries trades while the market is open. Checking it outside
   // regular hours would report "broken" every evening.
   const label = "Finnhub trade websocket";
   if (marketPhase() !== "open") {
-    out.push(skip("finnhub_ws", label, "market closed — no trades expected"));
+    out.push(skip("finnhub_ws", label, "market closed: no trades expected"));
   } else if (!wsStatus.connected) {
     out.push(result("finnhub_ws", label, "socket is disconnected"));
   } else {
@@ -174,13 +174,13 @@ async function probeAll(): Promise<CanaryResult[]> {
     const fellBack = snaps.find((s) => s.snap && s.snap.source !== "robinhood");
     const pulled = snaps.filter((s) => s.snap?.source === "robinhood");
     if (fellBack) {
-      out.push(result("robinhood", rhLabel, `user ${fellBack.id}'s snapshot fell back to "${fellBack.snap!.source}" — their Robinhood pull is failing`));
+      out.push(result("robinhood", rhLabel, `user ${fellBack.id}'s snapshot fell back to "${fellBack.snap!.source}": their Robinhood pull is failing`));
     } else if (!pulled.length) {
       out.push(skip("robinhood", rhLabel, `${linked.length} linked account(s), none pulled yet this run`));
     } else {
       const oldest = pulled.reduce((a, b) => (a.snap!.asOf <= b.snap!.asOf ? a : b));
       const age = agoSec(oldest.snap!.asOf);
-      out.push(result("robinhood", rhLabel, age > 3 * 3600 ? `user ${oldest.id}'s snapshot is ${Math.round(age / 3600)}h old — refreshes are failing` : null));
+      out.push(result("robinhood", rhLabel, age > 3 * 3600 ? `user ${oldest.id}'s snapshot is ${Math.round(age / 3600)}h old: refreshes are failing` : null));
     }
   }
 
@@ -188,7 +188,7 @@ async function probeAll(): Promise<CanaryResult[]> {
 }
 
 // Every account with a Robinhood link. "Are Robinhood's private endpoints still
-// working" is a property of the feed, not of one account — and since the broker
+// working" is a property of the feed, not of one account: and since the broker
 // timer refreshes them all, all of them are evidence.
 async function linkedRobinhoodUsers(): Promise<number[]> {
   const rows = await db
@@ -214,13 +214,13 @@ export async function runCanaries(): Promise<CanaryResult[]> {
   const healed = now.filter((r) => r.status === "ok" && before.get(r.feed) === "broken");
   last = now;
 
-  for (const r of broke) console.error(`[canary] ${r.feed} BROKEN — ${r.detail}`);
+  for (const r of broke) console.error(`[canary] ${r.feed} BROKEN: ${r.detail}`);
   for (const r of healed) console.log(`[canary] ${r.feed} recovered`);
 
   if (telegramEnabled() && (broke.length || healed.length)) {
     const lines = [
-      ...broke.map((r) => `🔴 *${r.label}* — ${r.detail}`),
-      ...healed.map((r) => `🟢 *${r.label}* — back to normal`),
+      ...broke.map((r) => `🔴 *${r.label}*: ${r.detail}`),
+      ...healed.map((r) => `🟢 *${r.label}*: back to normal`),
     ];
     try {
       await notifyTelegram(`*sharpEdge data feeds*\n\n${lines.join("\n")}\n\n_Numbers from a broken feed are not trustworthy until this clears._`);

@@ -1,4 +1,4 @@
-// Unified long/short idea validation — the core decision-support engine.
+// Unified long/short idea validation: the core decision-support engine.
 //
 // Every idea (screener candidate, user ticker, generated batch) goes through
 // the same pipeline: deterministic evidence gathering (technicals, levels,
@@ -66,7 +66,7 @@ export interface IdeaReport {
   options_view?: {
     // The AI picks a structure from the full menu and proposes concrete legs;
     // maxLoss/maxGain/breakevens are computed server-side (Black-Scholes),
-    // never taken on the model's word — same pattern as the trade frame.
+    // never taken on the model's word: same pattern as the trade frame.
     strategy:
       | "long_call" | "long_put"
       | "vertical_call_debit" | "vertical_call_credit"
@@ -96,7 +96,7 @@ const IDEA_SCHEMA = {
     headline: { type: "string", description: "One plain-English sentence stating the verdict and the core reason." },
     scores: {
       type: "object",
-      description: "0-10 per dimension, honest and independent — do not let one strong dimension inflate the others.",
+      description: "0-10 per dimension, honest and independent: do not let one strong dimension inflate the others.",
       properties: {
         technical: { type: "number" }, catalyst: { type: "number" }, market_alignment: { type: "number" },
         news_sentiment: { type: "number" }, risk_reward: { type: "number" }, invalidation_clarity: { type: "number" },
@@ -137,7 +137,7 @@ const IDEA_SCHEMA = {
         invalidation_case: { type: "string", description: "What the failure looks like and the expected loss if stopped." },
         survives_risk_off: { type: "boolean" },
         risk_off_note: { type: "string", description: "Does the idea still make sense if the market turns risk-off? Why/why not." },
-        single_condition_dependency: { type: "string", description: "Whether the idea depends on one narrow condition (e.g. 'only works if earnings beat') — name it, or state it is multi-legged." },
+        single_condition_dependency: { type: "string", description: "Whether the idea depends on one narrow condition (e.g. 'only works if earnings beat'): name it, or state it is multi-legged." },
       },
       required: ["base_case", "bull_case", "bear_case", "invalidation_case", "survives_risk_off", "risk_off_note", "single_condition_dependency"],
       additionalProperties: false,
@@ -191,26 +191,26 @@ const IDEA_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-// Stable rubric — byte-identical across calls for prompt-cache hits.
+// Stable rubric: byte-identical across calls for prompt-cache hits.
 const VALIDATOR_SYSTEM = `You are the idea-validation engine of a trading decision-support system for one self-directed trader. You receive one candidate trade idea (long or short) with pre-computed technical evidence, support/resistance levels, relative strength, sector rotation, market regime, news headlines, earnings timing, and a risk-first trade frame. Produce a structured, conservative validation.
 
-Rating rubric — apply it strictly. The context provides a TARGET RISK/REWARD block with this trader's numeric R:R thresholds; apply those exact numbers wherever this rubric references the R:R bar:
+Rating rubric: apply it strictly. The context provides a TARGET RISK/REWARD block with this trader's numeric R:R thresholds; apply those exact numbers wherever this rubric references the R:R bar:
 - "strong": at least three INDEPENDENT confirmations (e.g. trend structure + volume-confirmed level break + relative strength + supportive catalyst), a clear invalidation level, risk/reward at or above the trader's stated target to the first target, market/sector context not fighting the trade, and no unresolved news conflict.
 - "moderate": two solid confirmations and acceptable risk/reward, but a missing leg (no catalyst, neutral sector, or R:R in the trader's stated moderate band below target).
 - "weak": one factor doing all the work, conflicted evidence, poor entry location (extended/chased), or R:R below the trader's stated weak threshold.
 - "reject": no edge, structure contradicts the direction, news contradicts the setup without a repricing case, illiquid, or the trade only works in a narrow scenario that current regime makes unlikely.
 
 Hard rules:
-- Momentum alone NEVER justifies more than "weak" — a stock having moved up or down recently is not evidence it will continue. Demand structure, participation (volume), relative strength, and context.
+- Momentum alone NEVER justifies more than "weak": a stock having moved up or down recently is not evidence it will continue. Demand structure, participation (volume), relative strength, and context.
 - Short ideas must be validated by structural breakdown (trend break, level break, lower-high sequence, distribution volume) AND a bearish thesis. Falling price alone is not a short case; crowded oversold shorts (deep RSI lows) get downgraded for bounce risk.
 - If the provided news contradicts the technical direction, say so explicitly in news_reasons, set catalyst quality to "conflicting", and downgrade the rating unless there is a strong repricing argument.
 - Distinguish real catalysts (earnings surprises, guidance changes, regulatory decisions, contract wins, activist stakes) from noise (listicles, price-move commentary, routine PR). Noise never raises catalyst score above 3.
 - Earnings within the holding period is a material risk: flag it in warnings and reflect it in the plan (size down, exit before, or explicitly frame it as an earnings bet).
 - Ground every number in the provided data. Do not invent prices, levels, or news. If a needed input is missing, say so and be more conservative.
-- The trade frame provided (entry/stop/targets) is a starting point computed from ATR and levels — refine it with judgment, but keep stops at structurally meaningful levels and state the R:R math.
+- The trade frame provided (entry/stop/targets) is a starting point computed from ATR and levels: refine it with judgment, but keep stops at structurally meaningful levels and state the R:R math.
 - Respect the market regime: longs in a risk-off tape and shorts in a strong uptrend need extra evidence; say whether the idea survives a regime flip in stress_tests.
-- If a TRADER'S PAST-TRADE JOURNAL block is provided and it shows a recurring mistake relevant to this setup (e.g. repeatedly chasing breakouts without volume confirmation, repeatedly losing on this same ticker, cutting winners early), call it out explicitly in warnings and let it inform the plan — that history is real, not hypothetical.
-- If the honest answer is "no trade", return direction "no_trade" with rating "reject" — do not manufacture a plan.
+- If a TRADER'S PAST-TRADE JOURNAL block is provided and it shows a recurring mistake relevant to this setup (e.g. repeatedly chasing breakouts without volume confirmation, repeatedly losing on this same ticker, cutting winners early), call it out explicitly in warnings and let it inform the plan: that history is real, not hypothetical.
+- If the honest answer is "no trade", return direction "no_trade" with rating "reject": do not manufacture a plan.
 - Plain English throughout; explain any technical term in the same sentence. This is decision support, not licensed financial advice; the trader decides.`;
 
 export interface IdeaContext {
@@ -259,7 +259,7 @@ export async function gatherIdeaContext(
   withOptions: boolean
 ): Promise<IdeaContext | { error: string }> {
   ticker = ticker.toUpperCase().trim();
-  // Relative-strength and beta math needs benchmark candles — warm the cache
+  // Relative-strength and beta math needs benchmark candles: warm the cache
   // if this is called before the first scheduled market refresh.
   if (!benchmarkCandles("SPY")) await refreshMarketContext();
 
@@ -307,7 +307,7 @@ export async function gatherIdeaContext(
   const frame = tradeFrame(ind, dir);
   // Ideas are medium/long-term equity positions: size against account equity
   // with fixed account defaults, NOT the trader's short-term Analyze-tab risk
-  // prefs — the Ideas tab is fully independent of the analyzer.
+  // prefs: the Ideas tab is fully independent of the analyzer.
   const sizing = await positionSizing(userId, frame.entry, frame.stop, { risk: loadRiskConfig(), basis: "equity" });
   let optionsText: string | null = null;
   let optionsSummary: OptionsSummary | null = null;
@@ -343,13 +343,13 @@ async function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Port
   const secRot = snap?.sectors.find((s) => s.sector === ctx.sector);
   const fmt = (v: number | null | undefined, dec = 2) => (v != null ? v.toFixed(dec) : "n/a");
   // Ideas are medium-to-long-term equity buys/shorts, so the R:R bar is a fixed
-  // 2:1 — deliberately NOT the trader's analyzer target_rr (that knob is for the
+  // 2:1: deliberately NOT the trader's analyzer target_rr (that knob is for the
   // short-term swing/options Analyze tab only). Keeping it constant also holds
   // the system block byte-identical across users so prompt-cache hits survive.
   const targetRR = 2;
 
   return [
-    `IDEA TO VALIDATE: ${ctx.ticker} (${ctx.name}) — ${ctx.requestedDirection === "auto" ? `direction AUTO (quant lean: ${ctx.quantDirection})` : ctx.requestedDirection.toUpperCase()}`,
+    `IDEA TO VALIDATE: ${ctx.ticker} (${ctx.name}): ${ctx.requestedDirection === "auto" ? `direction AUTO (quant lean: ${ctx.quantDirection})` : ctx.requestedDirection.toUpperCase()}`,
     `Sector: ${ctx.sector} / ${ctx.industry}`,
     userNotes ? `Trader's notes: ${userNotes}` : "",
     ``,
@@ -373,11 +373,11 @@ async function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Port
     `NEWS (last 14 days):`,
     ctx.headlines,
     ``,
-    `EARNINGS: ${ctx.earnings ? `next report ${ctx.earnings.date} (${ctx.earnings.daysAway} days away${ctx.earnings.hour ? ", " + ctx.earnings.hour : ""}) — flag if inside the holding period.` : "no scheduled report found in the next ~70 days."}`,
+    `EARNINGS: ${ctx.earnings ? `next report ${ctx.earnings.date} (${ctx.earnings.daysAway} days away${ctx.earnings.hour ? ", " + ctx.earnings.hour : ""}): flag if inside the holding period.` : "no scheduled report found in the next ~70 days."}`,
     ``,
     `TARGET RISK/REWARD: this trader's minimum R:R for a "strong" rating is ${targetRR.toFixed(1)}:1 to the first target; the "moderate" band runs down to ${Math.max(1, targetRR - 0.5).toFixed(1)}:1; anything below ${Math.max(1, targetRR - 0.5).toFixed(1)}:1 caps the rating at "weak" on the risk/reward leg.`,
     ``,
-    `RISK-FIRST TRADE FRAME (deterministic starting point from ATR + swing levels — refine with judgment):`,
+    `RISK-FIRST TRADE FRAME (deterministic starting point from ATR + swing levels: refine with judgment):`,
     ctx.frame
       ? `${ctx.frame.direction.toUpperCase()}: entry ~$${fmt(ctx.frame.entry)}, stop $${fmt(ctx.frame.stop)}, T1 $${fmt(ctx.frame.t1)}, T2 $${fmt(ctx.frame.t2)}, R:R to T1 ≈ ${fmt(ctx.frame.rr, 1)}:1`
       : "(unavailable)",
@@ -386,9 +386,9 @@ async function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Port
       : "",
     accountContextText(userId),
     await journalContextText(userId, ctx.ticker),
-    held ? `POSITION: trader already holds ${held.shares} shares @ $${held.cost_basis}${held.thesis ? ` — thesis: ${held.thesis}` : ""}.` : `POSITION: trader does not hold ${ctx.ticker}.`,
+    held ? `POSITION: trader already holds ${held.shares} shares @ $${held.cost_basis}${held.thesis ? `: thesis: ${held.thesis}` : ""}.` : `POSITION: trader does not hold ${ctx.ticker}.`,
     ctx.optionsText
-      ? `\n${ctx.optionsText}\nInclude an options_view in your output. Consider the FULL strategy menu — long call/put, vertical debit/credit spreads, straddle, strangle, iron condor, covered call, cash-secured put, calendar — and pick the ONE structure that best fits both the thesis and the IV regime: sell premium (credit spreads, iron condor, covered call, CSP) when IV is elevated; buy premium (long options, debit spreads) when IV is low and a real move is expected; straddle/strangle only for a genuine big-move-either-way thesis; iron condor for a range-bound thesis; covered call / cash-secured put only when it fits an existing or intended share position. Do NOT default to plain calls/puts if a defined-risk structure fits better. Propose concrete legs (action/right/strike/expiry/quantity) using ONLY strikes and expiries from the chain data above — max loss, max gain, and breakevens will be computed deterministically from your legs, so make them real. If options genuinely add nothing here, use strategy "neutral" or "avoid" with an empty legs array and say why. Spell out premium risk (IV crush, theta decay) in plain terms in iv_context.`
+      ? `\n${ctx.optionsText}\nInclude an options_view in your output. Consider the FULL strategy menu: long call/put, vertical debit/credit spreads, straddle, strangle, iron condor, covered call, cash-secured put, and calendar. Pick the ONE structure that best fits both the thesis and the IV regime: sell premium (credit spreads, iron condor, covered call, CSP) when IV is elevated; buy premium (long options, debit spreads) when IV is low and a real move is expected; straddle/strangle only for a genuine big-move-either-way thesis; iron condor for a range-bound thesis; covered call / cash-secured put only when it fits an existing or intended share position. Do NOT default to plain calls/puts if a defined-risk structure fits better. Propose concrete legs (action/right/strike/expiry/quantity) using ONLY strikes and expiries from the chain data above. Max loss, max gain, and breakevens will be computed deterministically from your legs, so make them real. If options genuinely add nothing here, use strategy "neutral" or "avoid" with an empty legs array and say why. Spell out premium risk (IV crush, theta decay) in plain terms in iv_context.`
       : "",
   ]
     .filter((l) => l !== "")
@@ -397,7 +397,7 @@ async function contextToPrompt(userId: number, ctx: IdeaContext, portfolio: Port
 
 // Price the AI's proposed option legs deterministically (Black-Scholes stress),
 // so the max loss / max gain / breakevens the trader sees are computed, never
-// model-authored — the options twin of the deterministic tradeFrame().
+// model-authored: the options twin of the deterministic tradeFrame().
 function priceOptionsView(report: IdeaReport, ctx: IdeaContext) {
   const ov = report.options_view;
   if (!ov?.legs?.length || ov.strategy === "neutral" || ov.strategy === "avoid") return;
@@ -428,7 +428,7 @@ export async function validateIdea(
   portfolio: Portfolio,
   opts: { notes?: string; options?: boolean; source?: string } = {}
 ): Promise<IdeaReport | { error: string }> {
-  if (!opusBreaker.allow()) return { error: "AI circuit breaker is tripped — reset it from the dashboard status bar." };
+  if (!opusBreaker.allow()) return { error: "AI circuit breaker is tripped: reset it from the dashboard status bar." };
 
   const ctx = await gatherIdeaContext(userId, ticker, requestedDirection, !!opts.options);
   if ("error" in ctx) return ctx;
@@ -456,12 +456,12 @@ export async function validateIdea(
   }
 }
 
-// Optional narrowing for generation — mirrors the dashboard's filter panel.
+// Optional narrowing for generation: mirrors the dashboard's filter panel.
 export interface IdeaFilters {
   sectors?: string[];                    // exact sector names; empty/absent = all
   minScore?: number;                     // floor for the directional score (default 68)
   direction?: "long" | "short" | "both"; // default both
-  tickers?: string[];                    // allowlist — the dashboard's filtered view; absent = all
+  tickers?: string[];                    // allowlist: the dashboard's filtered view; absent = all
 }
 
 // Batch idea generation: strongest screener confluences, both directions,

@@ -1,4 +1,4 @@
-// Entitlements — the single chokepoint for "is this account allowed to do this".
+// Entitlements: the single chokepoint for "is this account allowed to do this".
 //
 // Two kinds of gate:
 //   • Pro-only features (chat advisor, intraday, briefings, journal-that-learns):
@@ -19,7 +19,7 @@ export type Plan = "free" | "pro";
 // the cap entirely. Keyed by the string stored in usage_counters.metric.
 export type MeteredFeature = "ai_validation" | "backtest";
 
-// Features that simply require Pro — no free allowance at all.
+// Features that simply require Pro: no free allowance at all.
 export type ProFeature =
   | "chat_advisor"
   | "intraday"
@@ -51,7 +51,7 @@ export interface Gate {
 
 export async function planFor(userId: number): Promise<Plan> {
   const row = await db.query(`SELECT plan FROM users WHERE id = ?`).get<{ plan: string }>(userId);
-  // Anything that isn't exactly 'pro' is treated as free — the safe closed state
+  // Anything that isn't exactly 'pro' is treated as free: the safe closed state
   // for a NULL, a legacy row, or a value we don't recognise.
   return row?.plan === "pro" ? "pro" : "free";
 }
@@ -77,7 +77,7 @@ export async function checkProFeature(userId: number, feature: ProFeature): Prom
   return { ok: false, reason: "pro_only", feature };
 }
 
-// Metered feature gate. Does NOT consume — call meter() after the work succeeds.
+// Metered feature gate. Does NOT consume: call meter() after the work succeeds.
 export async function checkMetered(userId: number, metric: MeteredFeature): Promise<Gate> {
   const plan = await planFor(userId);
   if (plan === "pro") return { ok: true };

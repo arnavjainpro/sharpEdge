@@ -6,12 +6,12 @@ import {
 } from "./index";
 
 // Mirrors signup.test.ts's threat model: an unconfirmed address must never
-// become the login. Here the failure mode is different — the account already
+// become the login. Here the failure mode is different: the account already
 // exists, so a bad confirm can't create a phantom row, but it CAN move a real
 // account's sign-in to an address the attacker doesn't actually control.
 //
 // NOTE: writes to the configured database, using @example.invalid addresses
-// that are deleted afterwards — the only other test file that writes besides
+// that are deleted afterwards: the only other test file that writes besides
 // signup.test.ts, deleteIdea.test.ts, heatmap.test.ts and isolation.test.ts.
 
 const emails: string[] = [];
@@ -43,7 +43,7 @@ test("staging a change does not move the login", async () => {
   expect(code).toMatch(/^[0-9]{6}$/);
   expect(await getPendingEmail(id)).toBe(newAddr);
   // The critical assertion: the account still signs in with the OLD address
-  // until the code comes back — a typo or a hijacked session can't strand it.
+  // until the code comes back: a typo or a hijacked session can't strand it.
   const user = await db.query(`SELECT email FROM users WHERE id = ?`).get<{ email: string }>(id);
   expect(user!.email).not.toBe(newAddr);
 });
@@ -69,7 +69,7 @@ test("concurrent submits of the same code apply exactly once", async () => {
   const code = await startEmailChange(id, newAddr);
 
   // Two tabs submitting the same code. The claim is a single atomic UPDATE, so
-  // only one can win — the point isn't that a second apply would corrupt
+  // only one can win: the point isn't that a second apply would corrupt
   // anything (both would write the same address), it's that the second must
   // read as "nothing pending", not silently succeed twice.
   const results = await Promise.all([confirmEmailChange(id, code), confirmEmailChange(id, code)]);
@@ -87,9 +87,9 @@ test("wrong codes are capped, and the fifth discards the change", async () => {
     expect(res.ok).toBe(false);
     expect(await getPendingEmail(id)).toBe(newAddr);
   }
-  expect(await confirmEmailChange(id, wrong)).toEqual({ ok: false, error: "too many wrong codes — start the change again", restart: true });
+  expect(await confirmEmailChange(id, wrong)).toEqual({ ok: false, error: "too many wrong codes: start the change again", restart: true });
 
-  // Discarded — the real code is now worthless, and the account never moved.
+  // Discarded: the real code is now worthless, and the account never moved.
   expect(await getPendingEmail(id)).toBeNull();
   expect((await confirmEmailChange(id, code)).ok).toBe(false);
   const user = await db.query(`SELECT email FROM users WHERE id = ?`).get<{ email: string }>(id);
@@ -102,7 +102,7 @@ test("an expired code is dead even though it matches", async () => {
   const code = await startEmailChange(id, newAddr);
   await db.query(`UPDATE users SET pending_email_expires = extract(epoch from now())::int - 1 WHERE id = ?`).run(id);
 
-  expect(await confirmEmailChange(id, code)).toEqual({ ok: false, error: "that code expired — start the change again", restart: true });
+  expect(await confirmEmailChange(id, code)).toEqual({ ok: false, error: "that code expired: start the change again", restart: true });
   const user = await db.query(`SELECT email FROM users WHERE id = ?`).get<{ email: string }>(id);
   expect(user!.email).not.toBe(newAddr);
 });
@@ -144,7 +144,7 @@ test("starting a new change reissues a code, invalidates the old one, and resets
   emails.push(secondAddr);
   const second = await startEmailChange(id, secondAddr);
 
-  // The stale code — for the address that's no longer even staged — is dead...
+  // The stale code: for the address that's no longer even staged: is dead...
   expect((await confirmEmailChange(id, first)).ok).toBe(false);
   // ...and that miss is attempt 1 of 5 against the NEW change, not the last one
   // before discard.

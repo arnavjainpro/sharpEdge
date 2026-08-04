@@ -5,7 +5,7 @@ import { advisorEvents, advisorBriefing } from "./advisor";
 
 // Every advisor answer is built from these two reads, so an unscoped query here
 // serves one account's private analysis to another. They are exported for this
-// suite precisely so the assertions run the real SQL — a copy of the query in
+// suite precisely so the assertions run the real SQL: a copy of the query in
 // the test would be free to drift out of sync with the app, which is how the
 // original defect survived as long as it did.
 //
@@ -43,7 +43,7 @@ async function loudEvent(ticker: string, kind: string, title: string, userId?: n
 //
 // Set-based, and with an explicit timeout. The loop-per-row version this
 // replaces made dozens of sequential round trips against a 15-connection pool
-// and regularly blew bun's 5s default hook timeout — and a hook that dies
+// and regularly blew bun's 5s default hook timeout: and a hook that dies
 // midway has already deleted the children and not the account, which is how
 // throwaway accounts ended up stranded in the live database.
 afterAll(async () => {
@@ -69,7 +69,7 @@ test("a signal written for one account never reaches another account's advisor c
   const forA = (await advisorEvents(a, since())).find((r) => r.title === `${TAG}AAPL headline`);
   const forB = (await advisorEvents(b, since())).find((r) => r.title === `${TAG}AAPL headline`);
 
-  // Both see the event — it's public market fact.
+  // Both see the event: it's public market fact.
   expect(forA).toBeDefined();
   expect(forB).toBeDefined();
   // Only A sees the advice, which names A's position size.
@@ -82,7 +82,7 @@ test("a signal written for one account never reaches another account's advisor c
 test("an event owned by one account never reaches another account's advisor context", async () => {
   const a = await throwawayUser();
   const b = await throwawayUser();
-  // position_close titles carry realized P&L verbatim — a fact about A's
+  // position_close titles carry realized P&L verbatim: a fact about A's
   // account, not about the market.
   const title = `${TAG}Closed NVDA (long) ~+12%`;
   await loudEvent("NVDA", "position_close", title, a);
@@ -116,6 +116,6 @@ test("a briefing written for one account never reaches another account's advisor
   ).run(nowSec(), "close", `Your book is concentrated. ${probe}`, a);
 
   expect((await advisorBriefing(a))?.content).toContain(probe);
-  // B has no briefing of its own, so it must get nothing — not A's.
+  // B has no briefing of its own, so it must get nothing: not A's.
   expect(await advisorBriefing(b)).toBeNull();
 });

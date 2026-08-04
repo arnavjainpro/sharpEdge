@@ -2,8 +2,8 @@
 //
 // Continuous front-month futures are seeded into the `universe` table so the
 // existing search, screener, and stock-detail paths pick them up unchanged.
-// Symbols are Yahoo's continuous-contract form (ES=F, CL=F, …) — the same
-// symbol we fetch candles for — kept as the canonical ticker to avoid colliding
+// Symbols are Yahoo's continuous-contract form (ES=F, CL=F, …): the same
+// symbol we fetch candles for: kept as the canonical ticker to avoid colliding
 // with real equity tickers (e.g. "ES" is Eversource Energy).
 //
 // Scoring reuses the equity pipeline: technicals/trend/RSI/MACD are price-only

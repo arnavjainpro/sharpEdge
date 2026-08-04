@@ -1,5 +1,5 @@
 // F2b part 2: detect closed/reduced positions by diffing two broker snapshots.
-// Pure and quote-free so it's fully testable — the wiring layer enriches each
+// Pure and quote-free so it's fully testable: the wiring layer enriches each
 // event with an estimated P&L from a live quote. Only ever diffs same-source
 // robinhood snapshots (the caller guarantees this), so a provider fallback or a
 // restart can't read as a mass liquidation.
@@ -40,15 +40,15 @@ export function closeDetect(prev: PosSnap[], next: PosSnap[], todayISO: string):
     const n = nextByKey.get(p.key);
     const prevQty = Math.abs(p.qty);
     const nowQty = n ? Math.abs(n.qty) : 0;
-    if (nowQty >= prevQty) continue;                        // unchanged or added — not a close
-    // Option that vanished on/after its expiry expired on its own — don't prompt.
+    if (nowQty >= prevQty) continue;                        // unchanged or added: not a close
+    // Option that vanished on/after its expiry expired on its own: don't prompt.
     if (nowQty === 0 && p.assetClass === "option" && p.expiry && p.expiry <= todayISO) continue;
     events.push({
       key: p.key, ticker: p.ticker, direction: p.direction,
       kind: nowQty === 0 ? "closed" : "reduced",
       prevQty, nowQty, closedQty: prevQty - nowQty,
       costBasis: p.costBasis ?? null,
-      note: hasNewPosition && nowQty === 0 ? "a new position appeared in the same update — possible symbol change" : undefined,
+      note: hasNewPosition && nowQty === 0 ? "a new position appeared in the same update: possible symbol change" : undefined,
     });
   }
   return events;

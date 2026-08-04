@@ -19,8 +19,8 @@ export function createThrottle(minGapMs: number) {
 }
 
 // One shared queue for all Claude traffic (triage + analysis + briefings),
-// spaced 350ms apart — ~3 calls/sec worst case. Every Claude call already funnels
-// through here, so it's the one place to record token usage (F1b) — no call site
+// spaced 350ms apart: ~3 calls/sec worst case. Every Claude call already funnels
+// through here, so it's the one place to record token usage (F1b): no call site
 // can bypass it, and the generic throttle above stays uncoupled from Anthropic.
 import { recordSpend } from "../db";
 
@@ -39,12 +39,12 @@ export function claudeQueue<T>(fn: () => Promise<T>): Promise<T> {
 // them used to blow up the same two ways when the model ran out of max_tokens
 // mid-answer (adaptive thinking spends from the same budget): either the text
 // block is missing entirely, or it holds half a JSON document. Both surfaced as
-// a raw TypeError/SyntaxError with no hint at the cause — parse in one place and
+// a raw TypeError/SyntaxError with no hint at the cause: parse in one place and
 // name it instead.
 export function parseJsonResponse<T>(res: { content: any[]; stop_reason?: string | null }, label: string): T {
   const text = res.content.find((b) => b.type === "text")?.text;
   if (res.stop_reason === "max_tokens" || !text) {
-    throw new Error(`${label}: response hit the token limit before the JSON was complete (stop_reason=${res.stop_reason ?? "none"}) — raise max_tokens`);
+    throw new Error(`${label}: response hit the token limit before the JSON was complete (stop_reason=${res.stop_reason ?? "none"}): raise max_tokens`);
   }
   try {
     return JSON.parse(text) as T;

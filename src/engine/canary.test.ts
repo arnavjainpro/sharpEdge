@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { checkDailyShape, checkIntradayShape, checkQuoteShape, checkNewsShape } from "./canary";
 import type { DailyCandles, IntradayBars } from "../ingest/candles";
 
-// These validators ARE the canary — the probes around them are just plumbing.
+// These validators ARE the canary: the probes around them are just plumbing.
 // What's being pinned is that each one still rejects the specific failure it
 // exists to catch, because a validator that quietly returns null for everything
 // is worse than no canary at all: it reports green while the feed is gone.
@@ -76,7 +76,7 @@ test("daily candles: ordering, completeness and staleness all fail loudly", () =
   stale.timestamps = stale.timestamps.map((t) => t - 14 * DAY);
   expect(checkDailyShape(stale)).toBeString();
 
-  // Mismatched array lengths — a partial parse.
+  // Mismatched array lengths: a partial parse.
   const ragged = goodDaily();
   ragged.timestamps = ragged.timestamps.slice(0, -1);
   expect(checkDailyShape(ragged)).toBeString();
@@ -102,7 +102,7 @@ test("intraday: losing the meta block is a break, not a shrug", () => {
 });
 
 test("news: an empty week is fine, a malformed item is not", () => {
-  // Quiet names genuinely have no news — that must not page anyone.
+  // Quiet names genuinely have no news: that must not page anyone.
   expect(checkNewsShape([])).toBeNull();
   expect(checkNewsShape([{ id: 1, datetime: now(), headline: "", source: "s", summary: "", url: "u" } as any])).toBeString();
   expect(checkNewsShape([{ id: 1, datetime: now(), source: "s", summary: "", url: "u" } as any])).toBeString();

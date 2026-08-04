@@ -6,9 +6,9 @@ export interface Holding {
   ticker: string;
   shares: number;       // shares; contracts for options
   cost_basis: number;
-  thesis?: string;      // why you own it — lets the AI judge "thesis broken vs. just drifting"
-  asset_class?: "equity" | "option"; // default equity — this is an equity/options tool, crypto isn't supported
-  market_value?: number; // broker-provided current value — options can't be quoted by ticker
+  thesis?: string;      // why you own it: lets the AI judge "thesis broken vs. just drifting"
+  asset_class?: "equity" | "option"; // default equity: this is an equity/options tool, crypto isn't supported
+  market_value?: number; // broker-provided current value: options can't be quoted by ticker
   option?: { type: "call" | "put"; strike: number; expiry: string; underlying: string };
 }
 
@@ -19,7 +19,7 @@ export interface Portfolio {
 
 // How the trader wants trades shaped, not just sized. Drives which options
 // structures the swing analyzer is allowed to propose (see APPETITE_PLAYBOOK in
-// ai/intraday.ts) — income/defined-risk at one end, convexity at the other.
+// ai/intraday.ts): income/defined-risk at one end, convexity at the other.
 export type RiskAppetite = "conservative" | "balanced" | "aggressive";
 export const RISK_APPETITES: readonly RiskAppetite[] = ["conservative", "balanced", "aggressive"];
 // Single coercion chokepoint: yaml, the settings PUT, and old rows all funnel
@@ -41,7 +41,7 @@ const ROOT = join(import.meta.dir, "..");
 
 function readPortfolioYaml(): any {
   // Optional. The file holds personal holdings so it's gitignored, which means a
-  // deployed instance won't have one — there, positions come from the broker link
+  // deployed instance won't have one: there, positions come from the broker link
   // or the import panel instead. Absent file = empty portfolio, not a boot crash.
   try {
     return parse(readFileSync(join(ROOT, "config/portfolio.yaml"), "utf-8")) ?? {};
@@ -100,7 +100,7 @@ export function loadUniverseFilters(): UniverseFilters {
 }
 
 // The scannable/searchable symbol for a holding. Option holdings carry a
-// composite display ticker ("MRVL 2026-07-24 203C") that is NOT a real symbol —
+// composite display ticker ("MRVL 2026-07-24 203C") that is NOT a real symbol -
 // map it to the underlying. Crypto ("SOL-USD") is unsupported and dropped. This
 // is the chokepoint every caller (search universe, detectors, daily-stats,
 // briefing) funnels through, so normalizing here keeps composites out of all of
@@ -147,7 +147,7 @@ if (import.meta.main) {
   console.log("asRiskAppetite self-check ok");
 
   // Signup allowlist: an empty result means OPEN, so every parse that should yield
-  // "no list" must actually yield [] — and every populated one must survive the
+  // "no list" must actually yield []: and every populated one must survive the
   // whitespace and casing people really type into a hosting dashboard.
   for (const empty of [undefined, "", "   ", ",", " , , "]) {
     const got = parseSignupAllowlist(empty);
@@ -163,7 +163,7 @@ if (import.meta.main) {
 }
 
 // Signup gate. Emails arrive from the form already trimmed+lowercased, so the list
-// is normalized the same way — otherwise a stray space or capital in the env var
+// is normalized the same way: otherwise a stray space or capital in the env var
 // silently locks the owner out of their own instance.
 export function parseSignupAllowlist(raw: string | undefined): string[] {
   return (raw ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
@@ -171,7 +171,7 @@ export function parseSignupAllowlist(raw: string | undefined): string[] {
 
 export const config = {
   finnhubKey: process.env.FINNHUB_API_KEY ?? "",
-  // Financial Modeling Prep — optional primary source for daily candles. Unset
+  // Financial Modeling Prep: optional primary source for daily candles. Unset
   // means every price bar comes from Yahoo, exactly as before. Even when set,
   // plan-restricted symbols (most ETFs, class shares) fall back to Yahoo per
   // symbol, so this never has to be all-or-nothing. See ingest/fmp.ts.
@@ -182,16 +182,16 @@ export const config = {
   // Transactional email (Resend), used only to prove someone controls the
   // address they signed up with. The default sender is Resend's shared sandbox
   // domain: no DNS setup, but it ONLY delivers to your own Resend account
-  // address — set EMAIL_FROM to an address on a domain you've verified to reach
+  // address: set EMAIL_FROM to an address on a domain you've verified to reach
   // anyone else.
   resendKey: process.env.RESEND_API_KEY ?? "",
   emailFrom: process.env.EMAIL_FROM ?? "onboarding@resend.dev",
-  // Comma-separated emails allowed to create an account. EMPTY MEANS OPEN — fine on
+  // Comma-separated emails allowed to create an account. EMPTY MEANS OPEN: fine on
   // localhost, but a public instance must set it: every account with holdings runs
   // its own triage and briefings, so an open signup is an open invitation to spend
   // your Anthropic credits. Matched against the lowercased, trimmed email.
   signupAllowlist: parseSignupAllowlist(process.env.SIGNUP_ALLOWLIST),
-  // Supabase Postgres connection string. Required — the app has no local fallback.
+  // Supabase Postgres connection string. Required: the app has no local fallback.
   databaseUrl: process.env.DATABASE_URL ?? "",
   // Legacy SQLite path, retained only for the one-time migration script.
   dbPath: join(ROOT, "data/sharpedge.db"),
@@ -202,7 +202,7 @@ export const config = {
   modelFast: process.env.SHARPEDGE_MODEL_FAST ?? "claude-haiku-4-5",
 };
 
-// Eastern Time components, extracted directly from Intl parts —
+// Eastern Time components, extracted directly from Intl parts -
 // no round-trip through a locale-string Date parse.
 const ET_FMT = new Intl.DateTimeFormat("en-US", {
   timeZone: "America/New_York",
@@ -232,7 +232,7 @@ export function etNow(now = new Date()): { mins: number; day: number } {
   return { mins, day };
 }
 
-// Real UTC epoch (ms) for a given ET wall-clock date+time — DST-correct. Finds
+// Real UTC epoch (ms) for a given ET wall-clock date+time: DST-correct. Finds
 // the ET offset at a first guess, then refines once in case the guess landed on
 // the far side of a spring-forward/fall-back boundary.
 export function etWallToEpoch(year: number, month1: number, dom: number, hour: number, minute: number): number {

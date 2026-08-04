@@ -33,7 +33,7 @@ if (!config.finnhubKey) {
 // dropped database connection.
 //
 // Supabase closes pooled connections that have gone idle, and Bun's SQL client
-// surfaces that from its socket-close handler rather than at a query `await` —
+// surfaces that from its socket-close handler rather than at a query `await` -
 // so it arrives as an UNHANDLED rejection that no call site can catch, and the
 // whole process exits. Observed repeatedly: `PostgresError: Connection closed`,
 // exit 1, overnight, taking the alerts and the morning briefing with it. The
@@ -51,11 +51,11 @@ process.on("unhandledRejection", (reason) => {
 // SHARP-29: background monitoring covers EVERY account, not just the first
 // signup. The split that makes that affordable:
 //
-//   detection  — a market fact, shared. Each ticker is fetched ONCE per cycle
+//   detection : a market fact, shared. Each ticker is fetched ONCE per cycle
 //                no matter how many accounts watch it, so the Finnhub call
 //                budget is driven by the union of everyone's tickers, not by
 //                users × tickers.
-//   triage/analysis/briefings — an opinion about YOUR portfolio, so these fan
+//   triage/analysis/briefings: an opinion about YOUR portfolio, so these fan
 //                out per account. This is the part that costs tokens, and it
 //                only runs for accounts that actually hold or watch the ticker.
 //
@@ -85,7 +85,7 @@ console.log(
 
 // Circuit breaker trips fire an immediate CRITICAL alert on every channel.
 setTripHandler(async (name, count, windowSec) => {
-  const msg = `Circuit Breaker Tripped — ${name} hit ${count} calls in ${windowSec}s. AI halted to prevent spend. Monitoring continues; reset from the dashboard.`;
+  const msg = `Circuit Breaker Tripped: ${name} hit ${count} calls in ${windowSec}s. AI halted to prevent spend. Monitoring continues; reset from the dashboard.`;
   broadcast("health", { breakerTripped: name });
   await notifyMac("🚨 sharpEdge: AI HALTED", msg);
   if (telegramEnabled()) await notifyTelegram(`🚨 *sharpEdge: AI HALTED*\n\n${msg}`);
@@ -94,23 +94,23 @@ setTripHandler(async (name, count, windowSec) => {
 // ── Pipeline: event → triage → (analysis) → notify → broadcast ──────────────
 
 // No-token severity heuristic used when live AI updates are paused. Takes the
-// portfolio explicitly — "held" is the whole point of the heuristic and it
+// portfolio explicitly: "held" is the whole point of the heuristic and it
 // differs per account.
 function heuristicSeverity(event: RawEvent, portfolio: Portfolio): { severity: "critical" | "high" | "info"; rationale: string } {
   const held = portfolio.holdings.some((h) => h.ticker === event.ticker);
   const kind = event.kind;
-  if (kind === "death_cross") return { severity: "high", rationale: "AI paused — death cross on held position (rule-based)." };
-  if (kind === "market_mover") return { severity: "info", rationale: "AI paused — abnormal mover promoted to monitoring (rule-based)." };
-  if (kind === "screener_short" && held) return { severity: "critical", rationale: "AI paused — strong short setup on a HELD position (rule-based)." };
+  if (kind === "death_cross") return { severity: "high", rationale: "AI paused: death cross on held position (rule-based)." };
+  if (kind === "market_mover") return { severity: "info", rationale: "AI paused: abnormal mover promoted to monitoring (rule-based)." };
+  if (kind === "screener_short" && held) return { severity: "critical", rationale: "AI paused: strong short setup on a HELD position (rule-based)." };
   if (kind === "golden_cross" || kind === "screener_pick" || kind === "screener_short")
-    return { severity: "high", rationale: "AI paused — screener setup (rule-based)." };
+    return { severity: "high", rationale: "AI paused: screener setup (rule-based)." };
   if ((kind === "filing" || kind === "earnings" || kind === "price_move") && held)
-    return { severity: "high", rationale: "AI paused — material event on held position (rule-based)." };
-  return { severity: "info", rationale: "AI paused — rule-based severity." };
+    return { severity: "high", rationale: "AI paused: material event on held position (rule-based)." };
+  return { severity: "info", rationale: "AI paused: rule-based severity." };
 }
 
 // One event, interpreted once per account that watches the ticker. `owners` is
-// empty for a swept market mover nobody holds — then nothing is triaged and no
+// empty for a swept market mover nobody holds: then nothing is triaged and no
 // tokens are spent, which is the desired behaviour rather than an edge case.
 async function processEvent(event: RawEvent, owners: number[]) {
   if (!owners.length) return;
@@ -125,7 +125,7 @@ async function processEvent(event: RawEvent, owners: number[]) {
     let signal = null;
 
     if (!live) {
-      // Live updates paused: no tokens spent — rule-based severity, no analysis.
+      // Live updates paused: no tokens spent: rule-based severity, no analysis.
       triage = heuristicSeverity(event, portfolio);
     } else {
       triage = await triageEvent(event, portfolio);
@@ -145,12 +145,12 @@ async function processEvent(event: RawEvent, owners: number[]) {
       ...(signal ?? {}),
     });
 
-    // Notifications fire ONLY for actionable buy/sell advice — plain language.
+    // Notifications fire ONLY for actionable buy/sell advice: plain language.
     const isBuy = signal && (signal.action === "buy" || signal.action === "add");
     const isSell = signal && (signal.action === "sell" || signal.action === "trim");
     if (signal && (isBuy || isSell)) {
       const headline = signal.plain_headline || `${isBuy ? "Consider buying" : "Consider selling"} ${event.ticker}.`;
-      // macOS and Telegram are single, machine-wide channels — there is one
+      // macOS and Telegram are single, machine-wide channels: there is one
       // TELEGRAM_CHAT_ID, not one per account. With more than one monitored
       // account the alert is tagged so it's clear whose position it's about.
       const tag = await accountTag(userId);
@@ -165,7 +165,7 @@ async function processEvent(event: RawEvent, owners: number[]) {
 }
 
 // " (vignesh@…)" when more than one account is monitored, "" when there's only
-// one — a solo user shouldn't have their own email stapled to every alert.
+// one: a solo user shouldn't have their own email stapled to every alert.
 const emailCache = new Map<number, string>();
 async function accountTag(userId: number): Promise<string> {
   if ((await monitoredUserIds()).length < 2) return "";
@@ -195,7 +195,7 @@ async function runDetectors() {
     }
   }
   // Dynamically-promoted market movers (from the index sweep): news + filings
-  // only — they have no local bar history for price detectors, and their move
+  // only: they have no local bar history for price detectors, and their move
   // was already captured by the sweep event itself. Nobody holds these by
   // definition, so they go to every monitored account as market awareness.
   const everyone = await monitoredUserIds();
@@ -258,10 +258,10 @@ function scheduleBriefings() {
     const kind = mins >= 9 * 60 && mins < 9 * 60 + 10 ? "open"
                : mins >= 16 * 60 + 15 && mins < 16 * 60 + 25 ? "close" : null;
     if (!kind || lastBriefingDay[kind] === today) return;
-    if (!aiLive()) return; // live updates paused — skip scheduled briefings
+    if (!aiLive()) return; // live updates paused: skip scheduled briefings
     lastBriefingDay[kind] = today;
     // One briefing per account, each written against that account's positions.
-    // A deep-model call each, twice a day — the largest fixed per-account cost
+    // A deep-model call each, twice a day: the largest fixed per-account cost
     // in the fan-out. Accounts with nothing to brief on are skipped rather than
     // paying for "you hold nothing".
     for (const u of await monitoredUsers()) {
@@ -270,7 +270,7 @@ function scheduleBriefings() {
         console.log(`[briefing] generating ${kind} briefing for user ${u.id}`);
         const content = await generateBriefing(kind, u.portfolio, u.id);
         broadcastTo(u.id, "briefing", { kind, content });
-        // no notification — briefings live on the dashboard; alerts are reserved for buy/sell advice
+        // no notification: briefings live on the dashboard; alerts are reserved for buy/sell advice
       } catch (err) {
         console.error(`[briefing] user ${u.id}:`, err);
       }
@@ -286,7 +286,7 @@ function scheduleSweep() {
     try {
       const universe = await scanUniverse();
       if (!universe.length) return;
-      // "watched" excludes tickers already covered by the detector loop — that's
+      // "watched" excludes tickers already covered by the detector loop: that's
       // the union across accounts now, so a name one user holds isn't swept as
       // an anonymous mover for everyone else.
       const watch = await watchMap();
@@ -303,7 +303,7 @@ function scheduleSweep() {
   setInterval(sweep, 15 * 60_000);
 }
 
-// Screener: full scan at boot, then every 6 hours. Pure math — no AI cost;
+// Screener: full scan at boot, then every 6 hours. Pure math: no AI cost;
 // any setups it finds flow through processEvent (which respects the AI toggle).
 // Market context (regime/sectors) refreshes right before each scan so scores
 // and idea validation always reference the current tape.
@@ -329,7 +329,7 @@ function scheduleScreener() {
   setInterval(scan, 6 * 3600_000);
 }
 
-// Market context alone is cheap (~16 chart fetches) — keep the regime fresh
+// Market context alone is cheap (~16 chart fetches): keep the regime fresh
 // between scans during trading hours.
 function scheduleMarketContext() {
   setInterval(async () => {
@@ -345,7 +345,7 @@ function scheduleMarketContext() {
 
 // Data-feed canaries (SHARP-9): every 30 minutes, plus one probe a minute after
 // boot so a feed that broke overnight is visible before the first scan leans on
-// it. Deliberately not tied to market hours — a shape change on a Sunday is
+// it. Deliberately not tied to market hours: a shape change on a Sunday is
 // still worth knowing about before Monday's open.
 function scheduleCanaries() {
   const tick = async () => {
@@ -357,7 +357,7 @@ function scheduleCanaries() {
 
 // Expired sessions and abandoned signups, swept daily. cleanupExpiredSessions()
 // has existed since auth was added but was never actually called, so sessions
-// accumulated forever — 14 rows survived across three accounts before the last
+// accumulated forever: 14 rows survived across three accounts before the last
 // account reset. Neither sweep is load-bearing (validateSession and
 // verifySignupToken both check expiry themselves), this just stops dead rows
 // piling up.
@@ -385,7 +385,7 @@ function scheduleUniverse() {
 // Broker: re-pull positions/orders/equity and push to the dashboard. A live
 // linked broker (Robinhood) refreshes every 60s while the market is open
 // for near-live position updates; otherwise every 15 minutes.
-// Every account is refreshed, not just the first — a linked broker is what makes
+// Every account is refreshed, not just the first: a linked broker is what makes
 // an account's monitoring real, and it used to be pulled on a timer for user 1
 // only. The cadence is driven by whether ANY account has a live link.
 function scheduleBroker() {
@@ -406,12 +406,12 @@ function scheduleBroker() {
 }
 
 // Insights: upcoming-earnings cache + options expiry warnings. Twice a day is
-// plenty — earnings dates and days-to-expiry move on a daily clock.
+// plenty: earnings dates and days-to-expiry move on a daily clock.
 function scheduleInsights() {
   const tick = async () => {
     try {
       const users = await monitoredUsers();
-      // Expiry warnings are position-specific — "your NVDA calls expire in 3
+      // Expiry warnings are position-specific: "your NVDA calls expire in 3
       // days" only means something against the portfolio that holds them.
       for (const u of users) {
         try { await checkOptionExpiries(u.portfolio, u.id); }
@@ -422,7 +422,7 @@ function scheduleInsights() {
       const union = unionPortfolio(users);
       const held = union.holdings.filter((h) => (h.asset_class ?? "equity") === "equity").map((h) => h.ticker);
       await refreshEarnings([...new Set(held)]);
-      console.log(`[insights] tick done — ${users.length} accounts, ${union.holdings.filter((h) => h.asset_class === "option").length} options checked, earnings refreshed for ${held.length} tickers`);
+      console.log(`[insights] tick done: ${users.length} accounts, ${union.holdings.filter((h) => h.asset_class === "option").length} options checked, earnings refreshed for ${held.length} tickers`);
       broadcast("broker", { source: "insights" }); // nudge the dashboard to re-pull state (earnings chips)
     } catch (err) {
       console.error("[insights]", err);
@@ -477,7 +477,7 @@ setBriefingHandler(async (userId) => {
 
 // Listen before the slow part. refreshUniverse walks ~12k NASDAQ symbols and
 // loadCikMap resolves ~3k CIKs against EDGAR, which together can run for minutes
-// on a cold container — long enough that a hosting platform's healthcheck gives up
+// on a cold container: long enough that a hosting platform's healthcheck gives up
 // and marks the deploy failed while the process is in fact healthy. Serving first
 // costs nothing: routes read the database per request, and the only things warming
 // up behind this are search coverage and EDGAR lookups.
@@ -488,7 +488,7 @@ startServer();
 const universeList = await refreshUniverse(unionPortfolio(await monitoredUsers()));
 await seedFutures(); // futures contracts join the universe (searchable/scorable/chartable)
 await loadCikMap(universeList);
-// One websocket subscription list covering every account's tickers — trades are
+// One websocket subscription list covering every account's tickers: trades are
 // public, so a shared stream is both correct and the only affordable option.
 startTradeStream([...bootWatch.keys()]);
 scheduleDailyStats();
@@ -503,4 +503,4 @@ scheduleInsights();
 scheduleCanaries();
 scheduleAuthCleanup();
 startCacheHeartbeat(unionPortfolio(await monitoredUsers()));
-console.log(`[sharpEdge] running — market is currently ${marketPhase()}`);
+console.log(`[sharpEdge] running: market is currently ${marketPhase()}`);

@@ -2,8 +2,8 @@ import { expect, test, afterAll } from "bun:test";
 import { db } from "../db";
 import { sectorHeatmap } from "./market";
 
-// sector_history is appended irregularly — on a state change, or hourly,
-// whichever comes first — so the bucketing is where this can silently go wrong:
+// sector_history is appended irregularly: on a state change, or hourly,
+// whichever comes first: so the bucketing is where this can silently go wrong:
 // pick the wrong row in a week and the heatmap shows a transient intraday blip
 // as if it were the week's verdict. These pin "last row in the week wins" and
 // the shape of the axis.
@@ -43,7 +43,7 @@ test("each cell is the week's LAST reading, not its first or its loudest", async
     [FAKE, MON_1 + 4 * 86400, "leading", 3.5],      // Fri, the close
   ]);
 
-  // Window must reach back past MON_1 — these are fixed historical dates.
+  // Window must reach back past MON_1: these are fixed historical dates.
   const weeksBack = Math.ceil((Date.now() / 1000 - MON_1) / WEEK) + 2;
   const cells = rowFor(await sectorHeatmap(weeksBack), FAKE)!.cells.filter(Boolean);
   expect(cells).toHaveLength(1);
@@ -87,7 +87,7 @@ test("the axis runs oldest → newest and every row aligns to it", async () => {
   const weeksBack = Math.ceil((Date.now() / 1000 - MON_1) / WEEK) + 2;
   const hm = await sectorHeatmap(weeksBack);
   expect(hm.weeks).toEqual([...hm.weeks].sort((a, b) => a - b));
-  // Every row is padded to the axis length — the UI indexes cells by column.
+  // Every row is padded to the axis length: the UI indexes cells by column.
   for (const r of hm.rows) expect(r.cells).toHaveLength(hm.weeks.length);
   // Stronger sector first: FAKE (+1) outranks FAKE_B (-6) on their latest week.
   const order = hm.rows.map((r) => r.sector).filter((s) => s.startsWith("__canary_test_sector"));

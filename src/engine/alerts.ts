@@ -1,11 +1,11 @@
 // Price / score alerts from the ticker detail panel.
 //
 // Crossing semantics: an alert stores the last observed value. It fires only on
-// a false→true transition AFTER creation — an alert created while the condition
+// a false→true transition AFTER creation: an alert created while the condition
 // is already true stays silent until the value dips out and crosses back in.
 // This is why last_value is seeded at creation and persisted (survives restart).
 // Fire-once by default: on firing, the alert deactivates (active=0); re-arm =
-// re-create. Recurring alerts (the `recurring` flag) stay armed instead —
+// re-create. Recurring alerts (the `recurring` flag) stay armed instead -
 // they re-fire on each fresh crossing without ever needing to be re-created.
 //
 // Coverage: the detector loop (runDetectors) only fetches quotes for
@@ -43,7 +43,7 @@ export function conditionMet(kind: AlertKind, value: number, threshold: number):
   return false;
 }
 // Fire only when the condition flips false→true. A null prior (shouldn't happen
-// post-seed) never fires — it just seeds on the next observation.
+// post-seed) never fires: it just seeds on the next observation.
 export function shouldFire(kind: AlertKind, prev: number | null, cur: number, threshold: number): boolean {
   if (prev == null) return false;
   return !conditionMet(kind, prev, threshold) && conditionMet(kind, cur, threshold);
@@ -109,10 +109,10 @@ function alertMessage(a: AlertRow, cur: number): string {
 
 async function deliver(text: string): Promise<void> {
   // Fire-and-forget from the caller's view (callers do not await). Failures are
-  // logged, never thrown — a dead channel must not disarm the alert or crash the loop.
+  // logged, never thrown: a dead channel must not disarm the alert or crash the loop.
   // allSettled, not sequential awaits: a Telegram outage must not also swallow
   // the macOS notification. The alert is already deactivated by the time we get
-  // here, so a lost notification is lost for good — try every channel.
+  // here, so a lost notification is lost for good: try every channel.
   // Off macOS notifyMac shells osascript, fails, and logs [notify:mac] failed:
   // per delivery. It is NOT a silent no-op. Telegram is the real channel here.
   const results = await Promise.allSettled([
@@ -128,7 +128,7 @@ async function processObservation(a: AlertRow, cur: number): Promise<void> {
   if (shouldFire(a.kind, a.last_value, cur, a.threshold)) {
     // Recurring alerts stay armed: last_value keeps updating, so the crossing
     // logic naturally requires the value to leave the zone before it can fire
-    // again — no spam while the condition stays true.
+    // again: no spam while the condition stays true.
     await db.query(`UPDATE alerts SET active = ?, last_value = ?, last_fired_ts = extract(epoch from now())::int WHERE id = ?`)
       .run(a.recurring ? 1 : 0, cur, a.id);
     console.log(`[alerts] FIRED #${a.id} ${a.ticker} ${a.kind} ${a.threshold} → ${cur}${a.recurring ? " (recurring, re-armed)" : ""}`);
@@ -204,7 +204,7 @@ if (import.meta.main) {
   assert(simulate("price_above", 100, 105, [106, 108, 112]) === 0, "created-while-true stays silent");
   assert(simulate("price_above", 100, 105, [98, 96, 103]) === 1, "re-crosses after dipping out: fires");
 
-  // recurring: mirrors processObservation's `active: a.recurring ? 1 : 0` — stays
+  // recurring: mirrors processObservation's `active: a.recurring ? 1 : 0`: stays
   // armed after firing, but the crossing logic still requires leaving the zone
   // first, so a value that stays above threshold must NOT fire twice in a row.
   assert(simulate("price_above", 100, 95, [105, 108, 112], true) === 1, "recurring: no repeat fire while still above");

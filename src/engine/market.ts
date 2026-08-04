@@ -1,5 +1,5 @@
 // Market context engine: benchmark trend/volatility regime, sector rotation,
-// and breadth. Pure math over free Yahoo data — no AI cost. Everything that
+// and breadth. Pure math over free Yahoo data: no AI cost. Everything that
 // judges an individual setup (screener scores, validator, intraday analyzer,
 // briefings) reads this context so ideas are never rated in a vacuum.
 import { db } from "../db";
@@ -10,7 +10,7 @@ import { sma, slopePctPerBar } from "./technicals";
 // SPY/QQQ/IWM stay in the fetch set: SPY drives regime + every sector's rel1m +
 // breadth (see refreshMarketContext), and QQQ/IWM feed relative-strength math.
 // The ^-prefixed indices are added so the dashboard can DISPLAY the real indices
-// (Dow/S&P/Nasdaq/Russell) instead of the ETF proxies — renderMarket picks which
+// (Dow/S&P/Nasdaq/Russell) instead of the ETF proxies: renderMarket picks which
 // keys to show; the math keeps using SPY.
 export const BENCHMARKS = ["SPY", "QQQ", "IWM", "^VIX", "^GSPC", "^DJI", "^IXIC", "^RUT"] as const;
 
@@ -44,7 +44,7 @@ export interface MarketSnapshot {
   benchmarks: Record<string, { price: number; ret1d: number; ret1w: number; ret1m: number }>;
 }
 
-// In-memory benchmark candle cache — the screener reuses these closes for
+// In-memory benchmark candle cache: the screener reuses these closes for
 // relative-strength and beta math without refetching per ticker.
 const candleCache = new Map<string, DailyCandles>();
 export const benchmarkCandles = (symbol: string) => candleCache.get(symbol) ?? null;
@@ -113,7 +113,7 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   const trendWord = trend === "up" ? "Uptrend" : trend === "down" ? "Downtrend" : "Sideways/choppy";
   const regime: MarketRegime = {
     trend, volatility, breadthPct, riskOff, vix, vixChange5d, spyVs200,
-    label: `${trendWord}, ${volatility} volatility${riskOff ? " — RISK-OFF" : ""}`,
+    label: `${trendWord}, ${volatility} volatility${riskOff ? ": RISK-OFF" : ""}`,
     description:
       `S&P 500 is in a ${trendWord.toLowerCase()} regime` +
       (spyVs200 != null ? ` (${spyVs200 >= 0 ? "+" : ""}${spyVs200.toFixed(1)}% vs its 200-day average)` : "") +
@@ -162,7 +162,7 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
   ).run(snapshot.ts, JSON.stringify(regime), JSON.stringify(sectors), JSON.stringify(benchmarks));
 
   // F6a: append rotation history, but only when a sector's state changes or its
-  // last row is ≥1h old — cadence-proof, so a burst of refreshes can't flood it.
+  // last row is ≥1h old: cadence-proof, so a burst of refreshes can't flood it.
   const lastFor = db.query(`SELECT state, ts FROM sector_history WHERE sector = ? ORDER BY ts DESC LIMIT 1`);
   const appendHist = db.query(`INSERT INTO sector_history (sector, ts, state, rel1m) VALUES (?, ?, ?, ?) ON CONFLICT (sector, ts) DO NOTHING`);
   for (const s of sectors) {
@@ -179,13 +179,13 @@ export async function refreshMarketContext(): Promise<MarketSnapshot> {
 // ── F6b / SHARP-8: sector rotation heatmap ───────────────────────────────────
 //
 // "What's rotating now" (the table above) versus "what's been rotating for
-// three weeks" (this). sector_history is appended irregularly — on a state
-// change, or hourly, whichever comes first — so the rows are neither weekly nor
+// three weeks" (this). sector_history is appended irregularly: on a state
+// change, or hourly, whichever comes first: so the rows are neither weekly nor
 // evenly spaced. Each cell is therefore the LAST row inside that ISO week: how
 // the week ENDED, which is the reading that survives intraweek noise.
 //
 // The axis spans the weeks that actually have data, newest last, capped at
-// `weeks`. It deliberately does NOT pad out to a fixed 12 columns — eleven empty
+// `weeks`. It deliberately does NOT pad out to a fixed 12 columns: eleven empty
 // cells next to one filled one reads as a broken widget rather than a young one.
 export interface HeatmapCell {
   week: number;              // unix ts of the Monday starting that week
@@ -219,7 +219,7 @@ export async function sectorHeatmap(weeks = 12): Promise<SectorHeatmap> {
     bySector.get(r.sector)!.set(r.week, { week: r.week, state: r.state, rel1m: r.rel1m });
   }
 
-  // Strongest sector first, by the most recent week it has a reading for — same
+  // Strongest sector first, by the most recent week it has a reading for: same
   // ordering idea as the rotation table, so the two line up visually.
   const latestRel = (cells: Map<number, HeatmapCell>) => {
     for (let i = axis.length - 1; i >= 0; i--) {

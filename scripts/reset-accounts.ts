@@ -21,7 +21,7 @@ const confirmed = process.argv.includes("--yes");
 
 const users = await db.query(`SELECT id, email FROM users ORDER BY id`).all<{ id: number; email: string }>();
 if (!users.length) {
-  console.log("No accounts exist — nothing to reset.");
+  console.log("No accounts exist: nothing to reset.");
   process.exit(0);
 }
 
@@ -51,7 +51,7 @@ const keptSettings = ((await db.query(`SELECT count(*)::int n FROM settings WHER
 console.log(`\nKept: ${keptEvents} public events, ${keptSettings} global settings, plus screener/universe/bars/sector_history.`);
 
 if (!confirmed) {
-  console.log("\nDry run — nothing deleted. Re-run with --yes to actually do it.");
+  console.log("\nDry run: nothing deleted. Re-run with --yes to actually do it.");
   process.exit(0);
 }
 
@@ -71,7 +71,7 @@ await db.transaction(async () => {
                    "chat_messages", "chat_threads"]) {
     await db.query(`DELETE FROM ${t}`).run();
   }
-  // Per-user settings only — user_id 0 is the global namespace (ai_live etc).
+  // Per-user settings only: user_id 0 is the global namespace (ai_live etc).
   await db.query(`DELETE FROM settings WHERE user_id <> 0`).run();
   // The few events that belong to one account rather than the market.
   await db.query(`DELETE FROM events WHERE user_id IS NOT NULL`).run();

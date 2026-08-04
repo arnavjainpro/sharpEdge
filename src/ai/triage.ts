@@ -15,7 +15,7 @@ export interface TriageResult {
   rationale: string;
 }
 
-// Stable system prompt — kept byte-identical so the prompt cache hits.
+// Stable system prompt: kept byte-identical so the prompt cache hits.
 // Exported so the cache heartbeat can send the exact same prefix.
 export function triageSystemPrompt(portfolio: Portfolio): string {
   const held = portfolio.holdings.map((h) => `${h.ticker} (${h.shares} shares)`).join(", ");
@@ -26,9 +26,9 @@ The investor holds: ${held || "no positions"}.
 Watchlist (not held): ${watched || "none"}.
 
 Severity levels:
-- "critical": likely to materially move the stock (>3-4%) or requires a same-day decision — e.g. surprise 8-K, activist 13D, big earnings miss/beat, guidance cut, M&A, CEO departure, sudden crash/spike on heavy volume.
-- "high": meaningful and worth reading today, but not decision-forcing — notable analyst-grade news, unusual volume with a plausible cause, routine 10-Q from a held position, moderate earnings surprise.
-- "info": routine noise — minor PR, listicle press coverage, small moves, insider Form 4s of modest size, events on watchlist names with no position impact.
+- "critical": likely to materially move the stock (>3-4%) or requires a same-day decision: e.g. surprise 8-K, activist 13D, big earnings miss/beat, guidance cut, M&A, CEO departure, sudden crash/spike on heavy volume.
+- "high": meaningful and worth reading today, but not decision-forcing: notable analyst-grade news, unusual volume with a plausible cause, routine 10-Q from a held position, moderate earnings surprise.
+- "info": routine noise: minor PR, listicle press coverage, small moves, insider Form 4s of modest size, events on watchlist names with no position impact.
 
 Screener events (kinds: golden_cross, death_cross, screener_pick, screener_short) are technical setups computed from real daily price history, not news:
 - death_cross on a held position → "critical"; on anything else → "high".
@@ -55,7 +55,7 @@ export async function triageEvent(event: RawEvent, portfolio: Portfolio): Promis
     const held = portfolio.holdings.some((h) => h.ticker === event.ticker);
     const fallback: TriageResult = {
       severity: held ? "high" : "info",
-      rationale: "Circuit breaker tripped — AI triage halted; defaulted by holding status.",
+      rationale: "Circuit breaker tripped: AI triage halted; defaulted by holding status.",
     };
     await setTriage(event.id, fallback.severity, fallback.rationale);
     return fallback;
@@ -91,7 +91,7 @@ export async function triageEvent(event: RawEvent, portfolio: Portfolio): Promis
     const held = portfolio.holdings.some((h) => h.ticker === event.ticker);
     const fallback: TriageResult = {
       severity: held ? "high" : "info",
-      rationale: "Triage unavailable — defaulted by holding status.",
+      rationale: "Triage unavailable: defaulted by holding status.",
     };
     await setTriage(event.id, fallback.severity, fallback.rationale);
     return fallback;

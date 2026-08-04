@@ -28,7 +28,7 @@ test("a textbook plan scores full marks", () => {
 test("a stop on the wrong side of entry zeroes risk-defined and everything downstream of it", () => {
   const r = scoreProcess(long({ stop: 102 }), ctx);
   expect(got(r, "Risk defined")).toBe(0);
-  // R:R and stop distance are meaningless once the stop is inverted — they must
+  // R:R and stop distance are meaningless once the stop is inverted: they must
   // not hand out marks off an absurd plan.
   expect(got(r, "Reward vs risk")).toBe(0);
   expect(got(r, "Stop distance")).toBe(0);
@@ -60,7 +60,7 @@ test("stop distance rejects both a noise-tight stop and a runaway-wide one", () 
   expect(got(tight, "Stop distance")).toBe(0);
   expect(got(wide, "Stop distance")).toBe(0);
   expect(got(ok, "Stop distance")).toBe(25);
-  // A 5x-ATR stop is still a *defined* risk, so that criterion stays earned —
+  // A 5x-ATR stop is still a *defined* risk, so that criterion stays earned -
   // the criteria have to be independent or the score stops being diagnostic.
   expect(got(wide, "Risk defined")).toBe(25);
 });
@@ -95,7 +95,7 @@ test("passing is correct when price goes nowhere and wrong when it runs", () => 
   expect(ran.outcome).toBe("pass_missed");
   expect(ran.netAtr).toBeCloseTo(6, 5);
 
-  // Direction does not matter — a hard move down is just as missed.
+  // Direction does not matter: a hard move down is just as missed.
   expect(gradePass({ closes: [100, 90] }, 2).outcome).toBe("pass_missed");
 });
 

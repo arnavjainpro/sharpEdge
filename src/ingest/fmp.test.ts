@@ -4,7 +4,7 @@ import { fetchDailyCandlesFmp, isRestricted, fmpQuotaBlocked, _clearRestricted, 
 import { config } from "../config";
 
 // fmp.ts no-ops without a key. Setting FMP_API_KEY here would be too late in a
-// full-suite run — config snapshots process.env at import, and another test file
+// full-suite run: config snapshots process.env at import, and another test file
 // may already have pulled it in. Writing the field is order-independent.
 const realKey = config.fmpKey;
 config.fmpKey = "test-key";
@@ -31,7 +31,7 @@ function stub(body: unknown, ok = true) {
   return () => calls;
 }
 
-// Plan refusals come back as 402 carrying bare prose — NOT JSON, and NOT a 200.
+// Plan refusals come back as 402 carrying bare prose: NOT JSON, and NOT a 200.
 // Stubbing them as JSON, or as an ok response, hides both halves of the bug:
 // JSON.parse throws on the body, and an early !res.ok bail skips the check.
 function stubRaw(text: string, status = 402) {
@@ -62,11 +62,11 @@ test("bars are stamped 09:30 ET, DST-correct on both sides of the boundary", asy
 });
 
 test("a 402 + prose plan refusal returns null and is memoized, not re-requested", async () => {
-  // Verbatim from the live API — unquoted prose, so JSON.parse throws on it.
+  // Verbatim from the live API: unquoted prose, so JSON.parse throws on it.
   const calls = stubRaw("Premium Query Parameter: 'Special Endpoint : This value set for 'symbol' is not available under your current subscription");
   expect(await fetchDailyCandlesFmp("XLK", "1y", 1)).toBeNull();
   expect(isRestricted("XLK")).toBe(true);
-  // Second call must not spend another request — this is what keeps a
+  // Second call must not spend another request: this is what keeps a
   // 1,500-name screener pass from re-buying the same rejection.
   expect(await fetchDailyCandlesFmp("XLK", "1y", 1)).toBeNull();
   expect(calls()).toBe(1);
@@ -108,7 +108,7 @@ test("a spent request allowance trips a global breaker, not a per-symbol retry",
 });
 
 test("a bad key falls back without condemning the symbol for the process lifetime", async () => {
-  // A revoked or mistyped key must not permanently pin every symbol to Yahoo —
+  // A revoked or mistyped key must not permanently pin every symbol to Yahoo -
   // fixing the key should be enough to recover, without a restart.
   stub({ "Error Message": "Invalid API KEY. Feel free to create a Free API Key" });
   expect(await fetchDailyCandlesFmp("AAPL", "1y", 1)).toBeNull();

@@ -1,7 +1,7 @@
 // One-time interactive Robinhood login from the terminal. The dashboard's
-// Settings → Brokerage panel does the same thing in the UI — both call
+// Settings → Brokerage panel does the same thing in the UI: both call
 // linkRobinhood(), this one just prompts for codes on the console.
-// Run: `bun run link:robinhood`  (read-only access — sharpEdge never trades).
+// Run: `bun run link:robinhood`  (read-only access: sharpEdge never trades).
 import { linkRobinhood, clearAuth } from "../src/broker/robinhood";
 import { findUserByEmail } from "../src/auth";
 

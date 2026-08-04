@@ -43,8 +43,8 @@ import { join } from "path";
 // ── SSE hub ──────────────────────────────────────────────────────────────────
 // Clients carry their userId so pushes can be addressed. Market-wide news
 // (regime refresh, screener finished) still goes to everyone via broadcast();
-// anything derived from a portfolio — an event's severity, a signal, a briefing
-// — goes through broadcastTo so it reaches only the account it was written for.
+// anything derived from a portfolio: an event's severity, a signal, a briefing
+//: goes through broadcastTo so it reaches only the account it was written for.
 type SSEClient = { controller: ReadableStreamDefaultController; id: number; userId: number };
 const clients = new Map<number, SSEClient>();
 let nextClientId = 1;
@@ -112,7 +112,7 @@ export function startServer() {
       }
 
       // Static brand assets (logo, favicon). Whitelisted by basename rather than
-      // joined from user input — no path segment from the URL reaches the disk,
+      // joined from user input: no path segment from the URL reaches the disk,
       // so "/assets/../../.env" can't escape the directory.
       if (url.pathname.startsWith("/assets/")) {
         const name = url.pathname.slice("/assets/".length);
@@ -143,14 +143,14 @@ export function startServer() {
           // Gate before the existence check, so a rejected address can't be used to
           // probe which emails already have accounts.
           if (config.signupAllowlist.length && !config.signupAllowlist.includes(email)) {
-            return Response.json({ ok: false, error: "this instance is invite-only — ask the owner to add your email" }, { status: 403 });
+            return Response.json({ ok: false, error: "this instance is invite-only: ask the owner to add your email" }, { status: 403 });
           }
           if (await findUserByEmail(email)) return Response.json({ ok: false, error: "an account with that email already exists" }, { status: 409 });
           const passwordHash = await hashPassword(password);
 
           // No mail transport means there is no way to verify anything, so
           // signup behaves as it did before this feature rather than bricking
-          // the app — every other optional key here disables one feature.
+          // the app: every other optional key here disables one feature.
           if (!emailEnabled()) {
             const userId = await createUser(email, passwordHash);
             const token = await createSession(userId);
@@ -161,7 +161,7 @@ export function startServer() {
           const mail = verificationEmail(code);
           if (!(await sendEmail(email, mail.subject, mail.text, mail.html))) {
             await discardSignup(email); // don't strand a signup nobody can confirm
-            return Response.json({ ok: false, error: "could not send the verification email — try again shortly" }, { status: 502 });
+            return Response.json({ ok: false, error: "could not send the verification email: try again shortly" }, { status: 502 });
           }
           return Response.json({ ok: true, pending: true, email });
         } catch (err) {
@@ -169,7 +169,7 @@ export function startServer() {
         }
       }
 
-      // Finishes a staged signup. Unauthenticated by definition — it sits above
+      // Finishes a staged signup. Unauthenticated by definition: it sits above
       // the session gate because it is what creates the account and the session.
       if (url.pathname === "/api/auth/confirm-signup" && req.method === "POST") {
         try {
@@ -194,7 +194,7 @@ export function startServer() {
           const user = await findUserByEmail(email);
           // A staged signup isn't an account yet, so the lookup misses and the
           // generic answer leaves you stuck with no way forward. Naming the
-          // situation is a mild account-enumeration leak — the wrong trade on a
+          // situation is a mild account-enumeration leak: the wrong trade on a
           // public service, the right one on a personal tool where being unable
           // to get in is the worse bug.
           if (!user && (await pendingSignupExists(email))) {
@@ -224,7 +224,7 @@ export function startServer() {
         return Response.json({ ok: true, userId: user.id, email: user.email });
       }
 
-      // Everything below is per-user data — require a valid session.
+      // Everything below is per-user data: require a valid session.
       const userId = await userIdFromRequest(req);
       if (!userId) return Response.json({ ok: false, error: "not authenticated" }, { status: 401 });
 
@@ -289,7 +289,7 @@ export function startServer() {
         });
       }
 
-      // Ranked screener results (pure quant — no AI cost to view)
+      // Ranked screener results (pure quant: no AI cost to view)
       if (url.pathname === "/api/screener") {
         // sparkTs is sent once, not per row: this endpoint returns the whole
         // screener table and the dashboard re-polls it every 10 minutes.
@@ -314,10 +314,10 @@ export function startServer() {
         if (!q) return Response.json({ results: [] });
         const rows = await db.query(
           // `ticker NOT LIKE '% %'` filters composite option strings ("MRVL
-          // 2026-07-24 203C") out of results — the row guard, not a query guard,
+          // 2026-07-24 203C") out of results: the row guard, not a query guard,
           // so multi-word name search still works.
           // ILIKE (not LIKE): SQLite's LIKE is case-insensitive by default,
-          // Postgres's is not — ILIKE preserves the original name-search behavior.
+          // Postgres's is not: ILIKE preserves the original name-search behavior.
           `SELECT ticker, name FROM universe
            WHERE (ticker ILIKE ? || '%' OR name ILIKE '%' || ? || '%')
              AND ticker NOT LIKE '% %'
@@ -365,7 +365,7 @@ export function startServer() {
           const action = body.action === "remove" ? "remove" : "add";
           const ticker = String(body.ticker ?? "").toUpperCase().trim();
           // Free accounts cap the watchlist; Pro is unlimited. Only a genuine ADD
-          // of a NOT-yet-watched ticker counts — re-adding one already on the list
+          // of a NOT-yet-watched ticker counts: re-adding one already on the list
           // or removing is always allowed, so a full free list stays editable.
           if (action === "add") {
             const current = currentPortfolio(userId).watchlist ?? [];
@@ -384,7 +384,7 @@ export function startServer() {
         }
       }
 
-      // Upgrade intent from the paywall. No payment yet — this records that a
+      // Upgrade intent from the paywall. No payment yet: this records that a
       // free user wanted Pro, which is the demand signal worth having pre-launch.
       if (url.pathname === "/api/billing/interest" && req.method === "POST") {
         try {
@@ -400,7 +400,7 @@ export function startServer() {
       }
 
       // Idea outcome scoreboard: replay past validated ideas against real
-      // candles — did "strong" ratings actually win? (pure math, 1h cache)
+      // candles: did "strong" ratings actually win? (pure math, 1h cache)
       if (url.pathname === "/api/ideas/scoreboard") {
         try {
           return Response.json({ ok: true, ...(await ideaScoreboard(userId)) });
@@ -409,7 +409,7 @@ export function startServer() {
         }
       }
 
-      // F0: validator calibration — hit-rate + avg-R by rating/direction and
+      // F0: validator calibration: hit-rate + avg-R by rating/direction and
       // per-dimension win/loss score gaps. Shares the scoreboard's 1h replay cache.
       if (url.pathname === "/api/calibration") {
         try {
@@ -441,7 +441,7 @@ export function startServer() {
         }
       }
 
-      // ── Practice: blind replay drills. Deterministic ($0, no AI) — the grade
+      // ── Practice: blind replay drills. Deterministic ($0, no AI): the grade
       // is arithmetic over real bars, so it is instant and reproducible.
       //
       // The anti-cheat lives here, not in the client: /new returns bars only up
@@ -502,7 +502,7 @@ export function startServer() {
       }
 
       // Archive the practice record: moves a per-user marker forward so stats
-      // start fresh. Deliberately not a DELETE — nothing the trader did is
+      // start fresh. Deliberately not a DELETE: nothing the trader did is
       // destroyed, which is why a plain confirmation is proportionate.
       if (url.pathname === "/api/practice/reset" && req.method === "POST") {
         try {
@@ -514,7 +514,7 @@ export function startServer() {
         }
       }
 
-      // F3: portfolio concentration — deterministic ($0). Resolve each holding's
+      // F3: portfolio concentration: deterministic ($0). Resolve each holding's
       // value/sector/beta, then let the pure engine do the grouping + warnings.
       // Options are excluded: this reads as stock exposure, not a mixed
       // premium/notional blend that misrepresents how concentrated the book is.
@@ -554,7 +554,7 @@ export function startServer() {
         return Response.json({ ideas: await recentIdeas(userId, 20, { includeIntraday: true }) });
       }
 
-      // Validate one idea — long, short, or auto (user-initiated, always allowed)
+      // Validate one idea: long, short, or auto (user-initiated, always allowed)
       if (url.pathname === "/api/ideas/validate" && req.method === "POST") {
         try {
           const body = (await req.json()) as { ticker?: string; direction?: string; notes?: string; options?: boolean };
@@ -579,10 +579,10 @@ export function startServer() {
       }
 
       // Batch idea generation: strongest confluences across sectors, both
-      // directions, validated one by one (capped — this is the expensive path).
+      // directions, validated one by one (capped: this is the expensive path).
       if (url.pathname === "/api/ideas/generate" && req.method === "POST") {
         {
-          // Batch idea generation is a Pro power feature — it fans out to several
+          // Batch idea generation is a Pro power feature: it fans out to several
           // validations at once, the most expensive AI path in the app.
           const gate = await checkProFeature(userId, "idea_generate");
           if (!gate.ok) return Response.json(upgradePayload(gate), { status: 402 });
@@ -603,7 +603,7 @@ export function startServer() {
             : undefined;
           const candidates = await pickCandidates(portfolio, count, filters);
           if (!candidates.length) {
-            return Response.json({ ok: true, reports: [], note: "No setup-grade candidates match the current filters in the latest scan. That is a valid answer — don't force trades." });
+            return Response.json({ ok: true, reports: [], note: "No setup-grade candidates match the current filters in the latest scan. That is a valid answer: don't force trades." });
           }
           const reports: IdeaReport[] = [];
           for (const c of candidates) {
@@ -635,7 +635,7 @@ export function startServer() {
       }
 
       // Backtest / walk-forward. Parses a described strategy (or reuses a spec
-      // for free re-runs) then runs the deterministic engine — the AI never
+      // for free re-runs) then runs the deterministic engine: the AI never
       // computes results, only translates intent.
       if (url.pathname === "/api/backtest" && req.method === "POST") {
         try {
@@ -684,7 +684,7 @@ export function startServer() {
             ].filter(Boolean).join(" · ") || null,
             payload: JSON.stringify({ spec, metrics: m, walkForward: !!body.walkForward, years: Math.round(years * 10) / 10 }),
           });
-          // Meter only a fresh, successful backtest — never a history re-run or a
+          // Meter only a fresh, successful backtest: never a history re-run or a
           // clarification (which returned early above).
           if (fresh) await meter(userId, "backtest");
           return Response.json({ ok: true, spec, result, stress, walkForward: walkForwardResult, walkForwardError, years: Math.round(years * 10) / 10 });
@@ -767,7 +767,7 @@ export function startServer() {
       if (url.pathname === "/api/broker/unlink" && req.method === "POST") {
         await clearAuth(userId);
         clearLinkState(userId);
-        // Drop the durable copy too — otherwise a later failed refresh would
+        // Drop the durable copy too: otherwise a later failed refresh would
         // restore positions from the account just disconnected.
         await retirePersistedSnapshot(userId);
         const snap = await refreshBroker(userId);
@@ -830,7 +830,7 @@ export function startServer() {
         return Response.json({ tracked: await listTracked(userId), keys: await trackedKeys(userId) });
       }
 
-      // F1b: AI token usage per day (global — background pipeline spend isn't per-user).
+      // F1b: AI token usage per day (global: background pipeline spend isn't per-user).
       if (url.pathname === "/api/spend") {
         return Response.json({ days: await spendByDay(7) });
       }
@@ -894,7 +894,7 @@ export function startServer() {
       // Profile: name/phone edit freely. Email is the sign-in identity, so a
       // change to it needs two independent proofs: the current password (gated
       // here) and a mailed code (staged here, applied by /confirm-email below).
-      // A new address is never written to users.email in this route — see
+      // A new address is never written to users.email in this route: see
       // startEmailChange's comment for why an unconfirmed one can't be allowed
       // to become the login.
       if (url.pathname === "/api/profile") {
@@ -910,7 +910,7 @@ export function startServer() {
             const email = String(body.email ?? "").trim().toLowerCase().slice(0, 254);
             if (email && email !== current?.email) {
               if (!emailEnabled()) {
-                return Response.json({ ok: false, error: "email changes need a mail provider — set RESEND_API_KEY (see .env.example)" }, { status: 503 });
+                return Response.json({ ok: false, error: "email changes need a mail provider: set RESEND_API_KEY (see .env.example)" }, { status: 503 });
               }
               if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(email)) {
                 return Response.json({ ok: false, error: "that doesn't look like an email address" }, { status: 400 });
@@ -919,7 +919,7 @@ export function startServer() {
               if (!hash || !(await verifyPassword(String(body.password ?? ""), hash))) {
                 return Response.json({ ok: false, error: "current password is wrong" }, { status: 403 });
               }
-              // Advisory only — the binding check is the UNIQUE index at
+              // Advisory only: the binding check is the UNIQUE index at
               // confirm time, since the address could be claimed by someone
               // else during the 15-minute window this code is live.
               if (await findUserByEmail(email)) {
@@ -929,7 +929,7 @@ export function startServer() {
               const mail = verificationEmail(code);
               if (!(await sendEmail(email, mail.subject, mail.text, mail.html))) {
                 await cancelEmailChange(userId); // don't leave a change staged that can never be confirmed
-                return Response.json({ ok: false, error: "could not send the verification email — try again shortly" }, { status: 502 });
+                return Response.json({ ok: false, error: "could not send the verification email: try again shortly" }, { status: 502 });
               }
               await updateProfile(userId, fields);
               return Response.json({ ok: true, profile: await getProfile(userId), pendingEmail: email });
@@ -961,7 +961,7 @@ export function startServer() {
       }
 
       // Master switch for automatic AI spend (triage/analysis/scheduled briefings).
-      // Global, not per-user — background monitoring is one shared pipeline (see index.ts).
+      // Global, not per-user: background monitoring is one shared pipeline (see index.ts).
       if (url.pathname === "/api/ai-live" && req.method === "POST") {
         const body = (await req.json().catch(() => ({}))) as { on?: boolean };
         await setAiLive(!!body.on);
@@ -1027,7 +1027,7 @@ export function startServer() {
           if (bad) return Response.json({ ok: false, error: `unknown kind "${bad}"` }, { status: 400 });
           const kinds = kindsRaw.length ? kindsRaw : null;
 
-          // Opaque cursor "ts.src.id" — a row-wise key, not a bare timestamp,
+          // Opaque cursor "ts.src.id": a row-wise key, not a bare timestamp,
           // so same-second rows page correctly (generate writes several at once).
           let cursor: HistoryCursor | null = null;
           const before = url.searchParams.get("before");
@@ -1047,7 +1047,7 @@ export function startServer() {
               cursor: `${r.ts}.${r.src}.${r.id}`,
               id: r.id, ts: r.ts, kind: r.kind, ticker: r.ticker,
               direction: r.direction, rating: r.rating, score: r.score, summary: r.summary,
-              src: r.src,          // which table the id belongs to — DELETE needs it
+              src: r.src,          // which table the id belongs to: DELETE needs it
               deletable: true,
               payload,
             };
@@ -1061,7 +1061,7 @@ export function startServer() {
 
       // The feed spans two tables with independent id sequences, so the row's
       // `src` ('i' = ideas/intraday, 'a' = artifacts) has to come back with the
-      // id. Defaults to 'a' — the only source that was deletable before.
+      // id. Defaults to 'a': the only source that was deletable before.
       if (url.pathname.startsWith("/api/history/") && req.method === "DELETE") {
         const id = Number(url.pathname.split("/").pop());
         if (!Number.isInteger(id)) return Response.json({ ok: false, error: "bad id" }, { status: 400 });
@@ -1115,7 +1115,7 @@ export function startServer() {
           // `history` is still accepted and deliberately ignored: a page cached
           // from before this change still posts it, and 400-ing a live
           // conversation to make a point would be the wrong trade. The server
-          // owns conversation history now — it reads it from the thread.
+          // owns conversation history now: it reads it from the thread.
           const body = (await req.json()) as { question?: string; threadId?: number; history?: ChatTurn[] };
           const question = String(body.question ?? "").trim();
           if (!question) return Response.json({ ok: false, error: "empty question" }, { status: 400 });
@@ -1169,7 +1169,7 @@ export function startServer() {
         return Response.json({ ok: true });
       }
 
-      // Re-probe the data feeds on demand — the timer is 30 minutes, which is
+      // Re-probe the data feeds on demand: the timer is 30 minutes, which is
       // too long to sit through when you're watching a feed come back.
       if (url.pathname === "/api/canary/check" && req.method === "POST") {
         return Response.json({ ok: true, canaries: await runCanaries() });
@@ -1237,7 +1237,7 @@ export function startServer() {
           } catch {}
         }
         if (!meta && !row && !quote?.c && !spark) {
-          return Response.json({ ok: false, error: `No data found for "${ticker}" — check the symbol.` }, { status: 404 });
+          return Response.json({ ok: false, error: `No data found for "${ticker}": check the symbol.` }, { status: 404 });
         }
         // Intraday plans included: History links here, and excluding them meant
         // the analysis you clicked through to wasn't on the page.
@@ -1253,7 +1253,7 @@ export function startServer() {
           ideas: ideaRows.flatMap((r) => {
             try {
               // `id` rides along so the card's ✕ can delete the stored row, not
-              // just the DOM node — dismissing here used to leave it in history.
+              // just the DOM node: dismissing here used to leave it in history.
               return [{ ...JSON.parse(r.report), id: r.id, ticker: r.ticker, direction: r.direction, rating: r.rating, ts: r.ts, source: r.source }];
             } catch { return []; }
           }),
@@ -1289,7 +1289,7 @@ export function startServer() {
       }
 
       // Company logo, proxied so the browser never talks to the image CDN
-      // directly — see ingest/logos.ts for why. Sits behind the auth gate above,
+      // directly: see ingest/logos.ts for why. Sits behind the auth gate above,
       // which also stops the instance being an open image proxy.
       if (url.pathname.startsWith("/api/logo/")) {
         const ticker = decodeURIComponent(url.pathname.slice("/api/logo/".length)).toUpperCase().trim();
