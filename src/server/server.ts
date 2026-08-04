@@ -19,6 +19,7 @@ import { canaryStatus, runCanaries } from "../engine/canary";
 import { currentPortfolio, brokerSnapshot, refreshBroker, loadRiskConfigFor, updateWatchlist, retirePersistedSnapshot } from "../broker";
 import { earningsFor, ideaScoreboard, calibration } from "../engine/insights";
 import { computeConcentration, type ConcHolding } from "../engine/concentration";
+import { portfolioSeries } from "../engine/balance";
 import { createDrill, gradeDrill, practiceStats, resetPractice, CURRENT_COHORT, type Plan as PracticePlan } from "../engine/practice";
 import { lessonViews, markComplete } from "../engine/learn";
 import { LEVELS, CRITERION_LESSON } from "../content/lessons";
@@ -1012,6 +1013,21 @@ export function startServer() {
       // Portfolio score trend for the sparkline in the portfolio hero.
       if (url.pathname === "/api/portfolio/score-history") {
         return Response.json({ scores: await scoreHistory(userId, 30) });
+      }
+
+      // The balance curve at real daily resolution. Built server-side because
+      // the alignment across holdings belongs next to the candle fetch, and
+      // because one request beats one per holding from the browser.
+      if (url.pathname === "/api/portfolio/series") {
+        const range = { "1Y": "1y", "6M": "6mo", "3M": "3mo", MAX: "max" }[
+          (url.searchParams.get("range") ?? "1Y").toUpperCase()
+        ] ?? "1y";
+        try {
+          return Response.json({ ok: true, ...(await portfolioSeries(userId, currentPortfolio(userId), range)) });
+        } catch (err) {
+          console.error("[series] portfolio balance series failed:", err);
+          return Response.json({ ok: false, error: "series unavailable" }, { status: 502 });
+        }
       }
 
       // Merged history feed: ideas + intraday analyses + saved artifacts.

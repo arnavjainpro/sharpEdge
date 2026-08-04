@@ -5628,10 +5628,6 @@
               <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
                 aria-label="Toggle live AI updates"><i></i></button>
             </div>
-            <p style="font-size:12px;color:var(--faint)">Detection never stops: events are still found and scored by
-              the deterministic engine. Pausing only stops the paid Claude calls — event triage falls back to
-              rule-based severity, deep analysis is skipped, and the 9:00/16:15 briefings do not run. Applies to
-              every account on this instance, not just yours.</p>
           </div>
         </section>
 
@@ -6822,10 +6818,21 @@
       // only, so it ignores dividends, splits, partial sells, and every closed
       // position. "Since you invested" was wrong by construction, not by rounding.
 
+      // A position change invalidates whatever curve we are holding, high-res or
+      // not. Signature over ticker+shares, so it also catches a share count
+      // moving without the ticker list changing.
+      const pfSig = portfolio.holdings.map((h) => `${h.ticker}:${h.shares}`).sort().join(",");
+      if (pfSig !== balanceSig) { balanceSig = pfSig; balanceHiRes = false; seriesFetchedAt = 0; }
+
+      // Sparks draw the curve INSTANTLY from data already in memory, then
+      // loadBalanceSeries() replaces it with real daily closes. Keeping the
+      // fallback means a failed or slow /api/portfolio/series leaves a coarse
+      // chart rather than an empty one — and once the good series lands, this
+      // must not overwrite it on the next portfolio refresh.
       const sparks = portfolio.holdings
         .map((h) => ({ h, s: screener[h.ticker]?.indicators?.spark }))
         .filter((x) => x.s?.length > 1);
-      if (sparks.length) {
+      if (!balanceHiRes && sparks.length) {
         const len = Math.min(...sparks.map((x) => x.s.length));
         balanceSeries = Array.from({ length: len }, (_, i) =>
           sparks.reduce((sum, x) => sum + x.h.shares * x.s[x.s.length - len + i], 0)
@@ -6837,6 +6844,7 @@
         balanceTs = sparkTs.length >= len ? sparkTs.slice(sparkTs.length - len) : [];
       }
       drawBalanceChart();
+      loadBalanceSeries();
       renderKpis();
     }
 
@@ -6847,13 +6855,37 @@
     let balanceSeries = [];
     let balanceTs = [];
     let chartRange = Number(localStorage.getItem("pfRange") ?? 0);
+    // High-res = one point per session from /api/portfolio/series. The spark
+    // fallback is ~30 points over 90 sessions, so ~3 sessions per point, which
+    // drew a 1M window as about seven straight segments.
+    let balanceHiRes = false, balanceSig = "", seriesFetchedAt = 0, seriesInFlight = false;
+
+    async function loadBalanceSeries() {
+      // renderPortfolio runs on every state poll; the server caches for 15 min,
+      // so re-asking more than once a minute only burns a round trip.
+      if (seriesInFlight || Date.now() - seriesFetchedAt < 60_000) return;
+      seriesInFlight = true;
+      try {
+        const res = await (await fetch("/api/portfolio/series")).json();
+        // Two points is the minimum drawable line; below that keep the fallback
+        // rather than blanking a chart that was rendering a moment ago.
+        if (res.ok && res.values?.length > 1) {
+          balanceSeries = res.values;
+          balanceTs = res.timestamps?.length === res.values.length ? res.timestamps : [];
+          balanceHiRes = true;
+          seriesFetchedAt = Date.now();
+          drawBalanceChart();
+        }
+      } catch { /* offline or 502: the spark-derived curve stays on screen */ }
+      finally { seriesInFlight = false; }
+    }
 
     function drawBalanceChart() {
       const n = balanceSeries.length;
-      // The series is ~30 DOWNSAMPLED points covering ~90 sessions, so one point
-      // is roughly three sessions. data-range is in days, so slicing by index
-      // made "1M" render about four months of history: invisible until the date
-      // axis landed and started contradicting the button. Slice by time instead.
+      // data-range is in days. Slicing by INDEX was wrong even at daily
+      // resolution and badly wrong on the spark fallback, where one point is
+      // ~3 sessions and "1M" rendered about four months of history: invisible
+      // until the date axis landed and started contradicting the button.
       const haveTs = balanceTs.length === n && n > 0;
       const lastTs = haveTs ? balanceTs[n - 1] : 0;
       const spanDays = haveTs ? (lastTs - balanceTs[0]) / 86400 : 0;

@@ -105,7 +105,7 @@ export function loadUniverseFilters(): UniverseFilters {
 // is the chokepoint every caller (search universe, detectors, daily-stats,
 // briefing) funnels through, so normalizing here keeps composites out of all of
 // them at once instead of each caller re-deriving it.
-function holdingSymbol(h: Holding): string | null {
+export function holdingSymbol(h: Holding): string | null {
   if (h.asset_class === "option") return h.option?.underlying?.toUpperCase() ?? null;
   const t = h.ticker.toUpperCase();
   if (t.includes(" ") || t.endsWith("-USD")) return null; // composite option / crypto → not a real symbol
