@@ -1455,10 +1455,20 @@
       min-width: 0;
     }
 
+    .hero-side {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .pf-score-row {
+      margin-top: 12px;
+    }
+
     /* Let the portfolio chart fill its column instead of stopping short of the
-       KPI grid beside it. align-self on the one item, not align-items on the
-       grid: the KPI column must keep `start`, or the day it becomes the shorter
-       of the two its four tiles would stretch to fill instead.
+       stack beside it. align-self on the one item, not align-items on the grid:
+       the left column must keep `start`, or the day it becomes the shorter of
+       the two its KPI tiles would stretch to fill instead.
 
        chartFrame() wraps the <svg> in a second .chart-wrap holding .chart-plot
        and the .chart-x date row, so the fill has to be handed down that chain —
@@ -5160,7 +5170,25 @@
           <div id="portfolio-day"></div>
           <div id="pf-score-trend"></div>
           <div class="hero-grid">
-            <div class="kpi-grid" id="kpi-grid"></div>
+            <!-- Everything on the left is ONE grid item, so the chart beside it
+                 has a full-height sibling to stretch against. As separate
+                 siblings below .hero-grid these left the whole right half of the
+                 section empty underneath the curve. #import-panel and
+                 #pf-score-result stay outside: both are full-width readouts. -->
+            <div class="hero-side">
+              <div class="kpi-grid" id="kpi-grid"></div>
+              <div id="broker-line"></div>
+              <div id="pf-updated"></div>
+              <div class="pf-score-row">
+                <button class="advise-btn" id="pf-score-btn" style="margin-top:0"
+                  title="AI health check: score out of 100 with pros, cons, and the biggest risk (a few cents, ~30s)"><svg
+                    class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />
+                  </svg>
+                  Score my portfolio</button>
+              </div>
+            </div>
             <div class="chart-wrap">
               <div class="chart-head">
                 <!-- Label removed by request. Still worth knowing what this curve
@@ -5180,8 +5208,6 @@
                 aria-label="Historical value of current holdings"></svg>
             </div>
           </div>
-          <div id="broker-line"></div>
-          <div id="pf-updated"></div>
           <div id="import-panel">
             <div class="hint">Link Robinhood (read-only) for live positions in <a href="#settings">Settings →
                 Brokerage</a>. It takes priority over this manual paste, which is the universal fallback for any
@@ -5193,15 +5219,6 @@
             <button class="advise-btn" id="import-go" style="margin-top:6px">Import</button>
             <button class="advise-btn ghost" id="import-clear" style="margin-top:6px">Clear import (back to
               YAML)</button>
-          </div>
-          <div style="margin-top:12px">
-            <button class="advise-btn" id="pf-score-btn" style="margin-top:0"
-              title="AI health check: score out of 100 with pros, cons, and the biggest risk (a few cents, ~30s)"><svg
-                class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 3l1.8 7.2L21 12l-7.2 1.8L12 21l-1.8-7.2L3 12l7.2-1.8z" />
-              </svg>
-              Score my portfolio</button>
           </div>
           <div id="pf-score-result"></div>
         </section>
