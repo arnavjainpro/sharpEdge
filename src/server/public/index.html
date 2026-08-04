@@ -6264,6 +6264,15 @@
       // Spendable cash (buying power), not account equity — equity would
       // double-count the positions already in the value above.
       const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
+      // An open order reserves buying power, so this legitimately reads $0 while
+      // money is still sitting in the account. The count belongs next to the
+      // number that it explains — down in the broker line on its own it reads as
+      // a replacement for the cash figure rather than the reason for it.
+      const orders = brokerInfo?.openOrders?.length ?? 0;
+      const ordersNote = `${orders} open order${orders === 1 ? "" : "s"}`;
+      // "link a broker" is wrong copy when one IS linked and simply returned no
+      // balance — that sends you to re-link something that is already working.
+      const linked = brokerInfo?.source === "robinhood" || brokerInfo?.source === "import";
       const positions = portfolio.holdings.filter((h) => h.asset_class !== "crypto").length;
       const tile = (k, v, note, cls = "", tip = "") => `
         <div class="kpi ${cls}">
@@ -6281,8 +6290,8 @@
         // portfolio.yaml carries no cash figure — say so rather than leaving a
         // hole in the two-column grid.
         cash != null
-          ? tile("Cash", money(cash), { text: "available to invest" }, "", "Buying power — what's actually spendable, not settled cash and not equity (equity would double-count the positions).")
-          : tile("Cash", "—", { text: "link a broker to track" }),
+          ? tile("Cash", money(cash), { text: orders ? `available now · ${ordersNote}` : "available to invest" }, "", "Buying power — what's actually spendable, not settled cash and not equity (equity would double-count the positions). An open order reserves buying power, so this can read $0 while cash is still in the account.")
+          : tile("Cash", "—", { text: linked ? (orders ? `no balance reported · ${ordersNote}` : "no balance reported") : "link a broker to track" }),
       ].join("");
     }
 
