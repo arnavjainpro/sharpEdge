@@ -258,7 +258,11 @@ function scheduleBriefings() {
     const kind = mins >= 9 * 60 && mins < 9 * 60 + 10 ? "open"
                : mins >= 16 * 60 + 15 && mins < 16 * 60 + 25 ? "close" : null;
     if (!kind || lastBriefingDay[kind] === today) return;
-    if (!aiLive()) return; // live updates paused: skip scheduled briefings
+    // await, not `!aiLive()`: aiLive is async, so the bare call is a Promise and
+    // always truthy, so this guard never fired and briefings kept running (a
+    // deep model call per account, twice a day) with AI updates explicitly
+    // paused.
+    if (!(await aiLive())) return; // live updates paused: skip scheduled briefings
     lastBriefingDay[kind] = today;
     // One briefing per account, each written against that account's positions.
     // A deep-model call each, twice a day: the largest fixed per-account cost

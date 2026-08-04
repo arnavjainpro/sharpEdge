@@ -896,18 +896,8 @@
         display: none;
       }
 
-      .switch-wrap span:first-child {
-        display: none;
-      }
     }
 
-    .switch-wrap {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: var(--dim);
-    }
 
     .switch {
       position: relative;
@@ -985,9 +975,6 @@
       color: var(--dim);
     }
 
-    .switch-wrap span {
-      white-space: nowrap;
-    }
 
     /* ticker search modal (⌘K) */
     #ticker-modal {
@@ -4995,10 +4982,9 @@
     }
 
     @media (max-width: 420px) {
-      header .switch-wrap {
-        display: none;
-      }
-
+      /* main's `header .switch-wrap { display:none }` is gone with the element:
+         the AI toggle moved into Settings, so there is nothing in the header
+         left to hide at this width. */
       #portfolio-value {
         font-size: clamp(34px, 12vw, var(--fs-hero));
       }
@@ -5132,11 +5118,6 @@
           <span id="status-dot"></span>
           <span id="status-label">live</span>
         </div>
-        <span class="switch-wrap">
-          <span>AI updates</span>
-          <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
-            aria-label="Toggle live AI updates"><i></i></button>
-        </span>
       </header>
       <div id="banner" role="alert">AI was halted after unusually high activity to protect your API spend.<button
           id="breaker-reset" type="button">Resume</button></div>
@@ -5634,6 +5615,23 @@
             <p style="font-size:12px;color:var(--faint)">Read-only: sharpEdge never places or cancels orders. Your
               password goes straight to Robinhood and is never stored: only the returned access tokens are.
               A linked account takes priority over the manual position import.</p>
+          </div>
+        </section>
+
+        <!-- Moved off the header. ai_live is stored in the GLOBAL settings
+             namespace (user_id 0), so this is not a per-account preference. -->
+        <section data-pane="settings">
+          <h2>AI updates</h2>
+          <div class="settings-card">
+            <div class="settings-row" style="align-items:center">
+              <span style="font-weight:600">Live AI analysis</span>
+              <button class="switch" id="ai-toggle" role="switch" aria-checked="true"
+                aria-label="Toggle live AI updates"><i></i></button>
+            </div>
+            <p style="font-size:12px;color:var(--faint)">Detection never stops: events are still found and scored by
+              the deterministic engine. Pausing only stops the paid Claude calls — event triage falls back to
+              rule-based severity, deep analysis is skipped, and the 9:00/16:15 briefings do not run. Applies to
+              every account on this instance, not just yours.</p>
           </div>
         </section>
 
