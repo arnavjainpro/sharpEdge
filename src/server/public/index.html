@@ -6944,9 +6944,11 @@
       const src = brokerInfo?.source ?? "manual";
       const srcLabel = src === "robinhood" ? "Linked: Robinhood" : src === "import" ? "Imported positions" : "From portfolio.yaml";
       const orders = brokerInfo?.openOrders?.length ?? 0;
+      // No staleness chip here: stampUpdated() already says "positions as of X"
+      // next to the timestamp it qualifies, which is where it belongs. A pill
+      // saying the same thing one line up was the same fact stated twice.
       el.innerHTML = `
     <span class="chip ${src === "robinhood" ? "buy" : src === "import" ? "info" : "calm"} sm">${srcLabel}</span>
-    ${staleChip()}
     ${orders ? `<span>${orders} open order${orders === 1 ? "" : "s"}</span>` : ""}`;
     }
 
@@ -6967,12 +6969,6 @@
       if (sec < 172800) return `${Math.round(sec / 3600)}h ago`;
       return `${Math.round(sec / 86400)}d ago`;
     }
-    function staleChip() {
-      const age = brokerAgeSec();
-      if (age == null || age < STALE_SEC) return "";
-      return `<span class="chip warn sm" title="These positions were last confirmed with your broker ${relAge(age)}. A refresh is in progress or the broker is unreachable.">as of ${relAge(age)}</span>`;
-    }
-
     // "Updated 3:42:07 PM" under the portfolio: stamped whenever state/quotes
     // reload. This is the time WE last fetched, which is not the same thing as
     // the time the positions were true: when the broker snapshot is older than
@@ -6983,9 +6979,13 @@
       if (!el) return;
       const t = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
       const age = brokerAgeSec();
-      el.textContent = age != null && age >= STALE_SEC
-        ? `Checked ${t} · positions as of ${relAge(age)}`
-        : "Updated " + t;
+      const stale = age != null && age >= STALE_SEC;
+      el.textContent = stale ? `Checked ${t} · positions as of ${relAge(age)}` : "Updated " + t;
+      // Inherited from the chip this replaced: the timestamp alone never said
+      // why the positions lag it.
+      el.title = stale
+        ? `These positions were last confirmed with your broker ${relAge(age)}. A refresh is in progress or the broker is unreachable.`
+        : "";
     }
 
     // Dashboard controls: mode, chart range, greeting. Wired once at boot.
