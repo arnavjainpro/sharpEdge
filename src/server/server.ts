@@ -522,8 +522,8 @@ export function startServer() {
         try {
           const holdings = currentPortfolio(userId).holdings.filter((h) => (h.asset_class ?? "equity") === "equity");
           const maxPositionPct = (await loadRiskConfigFor(userId)).max_position_pct ?? 20;
-          const betaFor = (key: string): number | null => {
-            const row = db.query(`SELECT indicators FROM screener WHERE ticker = ?`).get(key) as any;
+          const betaFor = async (key: string): Promise<number | null> => {
+            const row = await db.query(`SELECT indicators FROM screener WHERE ticker = ?`).get<{ indicators: string }>(key);
             if (!row) return null;
             try { return JSON.parse(row.indicators).beta ?? null; } catch { return null; }
           };
@@ -531,7 +531,7 @@ export function startServer() {
             const key = h.ticker.toUpperCase();
             let value = 0;
             try { const q = await cachedQuote(h.ticker); if (q?.c) value = Math.abs(h.shares * q.c); } catch {}
-            return { key, value, sector: (await universeMeta(key))?.sector ?? "Unknown", beta: betaFor(key) };
+            return { key, value, sector: (await universeMeta(key))?.sector ?? "Unknown", beta: await betaFor(key) };
           }));
           return Response.json({ ok: true, ...computeConcentration(items, maxPositionPct) });
         } catch (err) {

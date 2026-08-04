@@ -6323,6 +6323,9 @@
 
     /* ── data stores ── */
     let portfolio = { holdings: [], watchlist: [] };
+    // Loaded independently from /api/concentration. `undefined` means the risk
+    // read is still loading; null means it was unavailable on the last attempt.
+    let concentrationInfo;
     let quotes = {};
     let earnings = {};   // ticker → next earnings ISO date (holdings, ≤14d out)
     let screener = {};   // ticker -> row
@@ -6454,7 +6457,7 @@
         balanceTs = sparkTs.length >= len ? sparkTs.slice(sparkTs.length - len) : [];
       }
       drawBalanceChart();
-      renderKpis({ value, day, dayPct });
+      renderKpis();
     }
 
     /* ── balance chart + range tabs ────────────────────────────────────────
@@ -6501,9 +6504,10 @@
       sparkSvg($("#portfolio-spark"), slice, true, { axes: true, timestamps: ts });
     }
 
-    /* KPI strip. Beginner sees the four that answer "how am I doing"; Pro also
-       gets cost basis and beta, which is where the risk actually lives. */
-    function renderKpis({ value, day, dayPct }) {
+    /* KPI strip. The headline already owns market value and today's move, so the
+       first two tiles answer the next questions a trader should ask at a glance:
+       "how concentrated am I?" and "how hard does this book move vs the market?" */
+    function renderKpis() {
       // Spendable cash (buying power), not account equity — equity would
       // double-count the positions already in the value above.
       const cash = brokerInfo?.account?.buying_power ?? brokerInfo?.account?.cash;
@@ -6517,18 +6521,33 @@
       // balance — that sends you to re-link something that is already working.
       const linked = brokerInfo?.source === "robinhood" || brokerInfo?.source === "import";
       const positions = portfolio.holdings.filter((h) => h.asset_class !== "crypto").length;
+      const largest = concentrationInfo?.positions?.[0];
+      const largestWarn = largest && concentrationInfo.warnings?.some((w) =>
+        w.kind === "position" && w.label === largest.key
+      );
+      const beta = concentrationInfo?.portfolioBeta;
+      const betaNote = beta == null ? "needs scored holdings"
+        : beta > 1.15 ? "moves more than the market"
+          : beta < 0.85 ? "moves less than the market"
+            : "moves near the market";
       const tile = (k, v, note, cls = "", tip = "") => `
         <div class="kpi ${cls}">
           <div class="k">${tip ? `<span class="term" title="${esc(tip)}">${k}</span>` : k}</div>
           <div class="v ${note?.cls ?? ""}">${v}</div>
           ${note?.text ? `<div class="n">${note.text}</div>` : ""}
         </div>`;
-      // Deliberately no "total return" / "invested" tile: cost basis covers only
-      // currently-held shares, so it ignores dividends, splits, partial sells and
-      // every closed position. See the note in renderPortfolio.
       $("#kpi-grid").innerHTML = [
-        tile("Today", `${signed(dayPct)}%`, { text: `${day >= 0 ? "+" : "−"}${money(Math.abs(day))}`, cls: day >= 0 ? "up" : "down" }),
-        tile("Market value", money(value), { text: "what it's worth now" }),
+        largest
+          ? tile("Largest position", `${largest.pct.toFixed(0)}%`, {
+              text: `${esc(largest.key)}${largestWarn ? " · above your limit" : " of portfolio"}`,
+              cls: largestWarn ? "down" : "",
+            }, "", "Your largest single exposure as a share of stock and option value. Options are grouped with their underlying stock.")
+          : tile("Largest position", "—", { text: concentrationInfo === undefined ? "calculating risk…" : "not available" }),
+        beta != null
+          ? tile("Portfolio beta", beta.toFixed(2), {
+              text: `${betaNote} · ${concentrationInfo.betaCoveragePct.toFixed(0)}% covered`,
+            }, "", "Estimated sensitivity to the S&P 500. A beta of 1.00 moves roughly with the market; above 1 tends to swing more, below 1 less. Coverage shows how much portfolio value had a known beta.")
+          : tile("Portfolio beta", "—", { text: concentrationInfo === undefined ? "calculating risk…" : betaNote }),
         tile("Positions", String(positions), { text: positions === 1 ? "holding" : "holdings" }),
         // portfolio.yaml carries no cash figure — say so rather than leaving a
         // hole in the two-column grid.
@@ -7818,7 +7837,14 @@
       const sec = $("#concentration-section");
       try {
         const d = await (await fetch("/api/concentration")).json();
-        if (!d.ok || !d.totalValue) { sec.style.display = "none"; return; }
+        if (!d.ok || !d.totalValue) {
+          concentrationInfo = null;
+          sec.style.display = "none";
+          renderPortfolio();
+          return;
+        }
+        concentrationInfo = d;
+        renderPortfolio();
         sec.style.display = "";
         const money0 = (v) => "$" + Math.round(v).toLocaleString();
 
@@ -7863,7 +7889,11 @@
           : `Your largest slice is ${esc(top.name)} at <b>${top.pct.toFixed(0)}%</b>, so no single sector dominates the portfolio.`)
           + betaRead
           + ` <span style="color:var(--faint)">Across ${money0(d.totalValue)} of stock positions (options excluded). Deterministic, no AI.</span>`;
-      } catch { sec.style.display = "none"; }
+      } catch {
+        concentrationInfo = null;
+        sec.style.display = "none";
+        renderPortfolio();
+      }
     }
 
     /* ── F0: validator calibration — does the rubric predict outcomes? ── */
