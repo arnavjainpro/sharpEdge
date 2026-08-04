@@ -445,7 +445,7 @@
 
     /* Reads as a rail row, not a lone bordered box floating in the gap above
        the account. Same box as a #nav button so the rail keeps one rhythm, and
-       the chevrons mirror when collapsed — as a static << they pointed the wrong
+       the chevrons mirror when collapsed: as a static << they pointed the wrong
        way in the one state where the button expands rather than collapses. */
     #sidebar-collapse {
       display: flex;
@@ -1479,7 +1479,7 @@
        the two its KPI tiles would stretch to fill instead.
 
        chartFrame() wraps the <svg> in a second .chart-wrap holding .chart-plot
-       and the .chart-x date row, so the fill has to be handed down that chain —
+       and the .chart-x date row, so the fill has to be handed down that chain,
        and the rules are scoped to .hero-grid because .chart-wrap/.chart-plot are
        the generic frame every other chart in the app uses too. */
     .hero-grid>.chart-wrap {
@@ -1498,7 +1498,7 @@
     /* .chart-plot is the box that gets sized; the svg is pinned inside it. A
        percentage height on the svg itself resolves against an indefinite parent,
        falls back to its 1:1 viewBox ratio, and it renders as tall as the column
-       is wide — which then feeds back as the grid row height. Out of flow, it
+       is wide, which then feeds back as the grid row height. Out of flow, it
        contributes nothing to that measurement and simply fills. */
     .hero-grid .chart-plot {
       flex: 1;
@@ -2344,7 +2344,7 @@
     #portfolio-spark {
       margin-top: 16px;
       width: 100%;
-      /* Applies before chartFrame() has wrapped the svg — the skeleton state.
+      /* Applies before chartFrame() has wrapped the svg: the skeleton state.
          Once wrapped, .chart-plot owns the height and the rule above pins the
          svg to it. */
       height: 88px;
@@ -6112,8 +6112,8 @@
       }
       if (!PANES.includes(name)) name = "portfolio";
       // Land at the top of a pane you just switched to. Guarded on an actual
-      // change so a re-render of the pane you are already reading — showPane
-      // runs on every hashchange — does not yank you back up mid-scroll.
+      // change so a re-render of the pane you are already reading (showPane
+      // runs on every hashchange) does not yank you back up mid-scroll.
       if (name !== currentPane) { currentPane = name; window.scrollTo(0, 0); }
       // Settings belongs to no section, so it leaves the rail on whichever one
       // you came from: the same treatment #stock/TICKER gets: rather than
@@ -6166,7 +6166,7 @@
     // the section from the tab, so a #learn link lands in Learning regardless of
     // what was remembered.
     /* The logo is href="#portfolio" and there is a <section id="portfolio">, so
-       the browser treated it as a fragment link and scrolled to that section —
+       the browser treated it as a fragment link and scrolled to that section,
        landing below the greeting rather than at the top of the page. Worse, a
        click while already on Portfolio changes no hash, so no hashchange fires
        and showPane's scroll reset never runs. Handle it directly: the href stays
@@ -6872,7 +6872,7 @@
       // Sparks draw the curve INSTANTLY from data already in memory, then
       // loadBalanceSeries() replaces it with real daily closes. Keeping the
       // fallback means a failed or slow /api/portfolio/series leaves a coarse
-      // chart rather than an empty one — and once the good series lands, this
+      // chart rather than an empty one, and once the good series lands, this
       // must not overwrite it on the next portfolio refresh.
       const sparks = portfolio.holdings
         .map((h) => ({ h, s: screener[h.ticker]?.indicators?.spark }))

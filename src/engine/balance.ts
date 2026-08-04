@@ -1,7 +1,7 @@
 // The portfolio balance curve, at real daily resolution.
 //
 // This replaces summing each holding's screener `spark`, which is 30 samples
-// across a 90-session window (SPARK_POINTS/SPARK_WINDOW) — one point per ~3
+// across a 90-session window (SPARK_POINTS/SPARK_WINDOW): one point per ~3
 // trading days, so a 1-month view drew about seven vertices and the curve was
 // visibly made of straight segments. Raising SPARK_POINTS instead would have
 // fixed it for seven tickers by tripling a /api/screener payload that carries
@@ -17,7 +17,7 @@ import { holdingSymbol, type Portfolio } from "../config";
 export interface BalanceSeries {
   values: number[];
   timestamps: number[];
-  /** Holdings with no usable price history — options, crypto, dead symbols. */
+  /** Holdings with no usable price history: options, crypto, dead symbols. */
   skipped: string[];
 }
 
@@ -30,7 +30,7 @@ export interface Leg {
 /**
  * Sum legs onto one session calendar.
  *
- * Pure and exported so the alignment is testable without a network round trip —
+ * Pure and exported so the alignment is testable without a network round trip,
  * it is the part that can be subtly wrong while still producing a plausible
  * curve, which is the worst failure mode for a chart of someone's money.
  */
@@ -97,7 +97,7 @@ export async function portfolioSeries(
   if (!legs.length) return { values: [], timestamps: [], skipped };
 
   // Bulk (Yahoo) rather than fetchDailyCandles: no key, no quota, and this runs
-  // on every portfolio open. Parallel is fine at portfolio size — this is a
+  // on every portfolio open. Parallel is fine at portfolio size: this is a
   // handful of symbols, not the 3,100-name scan the sequential path exists for.
   const fetched = await Promise.all(
     legs.map(async (l) => {

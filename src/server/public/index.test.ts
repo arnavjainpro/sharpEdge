@@ -32,7 +32,11 @@ describe("dashboard shell", () => {
       for await (const file of glob.scan({ cwd: `${root}/${dir}`, absolute: true, onlyFiles: true })) {
         // Local portfolio.yaml is private, gitignored user data rather than app
         // copy. The committed portfolio.example.yaml is still checked.
-        if (relative(root, file) === "config/portfolio.yaml") continue;
+        // Separators normalized: relative() yields "config\portfolio.yaml" on
+        // Windows, so comparing the raw string skipped nothing there and the
+        // suite failed on whatever an em dash a user happened to type into
+        // their own holdings file.
+        if (relative(root, file).replaceAll("\\", "/") === "config/portfolio.yaml") continue;
         const text = await Bun.file(file).text();
         if (text.includes(emDash)) offenders.push(relative(root, file));
       }
