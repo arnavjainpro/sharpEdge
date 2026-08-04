@@ -444,6 +444,11 @@
 
     #sidebar.collapsed #nav button {
       justify-content: center;
+      /* gap:0 matters as much as centering here. The label collapses to
+         max-width:0 but stays a flex item, so its 10px gap survives and
+         justify-content centres icon+gap — leaving the icon visibly left of
+         the rail's midline with dead space on the right. */
+      gap: 0;
     }
 
     #nav button:hover {
@@ -514,88 +519,101 @@
       display: none !important;
     }
 
-    /* Workspace switcher. Deliberately NOT the .tabbar segmented control used
-       in Settings: that one is built for a content row, and at 74px the rail has
-       no horizontal budget for two labelled segments (~28px each, under the 44px
-       touch minimum). Stacks vertically instead, matching how #nav already
-       stacks, with a divider and a filled active pill so it never reads as just
-       two more nav items. */
-    #section-tabs {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 0 0 10px;
-      margin-bottom: 8px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    #section-tabs button {
+    /* Workspace switcher: ONE control, not a two-segment tablist. At 74px the
+       rail has no horizontal budget for two labelled segments (~28px each, under
+       the 44px touch floor), and stacking them vertically made the workspace
+       read as two more nav items sitting above the nav items. So this shows the
+       workspace you are in and swaps to the other on click — the swap glyph is
+       what says it is a control rather than a label. Always filled, so it never
+       reads as a peer of #nav's --brand-soft active tab. */
+    #section-switch {
       position: relative;
       display: flex;
       align-items: center;
       gap: 10px;
       width: 100%;
-      /* 44px is the touch-target floor; the rail is 74px wide so these are the
-         only controls up here that could fall under it. */
-      min-height: 44px;
-      padding: 8px 12px;
+      /* Same box as a #nav row (9px 12px → 34px tall). It was 44px for the touch
+         floor, but nav rows are 34px and set the rail's rhythm, so the switcher
+         just read as an oversized outlier — worst in the collapsed rail, where
+         there is no label to fill the extra height. The fill carries the
+         distinction; the height does not need to. */
+      padding: 11px 12px;
+      margin-bottom: 8px;
       border: none;
       border-radius: var(--radius-xs);
-      background: none;
-      color: var(--dim);
+      background: var(--brand);
+      color: var(--on-brand);
       font: 600 12px var(--sans);
       letter-spacing: var(--tracking-label);
       text-transform: uppercase;
       text-align: left;
+      transition: filter .14s ease;
     }
 
-    #section-tabs button:hover {
-      background: var(--gray-soft);
-      color: var(--fg);
+    #section-switch:hover {
+      filter: brightness(1.08);
     }
 
-    /* Filled, not --brand-soft: that already means "active tab" in #nav, and the
-       section and the tab inside it must not look like the same kind of thing. */
-    #section-tabs button[aria-current="true"] {
-      background: var(--brand);
-      color: var(--on-brand);
-    }
-
-    #section-tabs .sdot {
+    #section-switch .sdot,
+    #section-switch .sswap {
       display: flex;
       flex-shrink: 0;
     }
 
-    /* Aggregate: a badge fired on a tab hidden inside the other section. Badges
-       are display:none on the rail at <=720px, so this dot is the only signal
-       there. */
-    #section-tabs .sdot-badge {
+    #section-switch .slabel {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    /* The affordance. Dimmed until hover so the workspace name stays the thing
+       you read first. */
+    #section-switch .sswap {
+      opacity: .7;
+    }
+
+    #section-switch:hover .sswap {
+      opacity: 1;
+    }
+
+    /* Aggregate: a badge fired on a tab hidden inside the other workspace. With
+       a single button there is only one thing this dot can mean, so it sits on
+       the corner rather than in the row. Badges are display:none on the rail at
+       <=720px, so this is the only signal there. */
+    #section-switch .sdot-badge {
+      position: absolute;
+      top: 6px;
+      right: 6px;
       width: 7px;
       height: 7px;
       border-radius: 50%;
       background: var(--red);
-      margin-left: auto;
-      flex-shrink: 0;
+      box-shadow: 0 0 0 2px var(--brand);
     }
 
-    #sidebar.collapsed #section-tabs button {
+    #sidebar.collapsed #section-switch {
       justify-content: center;
-      padding: 8px 0;
+      padding: 11px 0;
+      gap: 0;
     }
 
-    #sidebar.collapsed #section-tabs .slabel {
+    #sidebar.collapsed #section-switch .slabel,
+    #sidebar.collapsed #section-switch .sswap {
       opacity: 0;
       max-width: 0;
       overflow: hidden;
     }
 
     @media (max-width: 720px) {
-      #sidebar:not(.collapsed) #section-tabs button {
+      #sidebar:not(.collapsed) #section-switch {
         justify-content: center;
-        padding: 8px 0;
+        padding: 11px 0;
+        gap: 0;
       }
 
-      #sidebar:not(.collapsed) #section-tabs .slabel {
+      #sidebar:not(.collapsed) #section-switch .slabel,
+      #sidebar:not(.collapsed) #section-switch .sswap {
         opacity: 0;
         max-width: 0;
         overflow: hidden;
@@ -810,6 +828,8 @@
 
       #sidebar:not(.collapsed) #nav button {
         justify-content: center;
+        /* Same dead-gap fix as the .collapsed rule — see there. */
+        gap: 0;
       }
 
       header {
@@ -2982,6 +3002,16 @@
 
     /* rotation heatmap (F6b): sectors × trailing weeks. Colour carries the
        state, the printed number carries the value — never colour alone. */
+
+    /* .card is a zero-padding, overflow:hidden, 20px-radius box, built for
+       tables that bleed to the edge. The legend is not a table: its first
+       swatch landed exactly in the bottom-left corner and the radius clipped
+       it, so "leading" showed a half-swatch. Pad the whole box — every child
+       then clears the corners, not just the one that was visibly wrong. */
+    #rotation-heatmap {
+      padding: 14px 16px;
+    }
+
     .heat-wrap {
       overflow-x: auto;
     }
@@ -4586,18 +4616,15 @@
         </a>
       </div>
       <!-- Workspace switcher. Trading is live money and live data; Learning is
-           training against past charts. Both sections' buttons stay in the DOM
-           and are toggled with `hidden` rather than re-rendered — bumpBadge()
-           reads its count out of the button's own textContent, so a button that
-           is absent drops the notification silently instead of deferring it. -->
-      <div id="section-tabs" role="tablist" aria-label="Workspace">
-        <button role="tab" data-section="trading" aria-current="true">
-          <span class="sdot"></span><span class="slabel">Trading</span><span class="sdot-badge" hidden></span>
-        </button>
-        <button role="tab" data-section="learning">
-          <span class="sdot"></span><span class="slabel">Learning</span><span class="sdot-badge" hidden></span>
-        </button>
-      </div>
+           training against past charts. One button: it names the workspace you
+           are in and swaps to the other on click. data-section is the CURRENT
+           section, written by applySection() — the click handler reads it to
+           decide where to go, so the button is the single source of truth and
+           can never disagree with the visible tabs. -->
+      <button id="section-switch" type="button">
+        <span class="sdot"></span><span class="slabel"></span><span class="sswap"></span><span class="sdot-badge"
+          hidden></span>
+      </button>
 
       <nav id="nav">
         <button data-tab="portfolio" class="active"><span class="ndot"></span><span
@@ -5318,10 +5345,19 @@
       "portfolio": '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       "market": '<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>',
       "ideas": '<path d="M9 18h6M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
-      "analyze": '<circle cx="12" cy="12" r="8"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>',
+      // Candlesticks, not the old crosshair: at 16px that crosshair was a ring
+      // with ticks, near-identical to Practice's bullseye two rows below it.
+      "analyze": '<line x1="8" y1="3" x2="8" y2="21"/><rect x="5.5" y="7" width="5" height="8" rx="1"/><line x1="16" y1="3" x2="16" y2="21"/><rect x="13.5" y="12" width="5" height="6" rx="1"/>',
       "backtest": '<path d="M10 2v6.3L4.7 18a2 2 0 0 0 1.8 3h11a2 2 0 0 0 1.8-3L14 8.3V2"/><line x1="8" y1="2" x2="16" y2="2"/><line x1="7" y1="15" x2="17" y2="15"/>',
       "learn": '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
-      "practice": '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+      // Dumbbell: Practice is reps against past charts. The old bullseye was a
+      // third ring in a rail that already had Market's globe.
+      "practice": '<path d="M6 8v8M3.5 10v4M18 8v8M20.5 10v4"/><path d="M6 12h12"/>',
+      // Section switcher. Own glyphs so the workspace never repeats the icon of
+      // a nav tab sitting directly beneath it.
+      "sec-trading": '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v.01M18 14v.01"/>',
+      "sec-learning": '<path d="M12 3 2 8l10 5 10-5-10-5z"/><path d="M6 10.5V16c0 1.66 2.69 3 6 3s6-1.34 6-3v-5.5"/>',
+      "swap": '<path d="m7 4-4 4 4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/>',
       "chat": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
       "activity": '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
       "history": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -5439,33 +5475,39 @@
     const TAB_SECTION = Object.fromEntries(
       Object.entries(SECTIONS).flatMap(([s, tabs]) => tabs.map((t) => [t, s]))
     );
-    const SECTION_ICON = { trading: "market", learning: "learn" };
+    // Own icons rather than borrowing Market's and Learn's: the switcher sits
+    // directly above those two nav buttons, and repeating their glyph one row
+    // up made the workspace look like a duplicate of the tab inside it.
+    const SECTION_META = {
+      trading: { icon: "sec-trading", label: "Trading", blurb: "live positions and market research" },
+      learning: { icon: "sec-learning", label: "Learning", blurb: "lessons and blind drills" },
+    };
+    const otherSection = (s) => (s === "trading" ? "learning" : "trading");
     const lastTabKey = (s) => `lastTab:${s}`;
 
     function applySection(section) {
-      document.querySelectorAll("#section-tabs button").forEach((b) => {
-        const on = b.dataset.section === section;
-        // aria-current, not just a class: title/aria-label name the buttons but
-        // never say which one you are in.
-        b.setAttribute("aria-current", String(on));
-      });
-      document.querySelectorAll("#nav button[data-tab]").forEach((b) => {
-        b.hidden = TAB_SECTION[b.dataset.tab] !== section;
+      const b = $("#section-switch");
+      const me = SECTION_META[section], next = SECTION_META[otherSection(section)];
+      b.dataset.section = section;
+      b.querySelector(".sdot").innerHTML = icon(me.icon, 15);
+      b.querySelector(".slabel").textContent = me.label;
+      // The label alone says where you are, not that this is a control, and not
+      // where clicking lands you. The title carries both.
+      b.title = `${me.label} — ${me.blurb}. Click to switch to ${next.label}.`;
+      b.setAttribute("aria-label", b.title);
+      document.querySelectorAll("#nav button[data-tab]").forEach((n) => {
+        n.hidden = TAB_SECTION[n.dataset.tab] !== section;
       });
       syncSectionBadges();
     }
 
-    // Roll hidden tabs' badges up to their section button, so a notification
-    // fired while you are in the other workspace is still visible.
+    // Roll hidden tabs' badges up to the switcher, so a notification fired while
+    // you are in the other workspace is still visible. Hidden is exactly the set
+    // of tabs in the other section, so there is nothing to key on per-section.
     function syncSectionBadges() {
-      for (const [section, tabs] of Object.entries(SECTIONS)) {
-        const pending = tabs.some((t) => {
-          const b = document.querySelector(`#nav button[data-tab="${t}"]`);
-          return b?.hidden && b.querySelector(".badge")?.classList.contains("show");
-        });
-        const dot = document.querySelector(`#section-tabs button[data-section="${section}"] .sdot-badge`);
-        if (dot) dot.hidden = !pending;
-      }
+      const pending = [...document.querySelectorAll("#nav button[data-tab]")]
+        .some((b) => b.hidden && b.querySelector(".badge")?.classList.contains("show"));
+      $("#section-switch .sdot-badge").hidden = !pending;
     }
     function parseHash() {
       const raw = location.hash.slice(1);
@@ -5537,19 +5579,13 @@
     // section's last-visited tab. A hash always wins over this: showPane derives
     // the section from the tab, so a #learn link lands in Learning regardless of
     // what was remembered.
-    $("#section-tabs").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-section]");
-      if (!b) return;
-      const section = b.dataset.section;
-      const remembered = localStorage.getItem(lastTabKey(section));
-      const target = SECTIONS[section].includes(remembered) ? remembered : SECTIONS[section][0];
-      showPane(target);
+    $("#section-switch").addEventListener("click", () => {
+      const next = otherSection($("#section-switch").dataset.section);
+      const remembered = localStorage.getItem(lastTabKey(next));
+      showPane(SECTIONS[next].includes(remembered) ? remembered : SECTIONS[next][0]);
     });
-    document.querySelectorAll("#section-tabs [data-section]").forEach((b) => {
-      b.querySelector(".sdot").innerHTML = icon(SECTION_ICON[b.dataset.section], 15);
-      b.title = b.dataset.section === "trading" ? "Trading — live positions and market research" : "Learning — lessons and blind drills";
-      b.setAttribute("aria-label", b.title);
-    });
+    $("#section-switch .sswap").innerHTML = icon("swap", 14);
+    applySection("trading");
     window.addEventListener("hashchange", () => { const { name, param } = parseHash(); showPane(name, param); });
     /* Deferred by one microtask, deliberately.
        showPane() dispatches into per-pane loaders, and those loaders read consts
@@ -6954,7 +6990,7 @@
       <div class="heat-legend">
         ${Object.entries(HEAT_COLOR).map(([state, c]) =>
           `<span><i style="background:color-mix(in srgb, ${c} 70%, transparent)"></i>${state}</span>`).join("")}
-        <span style="color:var(--faint)">Number is that week's 1-month return vs SPY, in percentage points.</span>
+        <span style="color:var(--faint)">Trailing 1-month return vs SPY as of that week, in percentage points. The window rolls, so neighbouring columns share three of their four weeks.</span>
       </div>`;
     }
 
@@ -9104,7 +9140,7 @@
       wrap.className = "chat-empty";
       const hello = document.createElement("div");
       hello.className = "msg ai";
-      hello.textContent = "Hi, I'm Jawa. Ask me anything about your money — I'll give you the straight answer, not the comfortable one.";
+      hello.textContent = "Hi, I'm Jawa! Ask me anything about your money — I'll give you the straight answer, not the comfortable one.";
       const chips = document.createElement("div");
       chips.className = "chat-suggest";
       for (const s of SUGGESTIONS) {
