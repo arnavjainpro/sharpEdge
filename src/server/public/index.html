@@ -5365,6 +5365,26 @@
     </div>
   </div>
 
+  <!-- Populated and opened by openPaywall() whenever a paid endpoint answers
+       402. Keep this outside #app-shell so it remains available while panes
+       are switched or hidden. -->
+  <dialog id="paywall-modal" aria-label="Upgrade to Pro">
+    <div class="pw-eyebrow">sharpEdge Pro</div>
+    <h3 id="pw-title">Unlock the full engine</h3>
+    <p class="pw-reason" id="pw-reason"></p>
+    <ul class="pw-feats">
+      <li><span>Unlimited AI trade validation &amp; stress tests</span></li>
+      <li><span>Walk-forward backtesting, no monthly cap</span></li>
+      <li><span>Chat advisor, intraday analyzer &amp; daily briefings</span></li>
+      <li><span>Journal-informed validation and an unlimited watchlist</span></li>
+    </ul>
+    <p class="pw-price">Pro is <b>$24</b><span>/month</span></p>
+    <div class="pw-cta">
+      <button class="advise-btn" id="pw-upgrade" style="margin-top:0">Upgrade to Pro</button>
+      <button class="refresh-btn" id="pw-dismiss">Maybe later</button>
+    </div>
+  </dialog>
+
   <!-- Chat widget. Deliberately a direct child of <body>, outside #app-shell
        and outside every [data-pane]: showPane() hides by the data-pane
        attribute, so anything mounted inside a pane would vanish on tab switch.
@@ -9454,7 +9474,8 @@
         const res = await fetchPaid("/api/ask", {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ question, threadId: chatThreadId ?? undefined }),
-        })).json();
+        });
+        if (!res) { pending.remove(); return; } // 402 → paywall shown; drop the pending bubble
         if (res.ok) {
           if (!chatThreadId) { chatSetThread(res.threadId); $("#chat-title").textContent = res.title || "Conversation"; }
           if (askedIn !== chatThreadId && askedIn !== null) { pending.remove(); return; }
