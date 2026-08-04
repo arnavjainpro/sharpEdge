@@ -6053,6 +6053,7 @@
         .some((b) => b.hidden && b.querySelector(".badge")?.classList.contains("show"));
       $("#section-switch .sdot-badge").hidden = !pending;
     }
+    let currentPane = null;
     function parseHash() {
       const raw = location.hash.slice(1);
       const [name, ...rest] = raw.split("/");
@@ -6087,6 +6088,10 @@
         return;
       }
       if (!PANES.includes(name)) name = "portfolio";
+      // Land at the top of a pane you just switched to. Guarded on an actual
+      // change so a re-render of the pane you are already reading — showPane
+      // runs on every hashchange — does not yank you back up mid-scroll.
+      if (name !== currentPane) { currentPane = name; window.scrollTo(0, 0); }
       // Settings belongs to no section, so it leaves the rail on whichever one
       // you came from: the same treatment #stock/TICKER gets: rather than
       // claiming a workspace it isn't part of.
@@ -6137,6 +6142,18 @@
     // section's last-visited tab. A hash always wins over this: showPane derives
     // the section from the tab, so a #learn link lands in Learning regardless of
     // what was remembered.
+    /* The logo is href="#portfolio" and there is a <section id="portfolio">, so
+       the browser treated it as a fragment link and scrolled to that section —
+       landing below the greeting rather than at the top of the page. Worse, a
+       click while already on Portfolio changes no hash, so no hashchange fires
+       and showPane's scroll reset never runs. Handle it directly: the href stays
+       for middle-click and "open in new tab". */
+    $("#home-link").addEventListener("click", (e) => {
+      e.preventDefault();
+      showPane("portfolio");
+      window.scrollTo(0, 0);
+    });
+
     $("#section-switch").addEventListener("click", () => {
       const next = otherSection($("#section-switch").dataset.section);
       const remembered = localStorage.getItem(lastTabKey(next));
