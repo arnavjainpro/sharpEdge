@@ -341,33 +341,12 @@
       flex-direction: column;
       padding: 18px 12px;
       gap: 2px;
-      /* margin-right rides the SAME curve as width, deliberately. The peek
-         overlay holds width + margin-right at a constant 74px; if margin
-         snapped while width eased, that sum would swing from -88 back to 74 and
-         the whole dashboard would slide sideways for 200ms on every hover. */
-      transition: width .2s ease, padding .2s ease, margin-right .2s ease;
+      transition: width .2s ease, padding .2s ease;
     }
 
     #sidebar.collapsed {
       width: 74px;
       padding: 20px 12px;
-    }
-
-    /* Hover-peek: a collapsed rail opens over the content while you point at it
-       and closes when you leave, without touching the persisted state.
-       .peek is set from JS, not :hover, because a tap leaves :hover stuck on
-       touch — which would strand full-width labels inside a 74px rail.
-
-       The negative margin is what makes this an overlay rather than a reflow:
-       the flex line still allocates 74px (236 - 162), so .main-col never moves,
-       and the extra width paints over it. Expanding the width alone would shove
-       the entire dashboard sideways every time the pointer crossed the rail. */
-    #sidebar.collapsed.peek {
-      width: 236px;
-      margin-right: -162px;
-      padding: 18px 12px;
-      z-index: 30;
-      box-shadow: 0 18px 48px rgba(0, 0, 0, .22);
     }
 
     .side-logo-row {
@@ -376,7 +355,7 @@
       padding: 6px 6px 18px;
     }
 
-    #sidebar.collapsed:not(.peek) .side-logo-row {
+    #sidebar.collapsed .side-logo-row {
       justify-content: center;
     }
 
@@ -391,7 +370,7 @@
       color: var(--text);
     }
 
-    #sidebar.collapsed:not(.peek) .side-logo {
+    #sidebar.collapsed .side-logo {
       flex: 0 0 auto;
     }
 
@@ -444,11 +423,11 @@
       flex-shrink: 0;
     }
 
-    #sidebar.collapsed:not(.peek) .side-lockup {
+    #sidebar.collapsed .side-lockup {
       display: none !important;
     }
 
-    #sidebar.collapsed:not(.peek) .side-mark {
+    #sidebar.collapsed .side-mark {
       display: block;
     }
 
@@ -503,18 +482,18 @@
       transition: opacity .18s ease, max-width .22s ease;
     }
 
-    #sidebar.collapsed:not(.peek) #sidebar-collapse {
+    #sidebar.collapsed #sidebar-collapse {
       justify-content: center;
       padding: 9px 0;
       gap: 0;
     }
 
-    #sidebar.collapsed:not(.peek) #sidebar-collapse .sc-label {
+    #sidebar.collapsed #sidebar-collapse .sc-label {
       opacity: 0;
       max-width: 0;
     }
 
-    #sidebar.collapsed:not(.peek) #sidebar-collapse .ic {
+    #sidebar.collapsed #sidebar-collapse .ic {
       transform: scaleX(-1);
     }
 
@@ -534,7 +513,7 @@
       transition: background .12s ease, color .12s ease;
     }
 
-    #sidebar.collapsed:not(.peek) #nav button {
+    #sidebar.collapsed #nav button {
       justify-content: center;
       /* gap:0 matters as much as centering here. The label collapses to
          max-width:0 but stays a flex item, so its 10px gap survives and
@@ -587,7 +566,7 @@
       transition: opacity .18s ease, max-width .22s ease;
     }
 
-    #sidebar.collapsed:not(.peek) #nav button .nlabel {
+    #sidebar.collapsed #nav button .nlabel {
       opacity: 0;
       max-width: 0;
       transition: opacity .12s ease, max-width .22s ease;
@@ -607,7 +586,7 @@
       display: inline-block;
     }
 
-    #sidebar.collapsed:not(.peek) #nav button .badge {
+    #sidebar.collapsed #nav button .badge {
       display: none !important;
     }
 
@@ -684,14 +663,14 @@
       box-shadow: 0 0 0 2px var(--brand);
     }
 
-    #sidebar.collapsed:not(.peek) #section-switch {
+    #sidebar.collapsed #section-switch {
       justify-content: center;
       padding: 11px 0;
       gap: 0;
     }
 
-    #sidebar.collapsed:not(.peek) #section-switch .slabel,
-    #sidebar.collapsed:not(.peek) #section-switch .sswap {
+    #sidebar.collapsed #section-switch .slabel,
+    #sidebar.collapsed #section-switch .sswap {
       opacity: 0;
       max-width: 0;
       overflow: hidden;
@@ -745,7 +724,7 @@
       background: var(--gray-soft);
     }
 
-    #sidebar.collapsed:not(.peek) .side-user {
+    #sidebar.collapsed .side-user {
       gap: 0;
       padding: 12px 0 4px;
       justify-content: center;
@@ -785,7 +764,7 @@
       transition: opacity .15s ease .05s, max-width .25s ease;
     }
 
-    #sidebar.collapsed:not(.peek) .side-user .who {
+    #sidebar.collapsed .side-user .who {
       opacity: 0;
       max-width: 0;
       transition: opacity .08s ease, max-width .25s ease;
@@ -6236,22 +6215,6 @@
       b.setAttribute("aria-expanded", String(!collapsed));
     }
     applySidebarCollapsed(localStorage.getItem("sidebarCollapsed") === "1");
-
-    /* Peek open on hover while collapsed. Gated on a real mouse: on touch a tap
-       leaves :hover asserted, so a CSS-only version would latch the rail open
-       with no way to dismiss it. focusin is NOT gated — keyboard users tabbing
-       into the rail need the labels whatever the pointer is. */
-    {
-      const sb = $("#sidebar");
-      const peek = (on) => sb.classList.toggle("peek", on && sb.classList.contains("collapsed"));
-      if (window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
-        sb.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") peek(true); });
-        sb.addEventListener("pointerleave", () => peek(false));
-      }
-      sb.addEventListener("focusin", () => peek(true));
-      // relatedTarget is where focus went; still inside the rail means stay open.
-      sb.addEventListener("focusout", (e) => { if (!sb.contains(e.relatedTarget)) peek(false); });
-    }
     $("#sidebar-collapse").addEventListener("click", () => {
       const next = !$("#sidebar").classList.contains("collapsed");
       localStorage.setItem("sidebarCollapsed", next ? "1" : "0");
